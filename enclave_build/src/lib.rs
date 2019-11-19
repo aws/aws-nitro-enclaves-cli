@@ -118,7 +118,7 @@ impl<'a> Docker2Eif<'a> {
         let bootstrap_ramfs = format!("{}/bootstrap-initrd.img", self.artifacts_prefix);
         let customer_ramfs = format!("{}/customer-initrd.img", self.artifacts_prefix);
 
-        Command::new(&self.linuxkit_path)
+        let output = Command::new(&self.linuxkit_path)
             .args(&[
                 "build",
                 "-name",
@@ -129,9 +129,16 @@ impl<'a> Docker2Eif<'a> {
             ])
             .output()
             .map_err(|_| Docker2EifError::LinuxkitExecError)?;
+        if !output.status.success() {
+            eprintln!(
+                "Linuxkit reported an error while creating the bootstrap ramfs: {:?}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Err(Docker2EifError::LinuxkitExecError);
+        }
 
         // Prefix the docker image filesystem, as expected by init
-        Command::new(&self.linuxkit_path)
+        let output = Command::new(&self.linuxkit_path)
             .args(&[
                 "build",
                 "-name",
@@ -144,6 +151,13 @@ impl<'a> Docker2Eif<'a> {
             ])
             .output()
             .map_err(|_| Docker2EifError::LinuxkitExecError)?;
+        if !output.status.success() {
+            eprintln!(
+                "Linuxkit reported an error while creating the customer ramfs: {:?}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Err(Docker2EifError::LinuxkitExecError);
+        }
 
         let mut build = EifBuilder::new(
             &Path::new(&self.kernel_img_path),

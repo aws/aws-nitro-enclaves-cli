@@ -142,7 +142,7 @@ impl Console {
 }
 
 pub struct FileLock {
-    _file: File,
+    pub _file: File,
 }
 
 impl FileLock {

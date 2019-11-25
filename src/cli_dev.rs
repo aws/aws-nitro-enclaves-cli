@@ -301,7 +301,7 @@ impl NitroEnclavesCmdReply {
 
 pub struct CliDev {
     mmap: MmapMut,
-    _lock: FileLock,
+    pub _lock: FileLock,
 }
 
 impl CliDev {

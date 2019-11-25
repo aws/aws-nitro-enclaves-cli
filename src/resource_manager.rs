@@ -9,14 +9,20 @@ use crate::cli_dev::{
     NitroEnclavesSlotFree,
 };
 
+use crate::terminate_enclaves;
 use crate::NitroCliResult;
 use crate::ENCLAVE_VSOCK_LOADER_PORT;
 
+use crate::commands_parser::TerminateEnclavesArgs;
 use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
+use crate::utils::generate_enclave_id;
+use crate::utils::ExitGracefully;
+use nix::fcntl::{flock, FlockArg};
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::mem::size_of_val;
+use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 
 // sys fs path to online/offline cpus
@@ -256,6 +262,19 @@ impl EnclaveResourceManager {
             between_packets_delay(),
         )
         .map_err(|err| {
+            let err_msg =
+                format!(
+                    "Sending the image to the enclave failed with error {:?}. Could not terminate the enclave.",
+                    err
+                );
+            let fd = self.cli_dev._lock._file.as_raw_fd();
+            flock(fd, FlockArg::Unlock).ok_or_exit(&err_msg);
+            let enclave_id = generate_enclave_id(self.slot_id).ok_or_exit(&err_msg);
+            eprintln!("Sending the image to the enclave failed");
+            eprintln!("Terminating the enclave...");
+            let terminate_args = TerminateEnclavesArgs { enclave_id };
+            terminate_enclaves(terminate_args).ok_or_exit(&err_msg);
+
             format!(
                 "Sending the image to the enclave failed with error {:?}",
                 err

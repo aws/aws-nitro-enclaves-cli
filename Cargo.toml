@@ -16,6 +16,7 @@ enum-primitive-derive = "0.1"
 log = "0.4"
 env_logger = "0.6"
 libc = "0.2"
+signal-hook = "0.1"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build"}
 

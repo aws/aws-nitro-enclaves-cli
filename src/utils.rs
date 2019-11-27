@@ -16,9 +16,17 @@ use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
+use libc::c_void;
+use nix::sys::time::TimeVal;
+use nix::sys::time::TimeValLike;
+use std::mem::size_of;
+
 pub const BUFFER_SIZE: usize = 1024;
-pub const TIMEOUT: u64 = 100;
-pub const POLL_TIMEOUT: i32 = 10000;
+pub const TIMEOUT: u64 = 100; // millis
+pub const POLL_TIMEOUT: i32 = 10000; // millis
+
+pub const CONSOLE_CONNECT_TIMEOUT: i64 = 20000; // millis
+pub const SO_VM_SOCKETS_CONNECT_TIMEOUT: i32 = 6;
 
 pub trait ExitGracefully<T, E> {
     fn ok_or_exit(self, message: &str) -> T;
@@ -33,6 +41,25 @@ impl<T, E: std::fmt::Debug> ExitGracefully<T, E> for Result<T, E> {
                 std::process::exit(1);
             }
         }
+    }
+}
+
+fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
+    let timeval = TimeVal::milliseconds(millis);
+    let ret = unsafe {
+        libc::setsockopt(
+            fd as i32,
+            libc::AF_VSOCK,
+            SO_VM_SOCKETS_CONNECT_TIMEOUT,
+            &timeval as *const _ as *const c_void,
+            size_of::<TimeVal>() as u32,
+        )
+    };
+
+    if ret != 0 {
+        Err("Failed to configure SO_VM_SOCKETS_CONNECT_TIMEOUT timeout".to_string())
+    } else {
+        Ok(())
     }
 }
 
@@ -52,6 +79,8 @@ impl Console {
 
         let sockaddr = SockAddr::new_vsock(cid, port);
 
+        vsock_set_connect_timeout(socket_fd, CONSOLE_CONNECT_TIMEOUT)?;
+
         connect(socket_fd, &sockaddr)
             .map_err(|err| format!("Failed to connect to the console: {}", err))?;
 
@@ -67,6 +96,8 @@ impl Console {
             None,
         )
         .map_err(|err| format!("Failed to create nonblocking console socket: {}", err))?;
+
+        vsock_set_connect_timeout(socket_fd, CONSOLE_CONNECT_TIMEOUT)?;
 
         let sockaddr = SockAddr::new_vsock(cid, port);
 
@@ -105,7 +136,9 @@ impl Console {
             if size == 0 {
                 break;
             } else if size > 0 {
-                (*output).write(&buffer).map_err(|err| format!("{}", err))?;
+                output
+                    .write(&buffer[..size])
+                    .map_err(|err| format!("{}", err))?;
             }
         }
 

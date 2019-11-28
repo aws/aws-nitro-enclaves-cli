@@ -3,10 +3,8 @@
 #![deny(warnings)]
 
 use clap::{App, AppSettings, Arg, SubCommand};
-use signal_hook::iterator::Signals;
-use signal_hook::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
-use std::thread::spawn;
 
+use nitro_cli::utils::handle_signals;
 use nitro_cli::utils::ExitGracefully;
 
 use nitro_cli::commands_parser::RunEnclavesArgs;
@@ -28,16 +26,6 @@ fn main() {
     env_logger::init();
     info!("Start Nitro CLI");
 
-    let signals =
-        Signals::new(&[SIGINT, SIGQUIT, SIGTERM, SIGHUP]).ok_or_exit("Could not handle signals");
-    spawn(move || {
-        for sig in signals.forever() {
-            if sig != SIGHUP {
-                eprintln!("Warning!! Trying to stop a command could leave the enclave in an unsafe state. If you think something is wrong please use SIGKILL to terminate the command.");
-            }
-        }
-    });
-
     let app = create_app!();
     #[cfg(feature = "power_user")]
     let app = testing_commands::initialize(app);
@@ -48,10 +36,12 @@ fn main() {
 
     match args.subcommand() {
         ("run-enclave", Some(args)) => {
+            handle_signals();
             let run_args = RunEnclavesArgs::new_with(args).ok_or_exit(args.usage());
             run_enclaves(run_args).ok_or_exit(args.usage());
         }
         ("terminate-enclave", Some(args)) => {
+            handle_signals();
             let terminate_args = TerminateEnclavesArgs::new_with(args).ok_or_exit(args.usage());
             terminate_enclaves(terminate_args).ok_or_exit(args.usage());
         }

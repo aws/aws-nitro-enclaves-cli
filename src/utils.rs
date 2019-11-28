@@ -8,12 +8,14 @@ use nix::poll::{PollFd, PollFlags};
 use nix::sys::socket::{connect, socket};
 use nix::sys::socket::{AddressFamily, SockAddr, SockFlag, SockType};
 use nix::unistd::read;
+use signal_hook::iterator::Signals;
+use signal_hook::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use std::fs::metadata;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::FromStr;
-use std::thread::sleep;
+use std::thread::{sleep, spawn};
 use std::time::{Duration, SystemTime};
 
 use libc::c_void;
@@ -61,6 +63,18 @@ fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
     } else {
         Ok(())
     }
+}
+
+pub fn handle_signals() {
+    let signals =
+        Signals::new(&[SIGINT, SIGQUIT, SIGTERM, SIGHUP]).ok_or_exit("Could not handle signals");
+    spawn(move || {
+        for sig in signals.forever() {
+            if sig != SIGHUP {
+                eprintln!("Warning! Trying to stop a command could leave the enclave in an unsafe state. If you think something is wrong please use SIGKILL to terminate the command.");
+            }
+        }
+    });
 }
 
 pub struct Console {

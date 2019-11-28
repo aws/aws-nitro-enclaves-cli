@@ -73,7 +73,10 @@ pub fn check_whitelist(
             let addr = raw_service["address"]
                 .as_str()
                 .ok_or_else(|| ProxyError::YamlFormatError)?;
-            let addrs = Proxy::parse_addr(addr, only_4, only_6)?;
+            let addrs = match Proxy::parse_addr(addr, only_4, only_6) {
+                Err(ProxyError::RemoteAddressError) => Ok(vec![]),
+                any => any,
+            }?;
             for addr in addrs.into_iter() {
                 if addr == remote_addr && port == remote_port {
                     return Ok(());

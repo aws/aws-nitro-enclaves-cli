@@ -170,6 +170,7 @@ pub fn console_enclaves(args: ConsoleArgs) -> NitroCliResult<()> {
     let slot_id = get_slot_id(args.enclave_id)?;
     let slot_info = NitroEnclavesSlotInfo::new(slot_id);
     let reply = slot_info.submit(&mut cli_dev)?;
+    drop(cli_dev);
     let enclave_cid = reply.enclave_cid;
 
     println!("Connecting to the console for enclave {}...", enclave_cid);

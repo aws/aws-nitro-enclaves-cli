@@ -29,7 +29,7 @@ CONTAINER_TAG="nitro_cli:1.0"
 
 
 .PHONY: all
-all: build-setup nc-vsock nitro-cli vsock-proxy
+all: build-setup nc-vsock nitro-cli nitro-cli-poweruser vsock-proxy
 
 
 .PHONY: driver-deps
@@ -62,7 +62,7 @@ nc-vsock: nc-vsock.c build-setup
 	$(CC) -o $(OBJ_PATH)/nc-vsock nc-vsock.c
 
 .PHONY: nitro-cli
-nitro-cli: $(BASE_PATH)/src/main.rs build-setup  build-container
+nitro-cli: $(BASE_PATH)/src/main.rs build-setup build-container
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -94,10 +94,23 @@ nitro-tests: $(BASE_PATH)/src/main.rs build-setup  build-container
 					 > /nitro_build/test_executables.txt && \
 			chmod -R 777 nitro_build '
 
-
+.PHONY: nitro-cli-poweruser
+nitro-cli-poweruser: $(BASE_PATH)/src/main.rs build-setup build-container
+	$(DOCKER) run \
+		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
+		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
+		$(CONTAINER_TAG) bin/bash -c \
+			'source /root/.cargo/env && \
+			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ cargo build \
+				--release \
+				--manifest-path=/nitro_src/Cargo.toml \
+				--target=x86_64-unknown-linux-musl \
+				--features=power_user \
+				--target-dir=/nitro_build/nitro_cli_poweruser  && \
+			chmod -R 777 nitro_build '
 
 .PHONY: vsock-proxy
-vsock-proxy: $(BASE_PATH)/vsock_proxy/src/main.rs build-setup  build-container
+vsock-proxy: $(BASE_PATH)/vsock_proxy/src/main.rs build-setup build-container
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \

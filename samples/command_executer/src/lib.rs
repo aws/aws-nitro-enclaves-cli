@@ -39,19 +39,12 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
         recv_loop(fd, &mut buf, len)?;
 
         let len_usize = len.try_into().map_err(|err| format!("{:?}", err))?;
-        let command = String::from(
-            std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{:?}", err))?,
-        );
-        let mut iter = command.split_whitespace();
-        let comm = iter.next().unwrap();
-        let mut args = Vec::new();
-        for token in iter {
-            args.push(token);
-        }
+        let command = std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{:?}", err))?;
 
         // execute command
-        let output = Command::new(comm)
-            .args(&args)
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(command)
             .output()
             .map_err(|err| format!("Could not execute the command: {:?}", err))?;
 

@@ -29,7 +29,7 @@ CONTAINER_TAG="nitro_cli:1.0"
 
 
 .PHONY: all
-all: build-setup nc-vsock nitro-cli nitro-cli-poweruser vsock-proxy
+all: build-setup init nc-vsock nitro-cli nitro-cli-poweruser vsock-proxy
 
 
 .PHONY: driver-deps
@@ -60,6 +60,10 @@ driver-clean:
 .PHONY: nc-vsock
 nc-vsock: nc-vsock.c build-setup
 	$(CC) -o $(OBJ_PATH)/nc-vsock nc-vsock.c
+
+.PHONY: init
+init: init.c build-setup
+	$(CC) -o $(OBJ_PATH)/init $< -static -static-libgcc -flto
 
 .PHONY: nitro-cli
 nitro-cli: $(BASE_PATH)/src/main.rs build-setup build-container

@@ -59,5 +59,37 @@ macro_rules! create_app {
                             .required(true),
                     ),
             )
+            .subcommand(
+                SubCommand::with_name("recv-file")
+                    .about("Receive a file from the enclave")
+                    .arg(
+                        Arg::with_name("port")
+                            .long("port")
+                            .help("port")
+                            .takes_value(true)
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("cid")
+                            .long("cid")
+                            .help("cid")
+                            .takes_value(true)
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("localpath")
+                            .long("localpath")
+                            .help("localpath")
+                            .takes_value(true)
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("remotepath")
+                            .long("remotepath")
+                            .help("remotepath")
+                            .takes_value(true)
+                            .required(true),
+                    ),
+            )
     };
 }

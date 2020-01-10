@@ -5,18 +5,32 @@ use nix::sys::socket::{recv, send};
 use std::convert::TryInto;
 use std::os::unix::io::RawFd;
 
-pub fn send_len(fd: RawFd, len: u64, _cmd: u8) -> Result<(), String> {
+pub fn send_u64(fd: RawFd, val: u64) -> Result<(), String> {
     let mut buf = [0u8; 9];
-    LittleEndian::write_u64(&mut buf, len);
+    LittleEndian::write_u64(&mut buf, val);
     send_loop(fd, &mut buf, 9)?;
     Ok(())
 }
 
-pub fn recv_len(fd: RawFd) -> Result<u64, String> {
+pub fn recv_u64(fd: RawFd) -> Result<u64, String> {
     let mut buf = [0u8; 9];
     recv_loop(fd, &mut buf, 9)?;
-    let len = LittleEndian::read_u64(&buf);
-    Ok(len)
+    let val = LittleEndian::read_u64(&buf);
+    Ok(val)
+}
+
+pub fn send_i32(fd: RawFd, val: i32) -> Result<(), String> {
+    let mut buf = [0u8; 4];
+    LittleEndian::write_i32(&mut buf, val);
+    send_loop(fd, &mut buf, 4)?;
+    Ok(())
+}
+
+pub fn recv_i32(fd: RawFd) -> Result<i32, String> {
+    let mut buf = [0u8; 4];
+    recv_loop(fd, &mut buf, 4)?;
+    let val = LittleEndian::read_i32(&buf);
+    Ok(val)
 }
 
 pub fn send_loop(fd: RawFd, buf: &[u8], len: u64) -> Result<(), String> {
@@ -24,7 +38,7 @@ pub fn send_loop(fd: RawFd, buf: &[u8], len: u64) -> Result<(), String> {
     let mut send_bytes = 0;
 
     while send_bytes < len {
-        let size = match send(fd, &buf[send_bytes..], MsgFlags::empty()) {
+        let size = match send(fd, &buf[send_bytes..len], MsgFlags::empty()) {
             Ok(size) => size,
             Err(nix::Error::Sys(EINTR)) => 0,
             Err(err) => return Err(format!("{:?}", err)),
@@ -40,7 +54,7 @@ pub fn recv_loop(fd: RawFd, buf: &mut [u8], len: u64) -> Result<(), String> {
     let mut recv_bytes = 0;
 
     while recv_bytes < len {
-        let size = match recv(fd, &mut buf[recv_bytes..], MsgFlags::empty()) {
+        let size = match recv(fd, &mut buf[recv_bytes..len], MsgFlags::empty()) {
             Ok(size) => size,
             Err(nix::Error::Sys(EINTR)) => 0,
             Err(err) => return Err(format!("{:?}", err)),

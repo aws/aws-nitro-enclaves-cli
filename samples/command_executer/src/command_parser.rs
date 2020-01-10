@@ -33,6 +33,25 @@ impl RunArgs {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RecvFileArgs {
+    pub cid: u32,
+    pub port: u32,
+    pub localfile: String,
+    pub remotefile: String,
+}
+
+impl RecvFileArgs {
+    pub fn new_with(args: &ArgMatches) -> Result<Self, String> {
+        Ok(RecvFileArgs {
+            cid: parse_cid(args)?,
+            port: parse_port(args)?,
+            localfile: parse_localfile(args)?,
+            remotefile: parse_remotefile(args)?,
+        })
+    }
+}
+
 #[derive(Serialize, Debug)]
 pub struct CommandOutput {
     stdout: String,
@@ -69,4 +88,18 @@ fn parse_command(args: &ArgMatches) -> Result<String, String> {
         .value_of("command")
         .ok_or("Could not find command argument")?;
     Ok(String::from(command))
+}
+
+fn parse_localfile(args: &ArgMatches) -> Result<String, String> {
+    let output = args
+        .value_of("localpath")
+        .ok_or("Could not find localpath")?;
+    Ok(String::from(output))
+}
+
+fn parse_remotefile(args: &ArgMatches) -> Result<String, String> {
+    let output = args
+        .value_of("remotepath")
+        .ok_or("Could not find remotepath")?;
+    Ok(String::from(output))
 }

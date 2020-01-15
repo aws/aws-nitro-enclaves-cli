@@ -1,0 +1,20 @@
+[package]
+name = "vsock-proxy"
+version = "0.1.0"
+authors = ["Bogdan Neacsu <neacsubn@amazon.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "2.33.0"
+dns-lookup = "1.0.1"
+env_logger = "0.6"
+idna = "0.2.0"
+log = "0.4"
+nix = "0.15.0"
+yaml-rust = "0.4.3"
+threadpool = "1.7.1"
+
+[dev-dependencies]
+rand = "0.7.0"

@@ -1,0 +1,335 @@
+// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+#![deny(warnings)]
+
+#[cfg(test)]
+mod test_nitro_cli_args {
+    use clap::{App, AppSettings, Arg, SubCommand};
+    use nitro_cli::create_app;
+
+    #[test]
+    fn terminate_enclave_enclave_id_arg_is_required() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "terminate-enclave"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn terminate_enclave_enclave_id_takes_value() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "terminate-enclave", "--enclave-id"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn terminate_enclave_enclave_id_takes_one_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "terminate-enclave",
+            "--enclave-id",
+            "i-1234_enc123",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn terminate_enclave_enclave_id_takes_multiple_values() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "terminate-enclave",
+            "--enclave-id",
+            "1234",
+            "135",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn describe_enclaves_correct_command() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "describe-enclaves"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn console_without_enclave_id_arg_is_required() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "console"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn console_enclave_id_takes_value() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "console", "--enclave-id"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn console_correct_command() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "console", "--enclave-id", "i-1234_enc123"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn console_enclave_id_takes_one_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "console",
+            "--enclave-id",
+            "i-1234_enc123",
+            "135",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn build_enclave_docker_uri_arg_is_required() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "build-enclave", "--output-file", "image.eif"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn build_enclave_docker_dir_arg_is_not_required() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--output-file",
+            "image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn build_enclave_output_arg_is_required() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn build_enclave_correct_command() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--docker-dir",
+            "dir/",
+            "--output-file",
+            "image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn run_enclave_correct_command_with_eif_path() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "10001",
+            "--memory",
+            "512",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+            "1234",
+            "--debug-mode",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn run_enclave_cpu_ids_arg_is_required() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--memory",
+            "512",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+            "12345",
+            "--debug-mode",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_cpu_ids_takes_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "--memory",
+            "512",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+            "12345",
+            "--debug-mode",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_cpu_ids_takes_multiple_values() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "10001",
+            "--memory",
+            "512",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+            "12345",
+            "--debug-mode",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn run_enclave_memory_arg_is_required() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+            "12345",
+            "--debug-mode",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_memory_takes_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "--memory",
+            "--eif-path",
+            "dir/image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_enclave_cid_takes_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "--memory",
+            "512",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_console_does_not_take_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "--memory",
+            "512",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+            "12345",
+            "--debug-mode",
+            "123",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_console_eif_path_is_required() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "--memory",
+            "512",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_eif_path_takes_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "10001",
+            "--memory",
+            "512",
+            "--eif-path",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+}

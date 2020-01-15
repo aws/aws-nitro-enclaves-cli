@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# vsock-proxy sysVinit config file
+
+. /etc/init.d/functions
+
+start() {
+	pidof vsock-proxy
+	if [ $? -eq 0 ]; then
+		echo "The vsock-proxy service is already running ..."
+		echo
+		return
+	fi
+	initlog -c "echo -n Starting vsock-proxy service ..."
+	REGION=$(echo $HOSTNAME | cut -d '.' -f 2)
+	vsock-proxy 8000 kms.${REGION}.amazonaws.com 443 >> /var/log/vsock-proxy.log 2>&1 &
+	touch /var/lock/subsys/vsock-proxy
+	success $"vsock-proxy service started"
+	echo
+}
+
+stop() {
+	initlog -c "echo -n Stopping vsock-proxy service ..."
+	killproc vsock-proxy
+	rm -f /var/lock/subsys/vsock-proxy
+	success $"vsock-proxy service stopped"
+	echo
+}
+
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	restart|reload|condrestart)
+		stop
+		start
+		;;
+	status)
+		status vsock-proxy
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|restart|reload|condrestart|status}"
+		exit 1
+esac
+
+exit 0

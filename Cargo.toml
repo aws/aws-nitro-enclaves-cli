@@ -1,0 +1,31 @@
+[package]
+name = "nitro-cli"
+version = "0.1.0"
+authors = ["Alexandru Gheorghe <aggh@amazon.com>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = ">=1.0", features = ["derive"] }
+clap = "2.33"
+memmap = "0.7"
+page_size = "0.4"
+serde_json = "1.0"
+num-traits = "0.2"
+nix = "0.15.0"
+enum-primitive-derive = "0.1"
+log = "0.4"
+env_logger = "0.6"
+libc = "0.2"
+eif_loader = { path = "./eif_loader" }
+enclave_build = { path = "./enclave_build"}
+
+[dev-dependencies]
+log = "0.4"
+tempfile = "3.1"
+
+[workspace]
+members = [".", "eif_defs", "eif_loader", "eif_utils", "enclave_build", "vsock_proxy"]
+
+[features]
+default = []
+power_user = []

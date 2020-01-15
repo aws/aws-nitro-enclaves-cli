@@ -1,0 +1,12 @@
+[package]
+name = "eif_utils"
+version = "0.1.0"
+authors = ["Alexandru Gheorghe <aggh@amazon.com>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.33.0"
+sha2 = "0.8"
+hex = "0.3.2"
+crc = "1.8"
+eif_defs = {path = "../eif_defs"}

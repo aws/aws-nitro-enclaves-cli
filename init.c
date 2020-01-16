@@ -40,8 +40,21 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <linux/vm_sockets.h>
+#include <poll.h>
+
+_Noreturn void die(const char *msg);
+#define die_on(CONDITION, ...) \
+    do { \
+        if (CONDITION) { \
+            die(__VA_ARGS__); \
+        } \
+    } while (0)
 
 #define DEFAULT_PATH_ENV "PATH=/sbin:/usr/sbin:/bin:/usr/bin"
+#define TIMEOUT 20000 // millis
+#define VSOCK_PORT 9000
+#define VSOCK_CID 3
 
 const char *const default_envp[] = {
     DEFAULT_PATH_ENV,
@@ -249,9 +262,7 @@ void init_console() {
 pid_t launch(char **argv, char **envp) {
     int pid = fork();
     if (pid != 0) {
-        if (pid < 0) {
-            die("fork");
-        }
+        die_on(pid < 0, "fork");
 
         return pid;
     }
@@ -272,9 +283,7 @@ pid_t launch(char **argv, char **envp) {
     setpgid(0, 0);
 
     // Terminate the arguments and exec.
-    if (putenv(DEFAULT_PATH_ENV)) { // Specify the PATH used for execvpe
-        die("putenv");
-    }
+    die_on(putenv(DEFAULT_PATH_ENV), "putenv"); // Specify the PATH used for execvpe
     execvpe(argv[0], argv, envp);
     die2("execvpe", argv[0]);
 }
@@ -283,9 +292,7 @@ int reap_until(pid_t until_pid) {
     for (;;) {
         int status;
         pid_t pid = wait(&status);
-        if (pid < 0) {
-            die("wait");
-        }
+        die_on(pid < 0, "wait");
 
         if (pid == until_pid) {
             // The initial child process died. Pass through the exit status.
@@ -325,14 +332,28 @@ char **read_config(FILE *env_file) {
         if (i + 1 >= env_size) {
             env_size += env_increment;
             env = realloc(env, env_size * sizeof(char *));
-            if (env == NULL)
-                die("not enough mem for env variables");
+            die_on(env == NULL, "not enough mem for env variables");
         }
 
         env[i] = line; 
         env[i + 1] = NULL;
     }
     return env;
+}
+
+void enclave_ready() {
+    int socket_fd;
+    struct sockaddr_vm sa = {
+        .svm_family = AF_VSOCK,
+        .svm_cid = VSOCK_CID,
+        .svm_port = VSOCK_PORT,
+    };
+
+    socket_fd = socket(AF_VSOCK, SOCK_STREAM, 0);
+    die_on(socket_fd < 0, "socket");
+
+    die_on(connect(socket_fd, (struct sockaddr*) &sa, sizeof(sa)), "connect");
+    die_on(close(socket_fd), "close");
 }
 
 int main(int argc, char **argv) {
@@ -345,6 +366,9 @@ int main(int argc, char **argv) {
     // Init /dev and start /dev/console for early debugging
     init_dev();
     init_console();
+
+    // Signal nitro-cli that the enclave has started
+    enclave_ready();
 
     FILE *env_file = fopen("/env", "r");
     FILE *cmd_file = fopen("/cmd", "r");

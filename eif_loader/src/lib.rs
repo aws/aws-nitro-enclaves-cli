@@ -204,6 +204,7 @@ mod tests {
 
     use super::*;
     use eif_utils::EifBuilder;
+    use sha2::Digest;
     use std::fs::File;
     use std::io::{Read, Write};
     use tempfile::tempdir;
@@ -224,8 +225,12 @@ mod tests {
                 src_file.write(&buf).unwrap();
             }
         }
+
+        let mut src_file = File::open(src_path).unwrap();
         assert_eq!(
-            send_image(&src_path, &mut dst_file, TOKEN).err().unwrap(),
+            send_image_to_dst(&mut src_file, &mut dst_file, TOKEN, None)
+                .err()
+                .unwrap(),
             EifLoaderError::InvalidHeader
         );
     }
@@ -251,11 +256,20 @@ mod tests {
             }
         }
 
-        let mut build = EifBuilder::new(&kernel_path, "dummy cmdline".to_string());
+        let mut build = EifBuilder::new(
+            &kernel_path,
+            "dummy cmdline".to_string(),
+            sha2::Sha256::new(),
+        );
+        let mut eif_out = File::create(eif_path.clone()).unwrap();
         build.add_ramdisk(&ramdisk_path);
-        build.write_to(&eif_path);
+        build.write_to(&mut eif_out);
 
-        assert_eq!(send_image(&eif_path, &mut dst_file, TOKEN).is_ok(), true);
+        let mut eif_file = File::open(eif_path.clone()).unwrap();
+        assert_eq!(
+            send_image_to_dst(&mut eif_file, &mut dst_file, TOKEN, None).is_ok(),
+            true
+        );
 
         let mut src_file = File::open(eif_path).unwrap();
         let mut dst_file = File::open(dst_path).unwrap();

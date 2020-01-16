@@ -11,7 +11,9 @@ use crate::cli_dev::{
 
 use crate::terminate_enclaves;
 use crate::NitroCliResult;
+use crate::ENCLAVE_READY_VSOCK_PORT;
 use crate::ENCLAVE_VSOCK_LOADER_PORT;
+use crate::VMADDR_CID_PARENT;
 
 use crate::commands_parser::TerminateEnclavesArgs;
 use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
@@ -185,6 +187,8 @@ impl EnclaveResourceManager {
         self.init_memory()?;
         self.init_cpus()?;
         let enclave_cid = self.start()?;
+        eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT)
+        .map_err(|err| format!("Waiting on enclave to boot failed with error {:?}", err))?;
         Ok((enclave_cid, self.slot_id))
     }
 

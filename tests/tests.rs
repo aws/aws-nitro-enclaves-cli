@@ -30,8 +30,10 @@ mod tests {
     use std::time::Duration;
 
     fn setup_env() {
-        let home = std::env::var("HOME").unwrap();
-        std::env::set_var("NITRO_CLI_BLOBS", format!("{}/.nitro_cli/prebuilt", home));
+        if let Err(_) = std::env::var("NITRO_CLI_BLOBS") {
+            let home = std::env::var("HOME").unwrap();
+            std::env::set_var("NITRO_CLI_BLOBS", format!("{}/.nitro_cli/prebuilt", home));
+        }
     }
 
     #[test]

@@ -15,7 +15,7 @@ RUN apt-get install -y pkg-config
 RUN apt-get install -y musl-tools
 
 # Build static version of Openssl.
-RUN apt-get install wget unzip
+RUN apt-get install -y wget unzip
 ENV OPENSSL_VERSION=OpenSSL_1_1_1d
 RUN mkdir /openssl_src
 RUN wget https://github.com/openssl/openssl/archive/${OPENSSL_VERSION}.zip -P /openssl_src
@@ -31,4 +31,5 @@ RUN  source $HOME/.cargo/env && \
 RUN  source $HOME/.cargo/env && \
     rustup target add --toolchain ${RUST_VERSION} x86_64-unknown-linux-musl
 
+RUN apt-get install -y jq
 RUN echo "Container build ready to go"

@@ -1,0 +1,10 @@
+version: 0.0
+os: linux
+files:
+  - source: /
+    destination: /
+hooks:
+  AfterInstall:
+    - location: run_tests.sh
+      timeout: 3600
+

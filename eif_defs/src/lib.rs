@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_eif_header_size() {
-        assert_eq!(std::mem::size_of::<EifHeader>(), 292);
+        assert_eq!(std::mem::size_of::<EifHeader>(), 548);
     }
 
     #[test]

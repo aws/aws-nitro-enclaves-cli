@@ -34,16 +34,16 @@ impl RunArgs {
 }
 
 #[derive(Debug, Clone)]
-pub struct RecvFileArgs {
+pub struct FileArgs {
     pub cid: u32,
     pub port: u32,
     pub localfile: String,
     pub remotefile: String,
 }
 
-impl RecvFileArgs {
+impl FileArgs {
     pub fn new_with(args: &ArgMatches) -> Result<Self, String> {
-        Ok(RecvFileArgs {
+        Ok(FileArgs {
             cid: parse_cid(args)?,
             port: parse_port(args)?,
             localfile: parse_localfile(args)?,

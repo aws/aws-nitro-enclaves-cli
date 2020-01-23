@@ -42,8 +42,7 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-devel"
-                .to_string(),
+            docker_uri: "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-devel".to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
         };

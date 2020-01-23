@@ -122,7 +122,7 @@ impl<'a> Docker2Eif<'a> {
             .args(&[
                 "build",
                 "-name",
-                bootstrap_ramfs.split("-").next().unwrap(),
+                &bootstrap_ramfs,
                 "-format",
                 "kernel+initrd",
                 ramfs_config_file.path().to_str().unwrap(),
@@ -135,7 +135,7 @@ impl<'a> Docker2Eif<'a> {
             .args(&[
                 "build",
                 "-name",
-                customer_ramfs.split("-").next().unwrap(),
+                &customer_ramfs,
                 "-format",
                 "kernel+initrd",
                 "-prefix",
@@ -150,6 +150,11 @@ impl<'a> Docker2Eif<'a> {
             self.cmdline.clone(),
             sha2::Sha384::new(),
         );
+
+        // Linuxkit adds -initrd.img sufix to the file names.
+        let bootstrap_ramfs = format!("{}-initrd.img", bootstrap_ramfs);
+        let customer_ramfs = format!("{}-initrd.img", customer_ramfs);
+
         build.add_ramdisk(Path::new(&bootstrap_ramfs));
         build.add_ramdisk(Path::new(&customer_ramfs));
         build.write_to(self.output);

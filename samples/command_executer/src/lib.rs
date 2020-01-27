@@ -171,7 +171,7 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
     }
 }
 
-pub fn run(args: RunArgs) -> Result<(), String> {
+pub fn run(args: RunArgs) -> Result<i32, String> {
     let socket_fd = socket(
         AddressFamily::Vsock,
         SockType::Stream,
@@ -196,13 +196,29 @@ pub fn run(args: RunArgs) -> Result<(), String> {
     // recv output
     let mut buf = [0u8; BUF_MAX_LEN];
     let len = recv_u64(socket_fd)?;
-    recv_loop(socket_fd, &mut buf, len)?;
-    let len_usize: usize = len.try_into().map_err(|err| format!("{:?}", err))?;
-    let json_output =
-        String::from(std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{:?}", err))?);
-    println!("{}", json_output);
+    let mut json_output = String::new();
+    let mut to_recv = len;
+    while to_recv > 0 {
+        let recv_len = min(BUF_MAX_LEN as u64, to_recv);
+        recv_loop(socket_fd, &mut buf, recv_len)?;
+        to_recv -= recv_len;
+        let to_recv_usize: usize = recv_len.try_into().map_err(|err| format!("{:?}", err))?;
+        json_output.push_str(
+            std::str::from_utf8(&buf[0..to_recv_usize]).map_err(|err| format!("{:?}", err))?,
+        );
+    }
 
-    Ok(())
+    let output: CommandOutput = serde_json::from_str(json_output.as_str())
+        .map_err(|err| format!("Could not deserialize the output: {:?}", err))?;
+    print!("{}", output.stdout);
+    eprint!("{}", output.stderr);
+
+    let rc = match output.rc {
+        Some(code) => code,
+        _ => 0,
+    };
+
+    Ok(rc)
 }
 
 pub fn recv_file(args: FileArgs) -> Result<(), String> {

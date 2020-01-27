@@ -16,7 +16,8 @@ fn main() {
         }
         ("run", Some(args)) => {
             let run_args = RunArgs::new_with(args).ok_or_exit(args.usage());
-            run(run_args).ok_or_exit(args.usage());
+            let rc = run(run_args).ok_or_exit(args.usage());
+            std::process::exit(rc);
         }
         ("recv-file", Some(args)) => {
             let subcmd_args = FileArgs::new_with(args).ok_or_exit(args.usage());

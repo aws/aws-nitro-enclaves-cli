@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::process::Output;
 
 use clap::ArgMatches;
@@ -52,11 +52,11 @@ impl FileArgs {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CommandOutput {
-    stdout: String,
-    stderr: String,
-    rc: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+    pub rc: Option<i32>,
 }
 
 impl CommandOutput {

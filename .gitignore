@@ -1,0 +1,17 @@
+*.o
+enclave
+build/
+**/target
+**/*.rs.bk
+**/*o.cmd
+**/*o.cmd
+**/*o
+**/*o.mod.o
+**/*mod.c
+**/*ko
+**/*order
+**/*symvers
+**/*.tmp_versions
+**/*.tmp_versions
+**/*.cache.mk
+.idea

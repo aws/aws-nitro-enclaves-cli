@@ -26,9 +26,10 @@ enum CmdId {
     RunCmd = 0,
     RecvFile,
     SendFile,
+    RunCmdNoWait,
 }
 
-fn run_server(fd: RawFd) -> Result<(), String> {
+fn run_server(fd: RawFd, no_wait: bool) -> Result<(), String> {
     // recv command
     let len = recv_u64(fd)?;
     let mut buf = [0u8; BUF_MAX_LEN];
@@ -38,14 +39,32 @@ fn run_server(fd: RawFd) -> Result<(), String> {
     let command = std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{:?}", err))?;
 
     // execute command
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .output()
-        .map_err(|err| format!("Could not execute the command: {:?}", err))?;
+    let command_output = if no_wait {
+        #[rustfmt::skip]
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(command)
+            .spawn();
+        if output.is_err() {
+            CommandOutput::new(
+                String::new(),
+                format!("Could not execute the command {}", command),
+                1,
+            )
+        } else {
+            CommandOutput::new(String::new(), String::new(), 0)
+        }
+    } else {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(command)
+            .output()
+            .map_err(|err| format!("Could not execute the command {}: {:?}", command, err))?;
+        CommandOutput::new_from(output)?
+    };
 
     // send output
-    let json_output = serde_json::to_string(&CommandOutput::new(output)?)
+    let json_output = serde_json::to_string(&command_output)
         .map_err(|err| format!("Could not serialize the output: {:?}", err))?;
     let buf = json_output.as_bytes();
     let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
@@ -153,7 +172,7 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
 
         match cmdid {
             CmdId::RunCmd => {
-                if let Err(e) = run_server(fd) {
+                if let Err(e) = run_server(fd, false) {
                     eprintln!("Error {}", e);
                 }
             }
@@ -164,6 +183,11 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
             }
             CmdId::SendFile => {
                 if let Err(e) = send_file_server(fd) {
+                    eprintln!("Error {}", e);
+                }
+            }
+            CmdId::RunCmdNoWait => {
+                if let Err(e) = run_server(fd, true) {
                     eprintln!("Error {}", e);
                 }
             }
@@ -185,7 +209,11 @@ pub fn run(args: RunArgs) -> Result<i32, String> {
     connect(socket_fd, &sockaddr).map_err(|err| format!("Connect failed: {}", err))?;
 
     // Send command id
-    send_u64(socket_fd, CmdId::RunCmd as u64)?;
+    if args.no_wait {
+        send_u64(socket_fd, CmdId::RunCmdNoWait as u64)?;
+    } else {
+        send_u64(socket_fd, CmdId::RunCmd as u64)?;
+    }
 
     // send command
     let buf = args.command.as_bytes();

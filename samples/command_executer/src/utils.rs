@@ -57,6 +57,12 @@ macro_rules! create_app {
                             .help("command")
                             .takes_value(true)
                             .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("no-wait")
+                            .long("no-wait")
+                            .help("command-executer won't wait the command's result")
+                            .takes_value(false),
                     ),
             )
             .subcommand(

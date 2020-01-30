@@ -21,6 +21,7 @@ pub struct RunArgs {
     pub cid: u32,
     pub port: u32,
     pub command: String,
+    pub no_wait: bool,
 }
 
 impl RunArgs {
@@ -29,6 +30,7 @@ impl RunArgs {
             cid: parse_cid(args)?,
             port: parse_port(args)?,
             command: parse_command(args)?,
+            no_wait: parse_no_wait(args),
         })
     }
 }
@@ -60,7 +62,15 @@ pub struct CommandOutput {
 }
 
 impl CommandOutput {
-    pub fn new(output: Output) -> Result<Self, String> {
+    pub fn new(stdout: String, stderr: String, code: i32) -> Self {
+        CommandOutput {
+            stdout,
+            stderr,
+            rc: Some(code),
+        }
+    }
+
+    pub fn new_from(output: Output) -> Result<Self, String> {
         Ok(CommandOutput {
             stdout: String::from_utf8(output.stdout).map_err(|err| format!("{:?}", err))?,
             stderr: String::from_utf8(output.stderr).map_err(|err| format!("{:?}", err))?,
@@ -88,6 +98,14 @@ fn parse_command(args: &ArgMatches) -> Result<String, String> {
         .value_of("command")
         .ok_or("Could not find command argument")?;
     Ok(String::from(command))
+}
+
+fn parse_no_wait(args: &ArgMatches) -> bool {
+    if args.is_present("no-wait") {
+        true
+    } else {
+        false
+    }
 }
 
 fn parse_localfile(args: &ArgMatches) -> Result<String, String> {

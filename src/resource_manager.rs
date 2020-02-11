@@ -188,7 +188,7 @@ impl EnclaveResourceManager {
         self.init_cpus()?;
         let enclave_cid = self.start()?;
         eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT)
-        .map_err(|err| format!("Waiting on enclave to boot failed with error {:?}", err))?;
+            .map_err(|err| format!("Waiting on enclave to boot failed with error {:?}", err))?;
         Ok((enclave_cid, self.slot_id))
     }
 

@@ -8,6 +8,7 @@ use crate::resource_manager::ResourceAllocator;
 use crate::ExitGracefully;
 use crate::NitroCliResult;
 use crate::ResourceAllocatorDriver;
+use crate::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 use clap::{App, Arg, ArgMatches, SubCommand};
 use eif_loader;
 use log::debug;
@@ -225,6 +226,9 @@ pub fn send_eif(args: &ArgMatches) -> NitroCliResult<()> {
         crate::resource_manager::between_packets_delay(),
     )
     .map_err(|err| format!("Failed to send eif Image: {:?}", err))?;
+
+    eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT)
+        .map_err(|err| format!("Waiting on enclave to boot failed with error {:?}", err))?;
     Ok(())
 }
 

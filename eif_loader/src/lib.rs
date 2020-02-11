@@ -235,7 +235,7 @@ pub fn enclave_ready(cid: u32, port: u32) -> Result<(), EifLoaderError> {
     // Wait until the other end is closed
     let mut buf = [0u8; 1];
     recv(client_fd, &mut buf, MsgFlags::empty())
-    .map_err(|_err| EifLoaderError::VsockReceivingError)?;
+        .map_err(|_err| EifLoaderError::VsockReceivingError)?;
 
     Ok(())
 }

@@ -154,33 +154,71 @@ impl YamlGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process::Command;
+    use std::fs::File;
+    use std::io::Read;
 
     /// Test YAML config files are the same as the ones written by hand
     #[test]
     fn test_ramfs() {
         let yaml_generator = YamlGenerator::new(
-            String::from("hello-world:latest"),
-            String::from("build/init"),
-            String::from("build/cmd"),
-            String::from("build/env"),
+            String::from("docker_image"),
+            String::from("path_to_init"),
+            String::from("path_to_cmd"),
+            String::from("path_to_env"),
         );
 
+        let mut bootstrap_data = String::new();
         let bootstrap_ramfs = yaml_generator.get_bootstrap_ramfs().unwrap();
+        let mut bootstrap_ramfs = File::open(bootstrap_ramfs.path()).unwrap();
+        bootstrap_ramfs.read_to_string(&mut bootstrap_data).unwrap();
+        assert_eq!(
+            bootstrap_data,
+            "---\
+             \nfiles:\
+             \n  - path: dev\
+             \n    directory: true\
+             \n    mode: \"0755\"\
+             \n  - path: init\
+             \n    source: path_to_init\
+             \n    mode: \"0755\"\
+             "
+        );
+
+        let mut customer_data = String::new();
         let customer_ramfs = yaml_generator.get_customer_ramfs().unwrap();
-
-        let status = Command::new("cmp")
-            .arg(bootstrap_ramfs.path().to_str().unwrap())
-            .arg("test_data/linuxkit.yml")
-            .status()
-            .expect("command");
-        assert!(status.success());
-
-        let status = Command::new("cmp")
-            .arg(customer_ramfs.path().to_str().unwrap())
-            .arg("test_data/default.yml")
-            .status()
-            .expect("command");
-        assert!(status.success());
+        let mut customer_ramfs = File::open(customer_ramfs.path()).unwrap();
+        customer_ramfs.read_to_string(&mut customer_data).unwrap();
+        assert_eq!(
+            customer_data,
+            "---\
+             \ninit:\
+             \n  - docker_image\
+             \nfiles:\
+             \n  - path: rootfs/dev\
+             \n    directory: true\
+             \n    mode: \"0755\"\
+             \n  - path: rootfs/run\
+             \n    directory: true\
+             \n    mode: \"0755\"\
+             \n  - path: rootfs/sys\
+             \n    directory: true\
+             \n    mode: \"0755\"\
+             \n  - path: rootfs/var\
+             \n    directory: true\
+             \n    mode: \"0755\"\
+             \n  - path: rootfs/proc\
+             \n    directory: true\
+             \n    mode: \"0755\"\
+             \n  - path: rootfs/tmp\
+             \n    directory: true\
+             \n    mode: \"0755\"\
+             \n  - path: cmd\
+             \n    source: path_to_cmd\
+             \n    mode: \"0644\"\
+             \n  - path: env\
+             \n    source: path_to_env\
+             \n    mode: \"0644\"\
+             "
+        );
     }
 }

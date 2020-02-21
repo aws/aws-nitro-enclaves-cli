@@ -62,7 +62,10 @@ impl CpuInfos {
             // its core_id at 2*i+1
             if line.contains("processor") {
                 ids.push(CpuInfos::get_value(line)?);
-            } else if line.contains("apicid") && !line.contains("initial") {
+            } else if line.contains("apicid")
+                && !line.contains("initial")
+                && !line.contains("flags")
+            {
                 let id = CpuInfos::get_value(line)?;
                 ids.push(id >> 1);
             }

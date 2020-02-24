@@ -117,3 +117,7 @@ pub fn get_run_enclaves_info(
     );
     Ok(info)
 }
+
+pub fn get_enclave_id(info: &EnclaveRunInfo) -> String {
+    info.enclave_id.clone()
+}

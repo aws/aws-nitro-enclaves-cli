@@ -21,7 +21,7 @@ use std::str::FromStr;
 use std::thread::{sleep, spawn};
 use std::time::{Duration, SystemTime};
 
-use crate::common::NitroCliResult;
+use crate::common::{ExitGracefully, NitroCliResult};
 
 pub const BUFFER_SIZE: usize = 1024;
 pub const TIMEOUT: u64 = 100; // millis
@@ -29,22 +29,6 @@ pub const POLL_TIMEOUT: i32 = 10000; // millis
 
 pub const CONSOLE_CONNECT_TIMEOUT: i64 = 20000; // millis
 pub const SO_VM_SOCKETS_CONNECT_TIMEOUT: i32 = 6;
-
-pub trait ExitGracefully<T, E> {
-    fn ok_or_exit(self, message: &str) -> T;
-}
-use log::error;
-impl<T, E: std::fmt::Debug> ExitGracefully<T, E> for Result<T, E> {
-    fn ok_or_exit(self, message: &str) -> T {
-        match self {
-            Ok(val) => val,
-            Err(err) => {
-                error!("{:?}: {}", err, message);
-                std::process::exit(1);
-            }
-        }
-    }
-}
 
 fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
     let timeval = TimeVal::milliseconds(millis);

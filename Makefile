@@ -29,7 +29,7 @@ CONTAINER_TAG="nitro_cli:1.0"
 
 
 .PHONY: all
-all: build-setup init nc-vsock nitro-cli nitro-cli-poweruser vsock-proxy
+all: build-setup init nc-vsock nitro-cli enclave-proc nitro-cli-poweruser vsock-proxy
 
 
 .PHONY: driver-deps
@@ -112,6 +112,20 @@ nitro-tests: $(BASE_PATH)/src/main.rs build-setup  build-container
 					 > /nitro_build/test_executables.txt && \
 			chmod -R 777 nitro_build '
 
+.PHONY: enclave-proc
+enclave-proc: $(BASE_PATH)/enclave_proc/src/main.rs build-setup build-container
+	$(DOCKER) run \
+		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
+		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
+		$(CONTAINER_TAG) bin/bash -c \
+			'source /root/.cargo/env && \
+			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ cargo build \
+				--release \
+				--manifest-path=/nitro_src/enclave_proc/Cargo.toml \
+				--target=x86_64-unknown-linux-musl \
+				--target-dir=/nitro_build/enclave_proc  && \
+			chmod -R 777 nitro_build '
+
 .PHONY: nitro-cli-poweruser
 nitro-cli-poweruser: $(BASE_PATH)/src/main.rs build-setup build-container
 	$(DOCKER) run \
@@ -142,12 +156,13 @@ vsock-proxy: $(BASE_PATH)/vsock_proxy/src/main.rs build-setup build-container
 			chmod -R 777 nitro_build '
 
 .PHONY: install
-install: vsock-proxy nitro-cli nitro_cli_resource_allocator
+install: vsock-proxy nitro-cli enclave-proc nitro_cli_resource_allocator
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/usr/sbin
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/var/vsock_proxy
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/nitro_cli_resource_allocator
 	$(INSTALL) -D -m 0700 $(OBJ_PATH)/nitro_cli/x86_64-unknown-linux-musl/release/nitro-cli ${NITRO_CLI_INSTALL_DIR}/usr/sbin/nitro-cli
+	$(INSTALL) -D -m 0700 $(OBJ_PATH)/enclave_proc/x86_64-unknown-linux-musl/release/enclave-proc ${NITRO_CLI_INSTALL_DIR}/usr/sbin/enclave-proc
 	$(INSTALL) -D -m 0700 $(OBJ_PATH)/vsock_proxy/x86_64-unknown-linux-musl/release/vsock-proxy ${NITRO_CLI_INSTALL_DIR}/usr/sbin/vsock-proxy
 	$(INSTALL) -D -m 0700 blobs/bzImage ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/bzImage
 	$(INSTALL) -D -m 0700 blobs/cmdline ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/cmdline
@@ -170,6 +185,7 @@ install: vsock-proxy nitro-cli nitro_cli_resource_allocator
 .PHONY: uninstall
 uninstall:
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/usr/sbin/nitro-cli
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/usr/sbin/enclave-proc
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/usr/sbin/vsock-proxy
 	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli
 	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/var/vsock_proxy

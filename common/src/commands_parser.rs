@@ -3,10 +3,19 @@
 #![deny(warnings)]
 
 use clap::ArgMatches;
+use serde::{Deserialize, Serialize};
 
 pub type NitroCliResult<T> = Result<T, String>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EnclaveProcessCommandType {
+    Start = 0,
+    Stop,
+    Describe,
+    Console,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunEnclavesArgs {
     pub eif_path: String,
     pub enclave_cid: Option<u64>,

@@ -8,6 +8,7 @@ extern crate num_traits;
 
 pub mod cli_dev;
 pub mod cpu_info;
+pub mod enclave_proc_comm;
 pub mod json_output;
 pub mod resource_allocator_driver;
 pub mod resource_manager;

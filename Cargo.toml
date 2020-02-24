@@ -17,6 +17,7 @@ log = "0.4"
 env_logger = "0.6"
 libc = "0.2"
 signal-hook = "0.1"
+serde_cbor = "0.10"
 common = { path = "./common" }
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build"}
@@ -26,7 +27,7 @@ log = "0.4"
 tempfile = "3.1"
 
 [workspace]
-members = [".", "common", "eif_defs", "eif_loader", "eif_utils", "enclave_build", "vsock_proxy"]
+members = [".", "common", "eif_defs", "eif_loader", "eif_utils", "enclave_build", "enclave_proc", "vsock_proxy"]
 
 [features]
 default = []

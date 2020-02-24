@@ -1,5 +1,5 @@
 [package]
-name = "common"
+name = "enclave-proc"
 version = "0.1.0"
 authors = ["Andrei Trandafir <aatrand@amazon.com>"]
 edition = "2018"
@@ -8,5 +8,10 @@ edition = "2018"
 
 [dependencies]
 serde = { version = ">=1.0", features = ["derive"] }
-clap = "2.33"
+log = "0.4"
+env_logger = "0.6"
+libc = "0.2"
+nix = "0.15"
 serde_cbor = "0.10"
+procinfo = "0.4"
+common = { path = "../common" }

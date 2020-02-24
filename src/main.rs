@@ -8,11 +8,13 @@ use nitro_cli::utils::handle_signals;
 use nitro_cli::utils::ExitGracefully;
 
 use common::commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
+    BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, EnclaveProcessCommandType,
+    RunEnclavesArgs, TerminateEnclavesArgs,
 };
 use env_logger;
 use log::info;
 use nitro_cli::create_app;
+use nitro_cli::enclave_proc_comm::{enclaved_command_send_single, enclaved_spawn};
 #[cfg(feature = "power_user")]
 use nitro_cli::testing_commands;
 use nitro_cli::{
@@ -36,6 +38,10 @@ fn main() {
         ("run-enclave", Some(args)) => {
             handle_signals();
             let run_args = RunEnclavesArgs::new_with(args).ok_or_exit(args.usage());
+            let mut comm = enclaved_spawn().expect("Enclave process spawning failed.");
+            enclaved_command_send_single(&EnclaveProcessCommandType::Start, &run_args, &mut comm)
+                .expect("Failed to send single command.");
+            // TODO: Move enclave run into the newly-spawned enclave process.
             run_enclaves(run_args).ok_or_exit(args.usage());
         }
         ("terminate-enclave", Some(args)) => {

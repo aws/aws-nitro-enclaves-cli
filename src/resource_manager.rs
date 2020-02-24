@@ -17,11 +17,10 @@ use crate::cli_dev::{
     NitroEnclavesSlotFree,
 };
 use crate::common::commands_parser::TerminateEnclavesArgs;
-use crate::common::NitroCliResult;
+use crate::common::{ExitGracefully, NitroCliResult};
 use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
 use crate::terminate_enclaves;
 use crate::utils::generate_enclave_id;
-use crate::utils::ExitGracefully;
 use crate::{ENCLAVE_READY_VSOCK_PORT, ENCLAVE_VSOCK_LOADER_PORT, VMADDR_CID_PARENT};
 
 // sys fs path to online/offline cpus

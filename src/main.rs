@@ -2,25 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 use clap::{App, AppSettings, Arg, SubCommand};
-
-use nitro_cli::utils::handle_signals;
-use nitro_cli::utils::ExitGracefully;
-
-use env_logger;
 use log::info;
+
 use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
+use nitro_cli::common::enclave_proc_command_send_single;
+use nitro_cli::common::logger;
+use nitro_cli::common::{EnclaveProcessCommandType, ExitGracefully};
 use nitro_cli::create_app;
+use nitro_cli::enclave_proc_comm::enclave_proc_spawn;
 #[cfg(feature = "power_user")]
 use nitro_cli::testing_commands;
+use nitro_cli::utils::handle_signals;
 use nitro_cli::{
     build_enclaves, console_enclaves, describe_enclaves, run_enclaves, terminate_enclaves,
 };
 
 fn main() {
     // Command line specification for NitroEnclaves CLI.
-    env_logger::init();
+    let logger = logger::init_logger();
+
+    logger.update_logger_id(format!("nitro-cli:{}", std::process::id()).as_str());
     info!("Start Nitro CLI");
 
     let app = create_app!();
@@ -35,6 +38,14 @@ fn main() {
         ("run-enclave", Some(args)) => {
             handle_signals();
             let run_args = RunEnclavesArgs::new_with(args).ok_or_exit(args.usage());
+            let mut comm = enclave_proc_spawn(&logger).expect("Enclave process spawning failed.");
+            enclave_proc_command_send_single(
+                &EnclaveProcessCommandType::Run,
+                Some(&run_args),
+                &mut comm,
+            )
+            .expect("Failed to send single command.");
+            // TODO: Move enclave run into the newly-spawned enclave process.
             run_enclaves(run_args).ok_or_exit(args.usage());
         }
         ("terminate-enclave", Some(args)) => {

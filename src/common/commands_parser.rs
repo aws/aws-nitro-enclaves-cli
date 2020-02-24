@@ -3,10 +3,11 @@
 #![deny(warnings)]
 
 use clap::ArgMatches;
+use serde::{Deserialize, Serialize};
 
 use crate::common::NitroCliResult;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunEnclavesArgs {
     pub eif_path: String,
     pub enclave_cid: Option<u64>,
@@ -82,6 +83,9 @@ impl ConsoleArgs {
         })
     }
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct EmptyArgs {}
 
 fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
     let memory = args

@@ -9,6 +9,8 @@ extern crate num_traits;
 pub mod cli_dev;
 pub mod common;
 pub mod cpu_info;
+pub mod enclave_proc;
+pub mod enclave_proc_comm;
 pub mod json_output;
 pub mod resource_allocator_driver;
 pub mod resource_manager;
@@ -32,13 +34,13 @@ use common::commands_parser::{
 use common::NitroCliResult;
 use cpu_info::CpuInfos;
 use enclave_build;
-use json_output::{get_enclave_describe_info, get_run_enclaves_info};
+use json_output::{get_enclave_describe_info, get_enclave_id, get_run_enclaves_info};
 use json_output::{EnclaveBuildInfo, EnclaveDescribeInfo};
 use resource_allocator_driver::ResourceAllocatorDriver;
 use resource_manager::online_slot_cpus;
 use resource_manager::EnclaveResourceManager;
 use utils::get_slot_id;
-use utils::{Console, ExitGracefully};
+use utils::Console;
 
 // Hypervisor cid as defined by:
 // http://man7.org/linux/man-pages/man7/vsock.7.html
@@ -49,7 +51,7 @@ pub const ENCLAVE_VSOCK_LOADER_PORT: u32 = 7000;
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
 pub const BUFFER_SIZE: usize = 1024;
 
-pub fn run_enclaves(args: RunEnclavesArgs) -> NitroCliResult<u64> {
+pub fn run_enclaves(args: RunEnclavesArgs) -> NitroCliResult<String> {
     let eif_file = File::open(&args.eif_path)
         .map_err(|err| format!("Failed to open the eif file: {:?}", err))?;
 
@@ -83,7 +85,7 @@ pub fn run_enclaves(args: RunEnclavesArgs) -> NitroCliResult<u64> {
         serde_json::to_string_pretty(&info).map_err(|err| format!("{:?}", err))?
     );
 
-    Ok(enclave_cid)
+    Ok(get_enclave_id(&info))
 }
 
 pub fn terminate_enclaves(terminate_args: TerminateEnclavesArgs) -> NitroCliResult<()> {

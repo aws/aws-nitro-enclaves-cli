@@ -11,6 +11,7 @@ use std::os::unix::io::{FromRawFd, RawFd};
 use std::str;
 use std::sync::mpsc;
 use std::{process, thread};
+use tempfile::NamedTempFile;
 
 use vsock_proxy::starter::{Proxy, ProxyError};
 
@@ -37,12 +38,18 @@ fn vsock_connect(port: u32) -> Result<RawFd, ProxyError> {
 fn test_tcp_connection() {
     // Proxy will translate from port 8000 vsock to localhost port 9000 TCP
     let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+    let mut file = NamedTempFile::new().unwrap();
+    file.write_all(
+        b"whitelist:\n\
+            - {address: 127.0.0.1, port: 9000}",
+    )
+    .unwrap();
     let proxy = Proxy::new(
         vsock_proxy::starter::VSOCK_PROXY_PORT,
         addr,
         9000,
         2,
-        None,
+        file.path().to_str(),
         false,
         false,
     );

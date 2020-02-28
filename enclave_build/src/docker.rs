@@ -288,27 +288,33 @@ fn write_config(config: Vec<String>) -> Result<NamedTempFile, DockerError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process::Command;
+    use std::io::Read;
 
     /// Test extracted configuration is as expected
     #[test]
     fn test_config() {
-        let docker = DockerUtil::new(String::from("nc-vsock:latest"));
+        let docker = DockerUtil::new(String::from(
+            "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample",
+        ));
 
         let (cmd_file, env_file) = docker.load().unwrap();
+        let mut cmd_file = File::open(cmd_file.path()).unwrap();
+        let mut env_file = File::open(env_file.path()).unwrap();
 
-        let status = Command::new("cmp")
-            .arg(cmd_file.path().to_str().unwrap())
-            .arg("test_data/test_cmd")
-            .status()
-            .expect("command");
-        assert!(status.success());
+        let mut cmd = String::new();
+        cmd_file.read_to_string(&mut cmd).unwrap();
+        assert_eq!(
+            cmd,
+            "/nc-vsock\n\
+             -l\n\
+             5000\n"
+        );
 
-        let status = Command::new("cmp")
-            .arg(env_file.path().to_str().unwrap())
-            .arg("test_data/test_env")
-            .status()
-            .expect("command");
-        assert!(status.success());
+        let mut env = String::new();
+        env_file.read_to_string(&mut env).unwrap();
+        assert_eq!(
+            env,
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n"
+        );
     }
 }

@@ -66,7 +66,7 @@ mod tests {
             .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "5d72953fe6a1179cb138de0856869a304c65207e180f6b349e9d5f7b2cbd23122f782d847f3594d614b8a0d4955a3479"
+            "c9b8700292f8a1190270359c2f010f96f49216c38089bcc49f4b96841d7cc360430ad7c0eb7a840ffdc70b8465b8284c"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
@@ -109,7 +109,7 @@ mod tests {
             .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "e5f1062706f2ea969e21061f13c635c29a8d04cd375529c4f6e1e560a2ad5b21363e0681b3c4d3c7c7eaed39a115186c"
+            "7f43e4bf78806fb629b6c5297986fd8a33da83d4c4c22bdd18338f890a09a8fb00e33df94e6253862ce9af87af234c41"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),

@@ -1,18 +1,15 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
-
 use clap::{App, AppSettings, Arg, SubCommand};
 
 use nitro_cli::utils::handle_signals;
 use nitro_cli::utils::ExitGracefully;
 
-use nitro_cli::commands_parser::RunEnclavesArgs;
-
 use env_logger;
 use log::info;
-use nitro_cli::commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, TerminateEnclavesArgs,
+use nitro_cli::common::commands_parser::{
+    BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::create_app;
 #[cfg(feature = "power_user")]

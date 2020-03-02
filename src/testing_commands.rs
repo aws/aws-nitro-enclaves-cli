@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-use super::cli_dev::*;
-
-use crate::resource_manager::ResourceAllocator;
-use crate::ExitGracefully;
-use crate::NitroCliResult;
-use crate::ResourceAllocatorDriver;
-use crate::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 use clap::{App, Arg, ArgMatches, SubCommand};
-use eif_loader;
 use log::debug;
 use num_traits::FromPrimitive;
 use std::fs::File;
+
+use super::cli_dev::*;
+use crate::common::NitroCliResult;
+use crate::resource_manager::ResourceAllocator;
+use crate::ExitGracefully;
+use crate::ResourceAllocatorDriver;
+use crate::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
+use eif_loader;
 
 pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
     app.subcommand(

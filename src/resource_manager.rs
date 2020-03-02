@@ -1,24 +1,8 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
+
 use log::error;
-
-use crate::cli_dev::{
-    sanitize_command, CliDev, NitroEnclavesCmdType, NitroEnclavesEnclaveStart,
-    NitroEnclavesSlotAddMem, NitroEnclavesSlotAddVcpu, NitroEnclavesSlotAlloc,
-    NitroEnclavesSlotFree,
-};
-
-use crate::terminate_enclaves;
-use crate::NitroCliResult;
-use crate::ENCLAVE_READY_VSOCK_PORT;
-use crate::ENCLAVE_VSOCK_LOADER_PORT;
-use crate::VMADDR_CID_PARENT;
-
-use crate::commands_parser::TerminateEnclavesArgs;
-use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
-use crate::utils::generate_enclave_id;
-use crate::utils::ExitGracefully;
 use nix::fcntl::{flock, FlockArg};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -26,6 +10,19 @@ use std::io::Write;
 use std::mem::size_of_val;
 use std::os::unix::io::AsRawFd;
 use std::time::Duration;
+
+use crate::cli_dev::{
+    sanitize_command, CliDev, NitroEnclavesCmdType, NitroEnclavesEnclaveStart,
+    NitroEnclavesSlotAddMem, NitroEnclavesSlotAddVcpu, NitroEnclavesSlotAlloc,
+    NitroEnclavesSlotFree,
+};
+use crate::common::commands_parser::TerminateEnclavesArgs;
+use crate::common::NitroCliResult;
+use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
+use crate::terminate_enclaves;
+use crate::utils::generate_enclave_id;
+use crate::utils::ExitGracefully;
+use crate::{ENCLAVE_READY_VSOCK_PORT, ENCLAVE_VSOCK_LOADER_PORT, VMADDR_CID_PARENT};
 
 // sys fs path to online/offline cpus
 const CPU_ONLINE_PATTERN: &str = "/sys/devices/system/cpu/cpu%/online";

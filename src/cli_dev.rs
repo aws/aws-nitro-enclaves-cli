@@ -7,6 +7,7 @@
 /// The definitions need to be kept in sync with the device API.
 use log::debug;
 use memmap::{MmapMut, MmapOptions};
+use serde::Deserialize;
 use std::ffi::CStr;
 use std::fmt::Debug;
 use std::fs::read_to_string;
@@ -18,9 +19,8 @@ use std::slice;
 use std::thread::sleep;
 use std::time;
 
+use crate::common::NitroCliResult;
 use crate::utils::FileLock;
-use crate::NitroCliResult;
-use serde::Deserialize;
 
 // Command types for sending requests to the NitroEnclaves device.
 #[derive(Debug, Copy, Clone, Primitive)]

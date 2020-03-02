@@ -2,28 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-use crate::NitroCliResult;
+use libc::{c_void, close};
 use nix::fcntl::{flock, FlockArg};
 use nix::poll::poll;
 use nix::poll::{PollFd, PollFlags};
 use nix::sys::socket::{connect, socket};
 use nix::sys::socket::{AddressFamily, SockAddr, SockFlag, SockType};
+use nix::sys::time::{TimeVal, TimeValLike};
 use nix::unistd::read;
 use signal_hook::iterator::Signals;
 use signal_hook::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use std::fs::metadata;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::FromStr;
 use std::thread::{sleep, spawn};
 use std::time::{Duration, SystemTime};
 
-use libc::c_void;
-use libc::close;
-use nix::sys::time::TimeVal;
-use nix::sys::time::TimeValLike;
-use std::mem::size_of;
+use crate::common::NitroCliResult;
 
 pub const BUFFER_SIZE: usize = 1024;
 pub const TIMEOUT: u64 = 100; // millis

@@ -15,10 +15,10 @@ use crate::ENCLAVE_READY_VSOCK_PORT;
 use crate::ENCLAVE_VSOCK_LOADER_PORT;
 use crate::VMADDR_CID_PARENT;
 
-use crate::commands_parser::TerminateEnclavesArgs;
 use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
 use crate::utils::generate_enclave_id;
 use crate::utils::ExitGracefully;
+use common::commands_parser::TerminateEnclavesArgs;
 use nix::fcntl::{flock, FlockArg};
 use std::fs::File;
 use std::fs::OpenOptions;

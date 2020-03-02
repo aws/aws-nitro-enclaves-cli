@@ -7,7 +7,6 @@ extern crate enum_primitive_derive;
 extern crate num_traits;
 
 pub mod cli_dev;
-pub mod commands_parser;
 pub mod cpu_info;
 pub mod json_output;
 pub mod resource_allocator_driver;
@@ -21,7 +20,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::fs::OpenOptions;
 
-use commands_parser::{
+use common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
 use resource_allocator_driver::ResourceAllocatorDriver;

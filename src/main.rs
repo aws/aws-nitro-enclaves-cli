@@ -7,13 +7,11 @@ use clap::{App, AppSettings, Arg, SubCommand};
 use nitro_cli::utils::handle_signals;
 use nitro_cli::utils::ExitGracefully;
 
-use nitro_cli::commands_parser::RunEnclavesArgs;
-
+use common::commands_parser::{
+    BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
+};
 use env_logger;
 use log::info;
-use nitro_cli::commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, TerminateEnclavesArgs,
-};
 use nitro_cli::create_app;
 #[cfg(feature = "power_user")]
 use nitro_cli::testing_commands;

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-use crate::NitroCliResult;
 use clap::ArgMatches;
+
+pub type NitroCliResult<T> = Result<T, String>;
 
 #[derive(Debug, Clone)]
 pub struct RunEnclavesArgs {
@@ -157,5 +158,9 @@ fn parse_output(args: &ArgMatches) -> Option<String> {
 
 fn debug_mode(args: &ArgMatches) -> Option<bool> {
     let val = args.is_present("debug-mode");
-    return if val { Some(val) } else { None };
+    if val {
+        Some(val)
+    } else {
+        None
+    }
 }

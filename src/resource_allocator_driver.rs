@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-use crate::NitroCliResult;
 use nix;
 use nix::ioctl_read;
 use nix::ioctl_readwrite;
 use std::fs::File;
 use std::mem::size_of_val;
 use std::os::unix::io::AsRawFd;
+
+use crate::common::NitroCliResult;
 
 pub const RESOURCE_ALLOCATOR_PATH: &str = "/dev/nitro_cli_resource_allocator";
 /// Structure to communicate with the resource allocator driver.

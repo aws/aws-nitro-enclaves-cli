@@ -7,7 +7,7 @@ extern crate enum_primitive_derive;
 extern crate num_traits;
 
 pub mod cli_dev;
-pub mod commands_parser;
+pub mod common;
 pub mod cpu_info;
 pub mod json_output;
 pub mod resource_allocator_driver;
@@ -15,33 +15,30 @@ pub mod resource_manager;
 pub mod testing_commands;
 pub mod utils;
 
-use enclave_build;
 use log::debug;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::io::{self, Read, Write};
 
-use commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
-};
-use resource_allocator_driver::ResourceAllocatorDriver;
-use resource_manager::EnclaveResourceManager;
-
-use crate::cli_dev::{
+use cli_dev::{
     CliDev, NitroEnclavesCmdReply, NitroEnclavesEnclaveStop, NitroEnclavesNextSlot,
     NitroEnclavesSlotCount, NitroEnclavesSlotFree, NitroEnclavesSlotInfo,
 };
-use std::io::{self, Read, Write};
-use utils::ExitGracefully;
-
-use crate::resource_manager::online_slot_cpus;
-use std::convert::TryFrom;
+use common::commands_parser::{
+    BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
+};
+use common::NitroCliResult;
+use cpu_info::CpuInfos;
+use enclave_build;
+use json_output::{get_enclave_describe_info, get_run_enclaves_info};
+use json_output::{EnclaveBuildInfo, EnclaveDescribeInfo};
+use resource_allocator_driver::ResourceAllocatorDriver;
+use resource_manager::online_slot_cpus;
+use resource_manager::EnclaveResourceManager;
 use utils::get_slot_id;
-use utils::Console;
-
-use crate::cpu_info::CpuInfos;
-use crate::json_output::{get_enclave_describe_info, get_run_enclaves_info};
-use crate::json_output::{EnclaveBuildInfo, EnclaveDescribeInfo};
+use utils::{Console, ExitGracefully};
 
 // Hypervisor cid as defined by:
 // http://man7.org/linux/man-pages/man7/vsock.7.html
@@ -51,7 +48,6 @@ pub const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
 pub const ENCLAVE_VSOCK_LOADER_PORT: u32 = 7000;
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
 pub const BUFFER_SIZE: usize = 1024;
-pub type NitroCliResult<T> = Result<T, String>;
 
 pub fn run_enclaves(args: RunEnclavesArgs) -> NitroCliResult<u64> {
     let eif_file = File::open(&args.eif_path)

@@ -7,9 +7,12 @@ pub mod logger;
 
 use log::error;
 use serde::{Deserialize, Serialize};
+use signal_hook::iterator::Signals;
+use signal_hook::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
+use std::thread::spawn;
 
 pub type NitroCliResult<T> = Result<T, String>;
 
@@ -110,4 +113,16 @@ pub fn receive_command_type(input_stream: &mut dyn Read) -> io::Result<EnclavePr
     let cmd_type = serde_cbor::from_slice(&cmd_data[..])
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(cmd_type)
+}
+
+pub fn handle_signals() {
+    let signals =
+        Signals::new(&[SIGINT, SIGQUIT, SIGTERM, SIGHUP]).ok_or_exit("Could not handle signals");
+    spawn(move || {
+        for sig in signals.forever() {
+            if sig != SIGHUP {
+                eprintln!("Warning! Trying to stop a command could leave the enclave in an unsafe state. If you think something is wrong please use SIGKILL to terminate the command.");
+            }
+        }
+    });
 }

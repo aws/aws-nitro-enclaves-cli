@@ -2,10 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
+pub mod cli_dev;
+pub mod commands;
 pub mod connection;
 pub mod connection_listener;
+pub mod cpu_info;
+pub mod json_output;
+pub mod resource_allocator_driver;
+pub mod resource_manager;
+pub mod utils;
 
-use log::{info, warn};
+use log::info;
 use nix::sys::signal::{signal, SigHandler, Signal};
 use nix::unistd::*;
 use procinfo::pid;
@@ -17,11 +24,14 @@ use std::os::unix::net::UnixStream;
 use std::process;
 use std::thread;
 
-use super::common::commands_parser::RunEnclavesArgs;
 use super::common::{read_u64_le, receive_command_type};
 use super::common::{EnclaveProcessCommandType, ExitGracefully};
+use crate::common::commands_parser::{
+    ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
+};
 use crate::common::logger::EnclaveProcLogWriter;
 
+use commands::{console_enclaves, describe_enclaves, run_enclaves, terminate_enclaves};
 use connection::Connection;
 use connection_listener::ConnectionListener;
 
@@ -53,22 +63,44 @@ fn process_event_loop(comm_stream: UnixStream) {
 
         match cmd {
             EnclaveProcessCommandType::Run => {
-                let run_args = receive_command_args::<RunEnclavesArgs>(connection.as_reader());
+                let run_args = receive_command_args::<RunEnclavesArgs>(connection.as_reader())
+                    .ok_or_exit("Failed to get run arguments.");
                 info!("Run args = {:?}", run_args);
-                // TODO: Launch an enclave from here.
-                // TODO: The exposed socket's name will be "<enclave_id>.sock".
+                let enclave_id = run_enclaves(run_args).ok_or_exit("Failed to run enclave.");
+                // TODO: run_enclaves(run_args).ok_or_exit(args.usage());
                 conn_listener
-                    .start("0".to_string())
+                    .start(enclave_id)
                     .ok_or_exit("Failed to start connection listener.");
             }
 
             EnclaveProcessCommandType::Terminate => {
-                info!("Stopping enclave process.");
-                // TODO: Terminate the enclave.
+                let terminate_args =
+                    receive_command_args::<TerminateEnclavesArgs>(connection.as_reader())
+                        .ok_or_exit("Failed to get terminate arguments.");;;
+                info!("Stop args = {:?}", terminate_args);
+                terminate_enclaves(terminate_args).ok_or_exit("Failed to terminate enclave.");
+                //TODO: terminate_enclaves(terminate_args).ok_or_exit(args.usage());
                 break;
             }
 
-            _ => warn!("Command not supported."),
+            EnclaveProcessCommandType::Console => {
+                let console_args = receive_command_args::<ConsoleArgs>(connection.as_reader())
+                    .ok_or_exit("Failed to get console arguments.");
+                info!("Console args = {:?}", console_args);
+                console_enclaves(console_args).ok_or_exit("Failed to open console to enclave.");
+                // TODO: console_enclaves(describe_args).ok_or_exit(args.usage());
+            }
+
+            EnclaveProcessCommandType::Describe => {
+                let describe_args =
+                    receive_command_args::<DescribeEnclaveArgs>(connection.as_reader())
+                        .ok_or_exit("Failed to get describe arguments.");
+                info!("Describe args = {:?}", describe_args);
+                describe_enclaves(describe_args).ok_or_exit("Failed to describe enclave.");
+                //TODO: describe_enclaves(describe_args).ok_or_exit(args.usage());
+            }
+
+            EnclaveProcessCommandType::ConnectionListenerStop => (),
         };
     }
 

@@ -1,12 +1,13 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(warnings)]
 
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-use crate::cli_dev::NitroEnclavesCmdReply;
 use crate::common::NitroCliResult;
-use crate::utils::generate_enclave_id;
+use crate::enclave_proc::cli_dev::NitroEnclavesCmdReply;
+use crate::enclave_proc::utils::generate_enclave_id;
 
 #[derive(Serialize)]
 pub struct EnclaveDescribeInfo {

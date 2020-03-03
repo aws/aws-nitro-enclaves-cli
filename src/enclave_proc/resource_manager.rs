@@ -11,17 +11,21 @@ use std::mem::size_of_val;
 use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 
-use crate::cli_dev::{
+use crate::common::commands_parser::TerminateEnclavesArgs;
+use crate::common::{ExitGracefully, NitroCliResult};
+use crate::enclave_proc::cli_dev::{
     sanitize_command, CliDev, NitroEnclavesCmdType, NitroEnclavesEnclaveStart,
     NitroEnclavesSlotAddMem, NitroEnclavesSlotAddVcpu, NitroEnclavesSlotAlloc,
     NitroEnclavesSlotFree,
 };
-use crate::common::commands_parser::TerminateEnclavesArgs;
-use crate::common::{ExitGracefully, NitroCliResult};
-use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
-use crate::terminate_enclaves;
-use crate::utils::generate_enclave_id;
-use crate::{ENCLAVE_READY_VSOCK_PORT, ENCLAVE_VSOCK_LOADER_PORT, VMADDR_CID_PARENT};
+use crate::enclave_proc::commands::terminate_enclaves;
+use crate::enclave_proc::commands::{
+    ENCLAVE_READY_VSOCK_PORT, ENCLAVE_VSOCK_LOADER_PORT, VMADDR_CID_PARENT,
+};
+use crate::enclave_proc::resource_allocator_driver::{
+    nitro_cli_slot_mem_region, ResourceAllocatorDriver,
+};
+use crate::enclave_proc::utils::generate_enclave_id;
 
 // sys fs path to online/offline cpus
 const CPU_ONLINE_PATTERN: &str = "/sys/devices/system/cpu/cpu%/online";
@@ -401,9 +405,11 @@ mod tests {
                 tempfile::tempfile().unwrap(),
                 false,
             )
-            .expect("Failed to create resource manager");
-            resource_manager.init_memory().expect("Init memory failed");
-            resource_manager.init_cpus().expect("Add cpus failed");
+            .ok_or_exit("Failed to create resource manager");
+            resource_manager
+                .init_memory()
+                .ok_or_exit("Init memory failed");
+            resource_manager.init_cpus().ok_or_exit("Add cpus failed");
         }
     }
 }

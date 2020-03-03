@@ -4,7 +4,7 @@
 use common::commands_parser::EnclaveProcessCommandType;
 use common::{read_u64_from_socket, write_u64_to_socket};
 use common::{ENCLAVE_PROC_BINARY, ENCLAVE_PROC_DIR_VAR, ENCLAVE_PROC_SOCKET_DIR};
-use log::{error, info};
+use log::{debug, error, info};
 use serde::Serialize;
 use serde_cbor;
 use std::env;
@@ -110,11 +110,11 @@ pub fn enclaved_connect_to_all() -> io::Result<Vec<UnixStream>> {
                     if let Some(path_str) = path.path().to_str() {
                         if path_str.ends_with(".sock") {
                             if let Ok(conn) = UnixStream::connect(path_str) {
-                                println!("Connected to: {}", path_str);
+                                debug!("Connected to: {}", path_str);
                                 conn_list.push(conn);
                             } else {
                                 // Can't connect to the enclave process; delete socket.
-                                println!("Deleting socket: {}", path_str);
+                                info!("Deleting stale socket: {}", path_str);
                                 fs::remove_file(path_str).expect("Failed to delete socket.");
                             }
                         }
@@ -148,6 +148,29 @@ where
     // Write the serialized command arguments.
     write_u64_to_socket(&mut socket, arg_bytes.len() as u64)?;
     socket.write_all(&arg_bytes)?;
+
+    Ok(())
+}
+
+pub fn enclaved_command_send_all<T>(cmd: &EnclaveProcessCommandType, args: &T) -> io::Result<()>
+where
+    T: Serialize,
+{
+    let mut conns = enclaved_connect_to_all()?;
+    let mut results: Vec<io::Result<()>> = Vec::with_capacity(conns.len());
+
+    for socket in conns.iter_mut() {
+        results.push(enclaved_command_send_single(cmd, args, socket));
+    }
+
+    let errors = results.iter().any(|result| result.is_err());
+
+    if errors {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Communication with at least one process failed.",
+        ));
+    }
 
     Ok(())
 }

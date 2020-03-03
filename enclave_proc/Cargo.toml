@@ -9,9 +9,16 @@ edition = "2018"
 [dependencies]
 serde = { version = ">=1.0", features = ["derive"] }
 log = "0.4"
+clap = "2.33"
 env_logger = "0.6"
+procinfo = "0.4"
+memmap = "0.7"
 libc = "0.2"
+page_size = "0.4"
 nix = "0.15"
 serde_cbor = "0.10"
-procinfo = "0.4"
+num-traits = "0.2"
+serde_json = "1.0"
+enum-primitive-derive = "0.1"
 common = { path = "../common" }
+eif_loader = { path = "../eif_loader" }

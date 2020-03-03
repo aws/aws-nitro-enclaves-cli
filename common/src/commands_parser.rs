@@ -5,7 +5,7 @@
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
 
-pub type NitroCliResult<T> = Result<T, String>;
+use crate::NitroCliResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EnclaveProcessCommandType {
@@ -55,7 +55,7 @@ impl BuildEnclavesArgs {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminateEnclavesArgs {
     pub enclave_id: String,
 }
@@ -68,7 +68,7 @@ impl TerminateEnclavesArgs {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DescribeEnclaveArgs {}
 
 impl DescribeEnclaveArgs {
@@ -79,7 +79,7 @@ impl DescribeEnclaveArgs {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsoleArgs {
     pub enclave_id: String,
 }

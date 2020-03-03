@@ -19,7 +19,7 @@ use std::thread::sleep;
 use std::time;
 
 use crate::utils::FileLock;
-use crate::NitroCliResult;
+use common::NitroCliResult;
 use serde::Deserialize;
 
 // Command types for sending requests to the NitroEnclaves device.

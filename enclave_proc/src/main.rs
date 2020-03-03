@@ -23,9 +23,15 @@ use nix::unistd::*;
 
 use serde::de::DeserializeOwned;
 
-use common::commands_parser::{EnclaveProcessCommandType, RunEnclavesArgs};
+use common::commands_parser::{
+    ConsoleArgs, DescribeEnclaveArgs, EnclaveProcessCommandType, RunEnclavesArgs,
+    TerminateEnclavesArgs,
+};
+use common::ExitGracefully;
 use common::ENCLAVE_PROC_SOCKET_DIR;
 use common::{read_u64_from_socket, write_u64_to_socket};
+
+use enclave_proc::{console_enclaves, describe_enclaves, run_enclaves, terminate_enclaves};
 
 // TODO: We should have includes & implementations for both Linux and Windows.
 use nix::sys::epoll;
@@ -104,18 +110,38 @@ fn process_event_loop(epoll_fd: RawFd) {
 
         match cmd {
             EnclaveProcessCommandType::Start => {
-                let run_args = receive_command_args::<RunEnclavesArgs>(&mut input_stream);
+                let run_args = receive_command_args::<RunEnclavesArgs>(&mut input_stream)
+                    .expect("Failed to get run arguments.");
                 info!("Run args = {:?}", run_args);
-                // TODO: Launch an enclave from here.
+                run_enclaves(run_args).ok_or_exit("Failed to run enclave.");
+                // TODO: run_enclaves(run_args).ok_or_exit(args.usage());
             }
 
             EnclaveProcessCommandType::Stop => {
-                info!("Stopping enclave process.");
-                // TODO: Terminate the enclave.
+                let terminate_args =
+                    receive_command_args::<TerminateEnclavesArgs>(&mut input_stream)
+                        .expect("Failed to get terminate arguments.");;;
+                info!("Stop args = {:?}", terminate_args);
+                terminate_enclaves(terminate_args).ok_or_exit("Failed to terminate enclave.");
+                //TODO: terminate_enclaves(terminate_args).ok_or_exit(args.usage());
                 break;
             }
 
-            _ => warn!("Command not supported."),
+            EnclaveProcessCommandType::Console => {
+                let console_args = receive_command_args::<ConsoleArgs>(&mut input_stream)
+                    .expect("Failed to get console arguments.");
+                info!("Console args = {:?}", console_args);
+                console_enclaves(console_args).ok_or_exit("Failed to open console to enclave.");
+                // TODO: console_enclaves(describe_args).ok_or_exit(args.usage());
+            }
+
+            EnclaveProcessCommandType::Describe => {
+                let describe_args = receive_command_args::<DescribeEnclaveArgs>(&mut input_stream)
+                    .expect("Failed to get describe arguments.");
+                info!("Describe args = {:?}", describe_args);
+                describe_enclaves(describe_args).ok_or_exit("Failed to describe enclave.");
+                //TODO: describe_enclaves(describe_args).ok_or_exit(args.usage());
+            }
         };
     }
 

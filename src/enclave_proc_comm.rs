@@ -4,14 +4,17 @@
 
 use log::info;
 use nix::unistd::*;
+use serde::Serialize;
 use std::fs;
 use std::io;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::process;
 
+use crate::common::enclave_proc_command_send_single;
 use crate::common::logger::EnclaveProcLogWriter;
 use crate::common::ENCLAVE_PROC_RESOURCES_DIR;
+use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 use crate::enclave_proc::enclave_process_run;
 
 /// Spawn an enclave process and wait until it has detached and has
@@ -70,10 +73,37 @@ pub fn enclave_proc_connect_to_all() -> io::Result<Vec<UnixStream>> {
 
                 // Can't connect to the enclave process, so delete the socket.
                 info!("Deleting stale socket: {}", path_str);
-                fs::remove_file(path_str).expect("Failed to delete socket.");
+                fs::remove_file(path_str).ok_or_exit("Failed to delete socket.");
             }
 
             None
         })
         .collect())
+}
+
+/// Broadcast a command to all available enclave processes.
+pub fn enclave_proc_command_send_all<T>(
+    cmd: &EnclaveProcessCommandType,
+    args: Option<&T>,
+) -> io::Result<()>
+where
+    T: Serialize,
+{
+    let mut conns = enclave_proc_connect_to_all()?;
+    let mut results: Vec<io::Result<()>> = Vec::with_capacity(conns.len());
+
+    for socket in conns.iter_mut() {
+        results.push(enclave_proc_command_send_single(cmd, args, socket));
+    }
+
+    let errors = results.iter().any(|result| result.is_err());
+
+    if errors {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Communication with at least one process failed.",
+        ));
+    }
+
+    Ok(())
 }

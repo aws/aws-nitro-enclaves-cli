@@ -1,23 +1,21 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
+
 use clap::{App, AppSettings, Arg, SubCommand};
 use log::info;
 
+use nitro_cli::build_enclaves;
 use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::common::enclave_proc_command_send_single;
 use nitro_cli::common::logger;
-use nitro_cli::common::{EnclaveProcessCommandType, ExitGracefully};
+use nitro_cli::common::{handle_signals, EnclaveProcessCommandType, ExitGracefully};
 use nitro_cli::create_app;
-use nitro_cli::enclave_proc_comm::enclave_proc_spawn;
+use nitro_cli::enclave_proc_comm::{enclave_proc_command_send_all, enclave_proc_spawn};
 #[cfg(feature = "power_user")]
 use nitro_cli::testing_commands;
-use nitro_cli::utils::handle_signals;
-use nitro_cli::{
-    build_enclaves, console_enclaves, describe_enclaves, run_enclaves, terminate_enclaves,
-};
 
 fn main() {
     // Command line specification for NitroEnclaves CLI.
@@ -38,24 +36,31 @@ fn main() {
         ("run-enclave", Some(args)) => {
             handle_signals();
             let run_args = RunEnclavesArgs::new_with(args).ok_or_exit(args.usage());
-            let mut comm = enclave_proc_spawn(&logger).expect("Enclave process spawning failed.");
+            let mut comm =
+                enclave_proc_spawn(&logger).ok_or_exit("Enclave process spawning failed.");
             enclave_proc_command_send_single(
                 &EnclaveProcessCommandType::Run,
                 Some(&run_args),
                 &mut comm,
             )
-            .expect("Failed to send single command.");
-            // TODO: Move enclave run into the newly-spawned enclave process.
-            run_enclaves(run_args).ok_or_exit(args.usage());
+            .ok_or_exit("Failed to send single command.");
         }
         ("terminate-enclave", Some(args)) => {
             handle_signals();
             let terminate_args = TerminateEnclavesArgs::new_with(args).ok_or_exit(args.usage());
-            terminate_enclaves(terminate_args).ok_or_exit(args.usage());
+            enclave_proc_command_send_all(
+                &EnclaveProcessCommandType::Terminate,
+                Some(&terminate_args),
+            )
+            .ok_or_exit("Failed to broadcast terminate command.");
         }
         ("describe-enclaves", Some(args)) => {
             let describe_args = DescribeEnclaveArgs::new_with(args).ok_or_exit(args.usage());
-            describe_enclaves(describe_args).ok_or_exit(args.usage());
+            enclave_proc_command_send_all(
+                &EnclaveProcessCommandType::Describe,
+                Some(&describe_args),
+            )
+            .ok_or_exit("Failed to broadcast describe command.");
         }
         ("build-enclave", Some(args)) => {
             let build_args = BuildEnclavesArgs::new_with(args).ok_or_exit(args.usage());
@@ -63,7 +68,8 @@ fn main() {
         }
         ("console", Some(args)) => {
             let console_args = ConsoleArgs::new_with(args).ok_or_exit(args.usage());
-            console_enclaves(console_args).ok_or_exit(args.usage());
+            enclave_proc_command_send_all(&EnclaveProcessCommandType::Console, Some(&console_args))
+                .ok_or_exit("Failed to broadcast console command.");
         }
         (&_, _) => {}
     }

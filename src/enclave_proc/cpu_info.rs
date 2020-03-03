@@ -1,5 +1,7 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(warnings)]
+
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader};

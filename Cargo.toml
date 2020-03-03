@@ -7,16 +7,11 @@ edition = "2018"
 [dependencies]
 serde = { version = ">=1.0", features = ["derive"] }
 clap = "2.33"
-memmap = "0.7"
-page_size = "0.4"
 serde_json = "1.0"
-num-traits = "0.2"
 nix = "0.15.0"
-enum-primitive-derive = "0.1"
 log = "0.4"
 env_logger = "0.6"
 libc = "0.2"
-signal-hook = "0.1"
 serde_cbor = "0.10"
 common = { path = "./common" }
 eif_loader = { path = "./eif_loader" }

@@ -9,4 +9,6 @@ edition = "2018"
 [dependencies]
 serde = { version = ">=1.0", features = ["derive"] }
 clap = "2.33"
+log = "0.4"
+signal-hook = "0.1"
 serde_cbor = "0.10"

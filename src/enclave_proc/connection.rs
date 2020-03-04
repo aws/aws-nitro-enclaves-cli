@@ -33,6 +33,12 @@ impl Drop for Connection {
     }
 }
 
+impl AsRawFd for Connection {
+    fn as_raw_fd(&self) -> RawFd {
+        self.input_stream.as_raw_fd()
+    }
+}
+
 impl Connection {
     /// Create a new connection instance.
     pub fn new(epoll_fd: RawFd) -> Self {

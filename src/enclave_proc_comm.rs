@@ -2,19 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-use log::info;
+use log::{debug, info};
+use nix::sys::epoll;
+use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
 use nix::unistd::*;
 use serde::Serialize;
 use std::fs;
-use std::io;
-use std::os::unix::io::AsRawFd;
+use std::io::{self, Read};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::process;
 
 use crate::common::enclave_proc_command_send_single;
 use crate::common::logger::EnclaveProcLogWriter;
-use crate::common::ENCLAVE_PROC_RESOURCES_DIR;
+use crate::common::{get_socket_path, read_u64_le};
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
+use crate::common::{
+    ENCLAVE_PROC_RESOURCES_DIR, ENCLAVE_PROC_WAIT_TIMEOUT_MSEC, MSG_ENCLAVE_CONFIRM,
+};
 use crate::enclave_proc::enclave_process_run;
 
 /// Spawn an enclave process and wait until it has detached and has
@@ -81,29 +86,123 @@ pub fn enclave_proc_connect_to_all() -> io::Result<Vec<UnixStream>> {
         .collect())
 }
 
+/// Open a connection to an enclave-specific socket.
+pub fn enclave_proc_connect_to_single(enclave_id: &String) -> io::Result<UnixStream> {
+    let socket_path = get_socket_path(enclave_id);
+    UnixStream::connect(socket_path)
+}
+
 /// Broadcast a command to all available enclave processes.
 pub fn enclave_proc_command_send_all<T>(
     cmd: &EnclaveProcessCommandType,
     args: Option<&T>,
-) -> io::Result<()>
+) -> io::Result<Vec<UnixStream>>
 where
     T: Serialize,
 {
-    let mut conns = enclave_proc_connect_to_all()?;
-    let mut results: Vec<io::Result<()>> = Vec::with_capacity(conns.len());
+    // Open a connection to each valid socket.
+    let epoll_fd = epoll::epoll_create().ok_or_exit("Could not create epoll_fd.");
+    let mut replies: Vec<UnixStream> = vec![];
+    let mut sockets = enclave_proc_connect_to_all()?;
+    let comms: Vec<io::Result<()>> = sockets
+        .iter_mut()
+        .map(|socket| {
+            // Add each valid connection to epoll.
+            let socket_clone = socket.try_clone()?;
+            let mut process_evt =
+                EpollEvent::new(EpollFlags::EPOLLIN, socket_clone.into_raw_fd() as u64);
+            epoll::epoll_ctl(
+                epoll_fd,
+                EpollOp::EpollCtlAdd,
+                socket.as_raw_fd(),
+                &mut process_evt,
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-    for socket in conns.iter_mut() {
-        results.push(enclave_proc_command_send_single(cmd, args, socket));
+            // Send the command.
+            enclave_proc_command_send_single(cmd, args, socket)
+        })
+        .collect();
+
+    // Don't proceed unless at least one connection has been established.
+    if comms.len() == 0 {
+        return Ok(vec![]);
     }
 
-    let errors = results.iter().any(|result| result.is_err());
+    // Get the number of transmission errors.
+    let num_errors = comms
+        .iter()
+        .filter(|result| result.is_err())
+        .collect::<Vec<_>>()
+        .len();
 
-    if errors {
+    // Get the number of expected replies.
+    let mut num_replies_expected = comms.len() - num_errors;
+    let mut events = vec![EpollEvent::empty(); num_replies_expected as usize];
+    let ret: io::Result<()> = loop {
+        let num_events = loop {
+            match epoll::epoll_wait(epoll_fd, &mut events[..], ENCLAVE_PROC_WAIT_TIMEOUT_MSEC) {
+                Ok(num_events) => break num_events,
+                Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => continue,
+                // TODO: Handle bad descriptors (closed remote connections).
+                Err(x) => panic!("epoll_wait failed: {:?}", x),
+            }
+        };
+
+        if num_events == 0 {
+            // Timeout occurred
+            break Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "Timed out waiting for replies.",
+            ));
+        }
+
+        assert!(num_events <= num_replies_expected, "Got too many replies!");
+
+        // Handle all replies.
+        for event in events.iter() {
+            let mut input_stream = unsafe { UnixStream::from_raw_fd(event.data() as RawFd) };
+            if let Ok(reply) = read_u64_le(&mut input_stream) {
+                if reply == MSG_ENCLAVE_CONFIRM {
+                    num_replies_expected -= 1;
+                    debug!("Got confirmation from {:?}", input_stream);
+                    replies.push(input_stream);
+                }
+            }
+        }
+
+        if num_replies_expected == 0 {
+            info!("Got all expected replies.");
+            break Ok(());
+        }
+    };
+
+    if (num_errors > 0) || ret.is_err() {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "Communication with at least one process failed.",
         ));
     }
 
-    Ok(())
+    Ok(replies)
+}
+
+/// Print a stream's output.
+pub fn enclave_proc_fetch_output(conns: &Vec<UnixStream>) {
+    for conn in conns.iter() {
+        for byte in conn.bytes() {
+            match byte {
+                Ok(data) => print!("{}", data as char),
+                Err(_) => break,
+            }
+        }
+    }
+}
+
+/// Close all active connections.
+pub fn enclave_proc_connection_close(conns: &Vec<UnixStream>) {
+    for conn in conns.iter() {
+        conn.shutdown(std::net::Shutdown::Both)
+            .ok_or_exit("Failed to shut down connection.");
+    }
 }

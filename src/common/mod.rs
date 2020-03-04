@@ -17,6 +17,8 @@ use std::thread::spawn;
 pub type NitroCliResult<T> = Result<T, String>;
 
 pub const ENCLAVE_PROC_RESOURCES_DIR: &str = "/root/.npe";
+pub const ENCLAVE_PROC_WAIT_TIMEOUT_MSEC: isize = 3000;
+pub const MSG_ENCLAVE_CONFIRM: u64 = 0xEEC0;
 
 /// The type of commands that can be sent to an enclave process.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -113,6 +115,13 @@ pub fn receive_command_type(input_stream: &mut dyn Read) -> io::Result<EnclavePr
     let cmd_type = serde_cbor::from_slice(&cmd_data[..])
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(cmd_type)
+}
+
+/// Get the path to our Unix socket.
+pub fn get_socket_path(enclave_id: &String) -> String {
+    // The full enclave ID is "i-(...)_enc<enc_id>" and we want to extract only <enc_id>.
+    let tokens: Vec<_> = enclave_id.rsplit("_enc").collect();
+    format!("{}/{}.sock", ENCLAVE_PROC_RESOURCES_DIR, tokens[0])
 }
 
 pub fn handle_signals() {

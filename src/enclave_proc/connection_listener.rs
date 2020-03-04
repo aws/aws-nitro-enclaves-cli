@@ -12,9 +12,9 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread::{self, JoinHandle};
 
 use crate::common::commands_parser::EmptyArgs;
-use crate::common::ENCLAVE_PROC_RESOURCES_DIR;
 use crate::common::{
-    enclave_proc_command_send_single, receive_command_type, safe_create_npe_resources_dir,
+    enclave_proc_command_send_single, get_socket_path, receive_command_type,
+    safe_create_npe_resources_dir,
 };
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 
@@ -56,7 +56,7 @@ impl ConnectionListener {
     }
 
     /// Initialize the connection listener.
-    pub fn start(&mut self, enclave_id: String) -> io::Result<()> {
+    pub fn start(&mut self, enclave_id: &String) -> io::Result<()> {
         // Obtain the path of the socket to listen on.
         safe_create_npe_resources_dir()?;
         self.socket_path = get_socket_path(enclave_id);
@@ -157,11 +157,4 @@ impl ConnectionListener {
             .ok_or_exit("Failed to join listener thread.");
         info!("The connection listener has been stopped.");
     }
-}
-
-/// Get the path to our Unix socket.
-fn get_socket_path(enclave_id: String) -> String {
-    // The full enclave ID is "i-(...)_enc<enc_id>" and we want to extract only <enc_id>.
-    let tokens: Vec<_> = enclave_id.rsplit("_enc").collect();
-    format!("{}/{}.sock", ENCLAVE_PROC_RESOURCES_DIR, tokens[0])
 }

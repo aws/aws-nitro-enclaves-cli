@@ -35,7 +35,7 @@ pub const ENCLAVE_VSOCK_LOADER_PORT: u32 = 7000;
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
 pub const BUFFER_SIZE: usize = 1024;
 
-pub fn run_enclaves(args: RunEnclavesArgs) -> NitroCliResult<String> {
+pub fn run_enclaves(args: RunEnclavesArgs) -> NitroCliResult<(u64, String)> {
     let eif_file = File::open(&args.eif_path)
         .map_err(|err| format!("Failed to open the eif file: {:?}", err))?;
 
@@ -69,7 +69,7 @@ pub fn run_enclaves(args: RunEnclavesArgs) -> NitroCliResult<String> {
         serde_json::to_string_pretty(&info).map_err(|err| format!("{:?}", err))?
     );
 
-    Ok(get_enclave_id(&info))
+    Ok((enclave_cid, get_enclave_id(&info)))
 }
 
 pub fn terminate_enclaves(terminate_args: TerminateEnclavesArgs) -> NitroCliResult<()> {

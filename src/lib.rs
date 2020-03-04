@@ -9,6 +9,7 @@ extern crate num_traits;
 pub mod common;
 pub mod enclave_proc;
 pub mod enclave_proc_comm;
+pub mod testing_commands;
 
 use log::debug;
 use serde::Serialize;

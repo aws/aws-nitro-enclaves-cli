@@ -180,3 +180,4 @@ uninstall:
 .PHONY: clean
 clean: driver-clean
 	$(RM) -rf $(OBJ_PATH)
+	$(CARGO) clean

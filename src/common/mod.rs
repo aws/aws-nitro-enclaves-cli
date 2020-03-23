@@ -119,8 +119,8 @@ pub fn receive_command_type(input_stream: &mut dyn Read) -> io::Result<EnclavePr
 
 /// Get the path to our Unix socket.
 pub fn get_socket_path(enclave_id: &String) -> String {
-    // The full enclave ID is "i-(...)_enc<enc_id>" and we want to extract only <enc_id>.
-    let tokens: Vec<_> = enclave_id.rsplit("_enc").collect();
+    // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
+    let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
     format!("{}/{}.sock", ENCLAVE_PROC_RESOURCES_DIR, tokens[0])
 }
 

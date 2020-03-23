@@ -15,7 +15,6 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
@@ -191,18 +190,17 @@ pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
         file.read_to_string(&mut contents)
             .map_err(|err| format!("{:?}", err))?;
         contents.retain(|c| !c.is_whitespace());
-        return Ok(format!("{}_enc{}", contents, slot_id));
+        return Ok(format!("{}-enc{:x}", contents, slot_id));
     }
-    Ok(format!("i-0000000000000000_enc{}", slot_id))
+    Ok(format!("i-0000000000000000-enc{:x}", slot_id))
 }
 
 pub fn get_slot_id(enclave_id: String) -> Result<u64, String> {
-    let tokens: Vec<&str> = enclave_id.split("_enc").collect();
+    let tokens: Vec<&str> = enclave_id.split("-enc").collect();
 
     match tokens.get(1) {
-        Some(slot_id) => {
-            u64::from_str(*slot_id).map_err(|_err| "Invalid enclave id format".to_string())
-        }
+        Some(slot_id) => u64::from_str_radix(*slot_id, 16)
+            .map_err(|_err| "Invalid enclave id format".to_string()),
         None => Err("Invalid enclave_id.".to_string()),
     }
 }

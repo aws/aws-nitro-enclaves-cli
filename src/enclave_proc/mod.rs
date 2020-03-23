@@ -26,7 +26,7 @@ use std::thread;
 
 use super::common::MSG_ENCLAVE_CONFIRM;
 use super::common::{read_u64_le, receive_command_type, write_u64_le};
-use super::common::{EnclaveProcessCommandType, ExitGracefully};
+use super::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
 use crate::common::commands_parser::{
     ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
@@ -61,6 +61,26 @@ fn route_output_to(fd: RawFd) -> RawFd {
     old_fd
 }
 
+/// Run a function, routing its output. Output redirection and restoration are
+/// performed irrespective of the function's status.
+fn safe_route_output<T, R>(
+    args: &mut T,
+    connection_fd: RawFd,
+    func: fn(&mut T) -> NitroCliResult<R>,
+) -> NitroCliResult<R> {
+    let output_fd = route_output_to(connection_fd);
+    let status = func(args);
+    route_output_to(output_fd);
+    status
+}
+
+/// Obtain the logger ID from the full enclave ID.
+fn get_logger_id(enclave_id: &str) -> String {
+    // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
+    let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
+    format!("enc-{}", tokens[0])
+}
+
 /// The main event loop of the enclave process.
 fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     let mut conn_listener = ConnectionListener::new();
@@ -77,19 +97,25 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
 
         match cmd {
             EnclaveProcessCommandType::Run => {
-                let run_args = receive_command_args::<RunEnclavesArgs>(connection.as_reader())
+                let mut run_args = receive_command_args::<RunEnclavesArgs>(connection.as_reader())
                     .ok_or_exit("Failed to get run arguments.");
                 info!("Run args = {:?}", run_args);
 
-                let output_fd = route_output_to(connection.as_raw_fd());
-                let (_, enclave_id) = run_enclaves(run_args).ok_or_exit("Failed to run enclave.");
-                info!("Enclave ID = {}", enclave_id);
-                logger.update_logger_id(format!("enc-{}", enclave_id).as_str());
+                let enc_manager =
+                    safe_route_output(
+                        &mut run_args,
+                        connection.as_raw_fd(),
+                        |mut run_args| { run_enclaves(&mut run_args) }
+                    )
+                    .ok_or_exit("Failed to run enclave.");
+
+                info!("Enclave ID = {}", enc_manager.enclave_id);
+                logger.update_logger_id(&get_logger_id(&enc_manager.enclave_id));
                 conn_listener
-                    .start(&enclave_id)
+                    .start(&enc_manager.enclave_id)
                     .ok_or_exit("Failed to start connection listener.");
+
                 // TODO: run_enclaves(run_args).ok_or_exit(args.usage());
-                route_output_to(output_fd);
             }
 
             EnclaveProcessCommandType::Terminate => {
@@ -211,8 +237,11 @@ fn create_enclave_process() {
     restore_signal_handlers(&old_sig_handlers);
 }
 
+/// Launch the enclave process.
+///
+/// * `comm_fd` - A descriptor used for initial communication with the parent Nitro CLI instance.
+/// * `logger` - The current log writer, whose ID gets updated when an enclave is launched.
 pub fn enclave_process_run(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) -> i32 {
-    // TODO: The enclave ID will be shared by both the logger and the event loop.
     logger.update_logger_id("enc-xxxxxxxxxxxx");
     create_enclave_process();
     process_event_loop(comm_stream, logger);

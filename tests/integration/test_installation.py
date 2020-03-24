@@ -24,11 +24,15 @@ def test_install_uninstall():
         helpers.run_cmd_err(help_cmd)
 
         install_cmd = make + " install"
+        build_nitro_cli = make + " nitro-cli"
+        build_vsock = make + " vsock-proxy"
+        helpers.run_cmd_ok(build_nitro_cli)
+        helpers.run_cmd_ok(build_vsock)
         helpers.run_cmd_ok(install_cmd)
 
         # Expect that we are able to successfully run the binaries.
-        help_cmd = "/bin/bash -ce \"source " + install_dir.name + "/env.sh && \
-                        nitro-cli --help && vsock-proxy --help\""
+        help_cmd = "/bin/bash -ce \"source " + install_dir.name + \
+                       "/etc/profile.d//nitro-cli-env.sh && nitro-cli --help && vsock-proxy --help\""
         helpers.run_cmd_ok(help_cmd)
 
         uninstall_cmd = make + " uninstall"

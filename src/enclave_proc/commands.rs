@@ -7,18 +7,15 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{self, Write};
 
-use crate::common::commands_parser::{
-    ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
-};
+use crate::common::commands_parser::{ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs};
 use crate::common::NitroCliResult;
 use crate::enclave_proc::cli_dev::{
-    CliDev, NitroEnclavesCmdReply, NitroEnclavesEnclaveStop, NitroEnclavesNextSlot,
-    NitroEnclavesSlotCount, NitroEnclavesSlotFree, NitroEnclavesSlotInfo,
+    CliDev, NitroEnclavesCmdReply, NitroEnclavesNextSlot, NitroEnclavesSlotCount,
+    NitroEnclavesSlotInfo,
 };
 use crate::enclave_proc::cpu_info::CpuInfos;
 use crate::enclave_proc::json_output::get_enclave_describe_info;
 use crate::enclave_proc::json_output::EnclaveDescribeInfo;
-use crate::enclave_proc::resource_allocator_driver::ResourceAllocatorDriver;
 use crate::enclave_proc::resource_manager::EnclaveManager;
 use crate::enclave_proc::utils::get_slot_id;
 use crate::enclave_proc::utils::Console;
@@ -62,34 +59,20 @@ pub fn run_enclaves(args: &RunEnclavesArgs) -> NitroCliResult<EnclaveManager> {
     Ok(enclave_manager)
 }
 
-pub fn terminate_enclaves(terminate_args: TerminateEnclavesArgs) -> NitroCliResult<()> {
+pub fn terminate_enclaves(enclave_manager: &mut EnclaveManager) -> NitroCliResult<()> {
     debug!("terminate_enclaves");
 
-    let mut cli_dev = CliDev::new()?;
-    if !cli_dev.enable()? {
-        return Err("Failed to enable cli dev".to_string());
-    }
-
-    let enclave_id = terminate_args.enclave_id.clone();
-    let slot_id = get_slot_id(terminate_args.enclave_id)?;
-
-    // Stop enclave
-    let stop = NitroEnclavesEnclaveStop::new(slot_id);
-    if let Err(err) = stop.submit(&mut cli_dev) {
+    if let Err(err) = enclave_manager.terminate_enclave() {
         println!(
             "Warning: Failed to stop enclave {}\nError message: {:?}",
-            enclave_id, err
+            enclave_manager.enclave_id, err
         );
     }
-    // Slot_free
-    let slot_free = NitroEnclavesSlotFree::new(slot_id);
-    slot_free.submit(&mut cli_dev)?;
 
-    let resource_allocator_driver = ResourceAllocatorDriver::new()?;
-    resource_allocator_driver.free(slot_id)?;
-
-    eprintln!("Successfully terminated enclave {}.", enclave_id);
-
+    eprintln!(
+        "Successfully terminated enclave {}.",
+        enclave_manager.enclave_id
+    );
     Ok(())
 }
 

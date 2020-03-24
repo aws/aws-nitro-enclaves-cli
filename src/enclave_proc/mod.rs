@@ -28,13 +28,14 @@ use super::common::MSG_ENCLAVE_CONFIRM;
 use super::common::{read_u64_le, receive_command_type, write_u64_le};
 use super::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
 use crate::common::commands_parser::{
-    ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs, TerminateEnclavesArgs,
+    ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs,
 };
 use crate::common::logger::EnclaveProcLogWriter;
 
 use commands::{console_enclaves, describe_enclaves, run_enclaves, terminate_enclaves};
 use connection::Connection;
 use connection_listener::ConnectionListener;
+use resource_manager::EnclaveManager;
 
 /// Read the arguments of the CLI command.
 fn receive_command_args<T>(input_stream: &mut dyn Read) -> io::Result<T>
@@ -84,6 +85,7 @@ fn get_logger_id(enclave_id: &str) -> String {
 /// The main event loop of the enclave process.
 fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     let mut conn_listener = ConnectionListener::new();
+    let mut enclave_manager = EnclaveManager::default();
 
     // Add the CLI communication channel to epoll.
     conn_listener.handle_new_connection(comm_stream);
@@ -101,32 +103,32 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
                     .ok_or_exit("Failed to get run arguments.");
                 info!("Run args = {:?}", run_args);
 
-                let enc_manager =
+                enclave_manager =
                     safe_route_output(
                         &mut run_args,
                         connection.as_raw_fd(),
-                        |mut run_args| { run_enclaves(&mut run_args) }
+                        |mut run_args| { run_enclaves(&mut run_args) },
                     )
                     .ok_or_exit("Failed to run enclave.");
 
-                info!("Enclave ID = {}", enc_manager.enclave_id);
-                logger.update_logger_id(&get_logger_id(&enc_manager.enclave_id));
+                info!("Enclave ID = {}", enclave_manager.enclave_id);
+                logger.update_logger_id(&get_logger_id(&enclave_manager.enclave_id));
                 conn_listener
-                    .start(&enc_manager.enclave_id)
+                    .start(&enclave_manager.enclave_id)
                     .ok_or_exit("Failed to start connection listener.");
 
                 // TODO: run_enclaves(run_args).ok_or_exit(args.usage());
             }
 
             EnclaveProcessCommandType::Terminate => {
-                let terminate_args =
-                    receive_command_args::<TerminateEnclavesArgs>(connection.as_reader())
-                        .ok_or_exit("Failed to get terminate arguments.");
-                info!("Stop args = {:?}", terminate_args);
-                let output_fd = route_output_to(connection.as_raw_fd());
-                terminate_enclaves(terminate_args).ok_or_exit("Failed to terminate enclave.");
+                safe_route_output(
+                    &mut enclave_manager,
+                    connection.as_raw_fd(),
+                    |mut enclave_manager| terminate_enclaves(&mut enclave_manager),
+                )
+                .ok_or_exit("Failed to terminate enclave.");
+
                 //TODO: terminate_enclaves(terminate_args).ok_or_exit(args.usage());
-                route_output_to(output_fd);
                 break;
             }
 

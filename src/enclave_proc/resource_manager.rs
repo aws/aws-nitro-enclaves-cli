@@ -4,13 +4,14 @@
 
 use kvm_bindings::kvm_userspace_memory_region;
 use kvm_bindings::KVMIO;
-use log::{error, info};
+use log::{debug, error, info};
 use std::fs::{File, OpenOptions};
 use std::os::raw::c_ulong;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::common::notify_error;
 use crate::common::{ExitGracefully, NitroCliResult};
 use crate::enclave_proc::commands::{
     ENCLAVE_READY_VSOCK_PORT, ENCLAVE_VSOCK_LOADER_PORT, VMADDR_CID_PARENT,
@@ -30,6 +31,7 @@ const NE_ENCLAVE_START: u64 =
 // The maximum allowable size of an enclave is 4 GB
 const ENCLAVE_MEMORY_MAX_SIZE: u64 = 1 << 32;
 
+#[derive(Clone)]
 struct MemoryRegion {
     mem_addr: u64,
     mem_size: u64,
@@ -51,7 +53,7 @@ struct EnclaveStartMetadata {
 }
 
 /// Helper class to allocate the resources needed by an enclave.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct ResourceAllocator {
     /// Requested memory size in bytes.
     requested_mem: u64,
@@ -67,11 +69,13 @@ struct ResourceAllocator {
 #[derive(Default)]
 struct EnclaveHandle {
     /// List of CPU IDs provided to the enclave.
-    pub cpu_ids: Vec<u32>,
+    cpu_ids: Vec<u32>,
     /// List of corresponding CPU descriptors provided by the driver.
-    pub cpu_fds: Vec<i32>,
+    cpu_fds: Vec<i32>,
     /// Amount of memory allocated for the enclave, in MB.
-    pub allocated_memory_mib: u64,
+    allocated_memory_mib: u64,
+    /// The enclave slot ID.
+    slot_uid: u64,
     /// The driver-provided enclave descriptor.
     enc_fd: RawFd,
     /// The allocator used to manage enclave memory.
@@ -207,6 +211,22 @@ impl ResourceAllocator {
         info!("Allocated {} regions.", self.mem_regions.len());
         Ok(&self.mem_regions)
     }
+
+    /// Free previously-allocated memory regions.
+    fn free(&mut self) -> NitroCliResult<()> {
+        for region in self.mem_regions.iter_mut() {
+            region.free()?;
+        }
+
+        self.mem_regions.clear();
+        Ok(())
+    }
+}
+
+impl Drop for ResourceAllocator {
+    fn drop(&mut self) {
+        self.free().ok_or_exit("Failed to drop memroy.");
+    }
 }
 
 impl EnclaveHandle {
@@ -243,6 +263,7 @@ impl EnclaveHandle {
             cpu_ids,
             cpu_fds: vec![],
             allocated_memory_mib: 0,
+            slot_uid: 0,
             resource_allocator: ResourceAllocator::new(requested_mem)
                 .ok_or_exit("Failed to create resource allocator."),
             enc_fd,
@@ -262,7 +283,10 @@ impl EnclaveHandle {
             self.terminate_enclave_error(&err_msg);
             err_msg
         })?;
+
         self.enclave_cid = Some(enclave_start.enclave_cid);
+        self.slot_uid = enclave_start.slot_uid;
+
         let info = get_run_enclaves_info(
             enclave_start.enclave_cid,
             enclave_start.slot_uid,
@@ -375,17 +399,68 @@ impl EnclaveHandle {
         Ok(start)
     }
 
+    /// Terminate an enclave.
+    fn terminate_enclave(&mut self) -> NitroCliResult<()> {
+        if self.enclave_cid.unwrap_or(0) != 0 {
+            release_enclave_descriptors(self.enc_fd, &self.cpu_fds)?;
+
+            // Release used memory.
+            self.resource_allocator.free()?;
+            info!("Enclave terminated.");
+
+            // Mark enclave as termiated.
+            self.clear();
+        }
+
+        Ok(())
+    }
+
+    /// Terminate an enclave and notify in case of errors.
+    fn terminate_enclave_and_notify(&mut self) {
+        // Attempt to terminate the enclave we are holding.
+        if let Err(err) = self.terminate_enclave() {
+            let mut err_msg = format!(
+                "Terminating enclave '{:X}' failed with error: {:?}",
+                self.slot_uid, err
+            );
+            err_msg.push_str(
+                "!!! The instance could be in an inconsistent state, please reboot it !!!",
+            );
+
+            // The error message should reach both the user and the logger.
+            notify_error(&err_msg);
+        }
+    }
+
+    /// Clear handle parameters after terminating an enclave.
+    fn clear(&mut self) {
+        self.cpu_fds.clear();
+        self.cpu_ids.clear();
+        self.enclave_cid = Some(0);
+        self.enc_fd = -1;
+        self.slot_uid = 0;
+    }
+
     /// Terminate the enclave if `run-enclave` failed.
     fn terminate_enclave_error(&mut self, err: &str) {
-        eprintln!("{}.", err);
-        eprintln!("Terminating the enclave...");
-        // TODO: Terminate the enclave.
+        let err_msg = format!("{}. Terminating the enclave...", err);
+
+        // Notify the user and the logger of the error, then terminate the enclave.
+        notify_error(&err_msg);
+        self.terminate_enclave_and_notify();
     }
 }
 
 impl Drop for EnclaveHandle {
     fn drop(&mut self) {
-        // TODO: Implement drop for the enclave handle.
+        // Check if we are (still) owning an enclave.
+        if self.enclave_cid.unwrap_or(0) == 0 {
+            debug!("Resource manager does not hold an enclave.");
+            return;
+        }
+
+        // Terminate the enclave, notifying of any errors.
+        self.terminate_enclave_and_notify();
     }
 }
 
@@ -429,6 +504,52 @@ impl EnclaveManager {
             .create_enclave()?;
         Ok(())
     }
+
+    /// Get the resources needed for enclave termination.
+    ///
+    /// The enclave handle is locked during this operation.
+    fn get_termination_resources(&self) -> NitroCliResult<(RawFd, Vec<RawFd>, ResourceAllocator)> {
+        let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        Ok((
+            locked_handle.enc_fd,
+            locked_handle.cpu_fds.clone(),
+            locked_handle.resource_allocator.clone(),
+        ))
+    }
+
+    /// Terminate the owned enclave.
+    ///
+    /// The enclave handle is locked only when getting the resources needed for termination.
+    /// This will allow 'describe-enclaves' to run in parallel with termination.
+    pub fn terminate_enclave(&mut self) -> NitroCliResult<()> {
+        let (enc_fd, cpu_fds, mut resource_allocator) = self.get_termination_resources()?;
+        release_enclave_descriptors(enc_fd, &cpu_fds)?;
+        resource_allocator.free()?;
+        self.enclave_handle
+            .lock()
+            .map_err(|e| e.to_string())?
+            .clear();
+        Ok(())
+    }
+}
+
+/// Release the enclave and vCPU descriptors.
+fn release_enclave_descriptors(enc_fd: RawFd, cpu_fds: &Vec<RawFd>) -> NitroCliResult<()> {
+    // Close vCPU descriptors.
+    for cpu_fd in cpu_fds.iter() {
+        let rc = unsafe { libc::close(*cpu_fd) };
+        if rc < 0 {
+            return Err("Failed to close CPU descriptor.".to_string());
+        }
+    }
+
+    // Close enclave descriptor.
+    let rc = unsafe { libc::close(enc_fd) };
+    if rc < 0 {
+        return Err("Failed to close enclave descriptor.".to_string());
+    }
+
+    Ok(())
 }
 
 /// Check if the `NITRO_BETWEEN_PACKETS_MILLIS` environment variable is set, and return a

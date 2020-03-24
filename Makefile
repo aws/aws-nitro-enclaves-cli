@@ -79,6 +79,13 @@ nitro-cli: $(BASE_PATH)/src/main.rs build-setup build-container
 				--target-dir=/nitro_build/nitro_cli  && \
 			chmod -R 777 nitro_build '
 
+.PHONY: nitro-cli-native
+nitro-cli-native:
+	cargo build \
+		--release \
+		--manifest-path=${BASE_PATH}/Cargo.toml \
+		--target-dir=${OBJ_PATH}/nitro_cli
+
 .PHONY: command-executer
 command-executer: $(BASE_PATH)/samples/command_executer/src/main.rs build-setup build-container
 	$(DOCKER) run \
@@ -141,27 +148,34 @@ vsock-proxy: $(BASE_PATH)/vsock_proxy/src/main.rs build-setup build-container
 				--manifest-path=/nitro_src/vsock_proxy/Cargo.toml && \
 			chmod -R 777 nitro_build '
 
-.PHONY: install
-install: vsock-proxy nitro-cli nitro_cli_resource_allocator
+.PHONY: vsock-proxy-native
+vsock-proxy-native:
+	cargo build \
+		--release \
+		--manifest-path=${BASE_PATH}/vsock_proxy/Cargo.toml \
+		--target-dir=${OBJ_PATH}/vsock_proxy
+
+# Target for installing only the binaries available to the end-user
+.PHONY: install-tools
+install-tools:
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/usr/sbin
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/var/vsock_proxy
-	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/nitro_cli_resource_allocator
-	$(INSTALL) -D -m 0700 $(OBJ_PATH)/nitro_cli/x86_64-unknown-linux-musl/release/nitro-cli ${NITRO_CLI_INSTALL_DIR}/usr/sbin/nitro-cli
-	$(INSTALL) -D -m 0700 $(OBJ_PATH)/vsock_proxy/x86_64-unknown-linux-musl/release/vsock-proxy ${NITRO_CLI_INSTALL_DIR}/usr/sbin/vsock-proxy
-	$(INSTALL) -D -m 0700 blobs/bzImage ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/bzImage
-	$(INSTALL) -D -m 0700 blobs/cmdline ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/cmdline
-	$(INSTALL) -D -m 0700 blobs/init ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/init
-	$(INSTALL) -D -m 0700 blobs/linuxkit ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/linuxkit
-	if [ -d ${NITRO_CLI_INSTALL_DIR}/lib/systemd/system ] ; then \
-		$(INSTALL) -D -m 0644 vsock_proxy/service/vsock-proxy.service ${NITRO_CLI_INSTALL_DIR}/lib/systemd/system/vsock-proxy.service ; \
-	else \
-		$(INSTALL) -D -m 0755 vsock_proxy/service/vsock-proxy ${NITRO_CLI_INSTALL_DIR}/etc/rc.d/init.d/vsock-proxy ; \
-	fi
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/nitro_cli/release/nitro-cli ${NITRO_CLI_INSTALL_DIR}/usr/sbin/nitro-cli
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/vsock_proxy/release/vsock-proxy ${NITRO_CLI_INSTALL_DIR}/usr/sbin/vsock-proxy
+	$(INSTALL) -D -m 0644 vsock_proxy/service/vsock-proxy.service ${NITRO_CLI_INSTALL_DIR}/usr/lib/systemd/system/vsock-proxy.service
 	$(INSTALL) -D -m 0644 vsock_proxy/service/vsock-proxy.logrotate.conf ${NITRO_CLI_INSTALL_DIR}/etc/logrotate.d/vsock-proxy
 	$(INSTALL) -D -m 0644 vsock_proxy/configs/config.yaml ${NITRO_CLI_INSTALL_DIR}/var/vsock_proxy/config.yaml
+
+.PHONY: install
+install: install-tools
+	$(INSTALL) -D -m 0755 blobs/bzImage ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/bzImage
+	$(INSTALL) -D -m 0755 blobs/cmdline ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/cmdline
+	$(INSTALL) -D -m 0755 blobs/init ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/init
+	$(INSTALL) -D -m 0755 blobs/linuxkit ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/linuxkit
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/nitro_cli_resource_allocator
 	$(INSTALL) -D -m 0755 drivers/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko \
-		${NITRO_CLI_INSTALL_DIR}/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko
+               ${NITRO_CLI_INSTALL_DIR}/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko
 	$(INSTALL) -m 0644 tools/env.sh ${NITRO_CLI_INSTALL_DIR}/env.sh
 	sed -i "2 a NITRO_CLI_INSTALL_DIR=$$(readlink -f ${NITRO_CLI_INSTALL_DIR})" ${NITRO_CLI_INSTALL_DIR}/env.sh
 	echo "Installation finished"
@@ -178,5 +192,5 @@ uninstall:
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/etc/logrotate.d/vsock-proxy
 
 .PHONY: clean
-clean: driver-clean
+clean:
 	$(RM) -rf $(OBJ_PATH)

@@ -26,10 +26,12 @@ pytest-3 tests/integration/test_installation.py \
 # Setup the environement with everything needed to run the integration tests
 make nitro-tests || test_failed
 make nitro_enclaves || test_failed
+make nitro-cli || test_failed
+make vsock-proxy || test_failed
 make install || test_failed
 # Preallocate 2048Gb, that should be enough for all the tests
 echo 1024 > /proc/sys/vm/nr_hugepages
-source build/install/env.sh
+source build/install/etc/profile.d//nitro-cli-env.sh
 
 # Build EIFS for testing
 nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample --output-file test_images/vsock-sample.eif

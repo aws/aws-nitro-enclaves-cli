@@ -70,4 +70,9 @@ impl Connection {
     pub fn as_writer(&mut self) -> &mut dyn Write {
         &mut self.input_stream
     }
+
+    /// Get the epoll descriptor.
+    pub fn get_epoll_fd(&self) -> RawFd {
+        self.epoll_fd
+    }
 }

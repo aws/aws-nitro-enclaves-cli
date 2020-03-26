@@ -25,6 +25,7 @@ pub const MSG_ENCLAVE_CONFIRM: u64 = 0xEEC0;
 pub enum EnclaveProcessCommandType {
     Run = 0,
     Terminate,
+    TerminateComplete,
     Describe,
     Console,
     ConnectionListenerStop,

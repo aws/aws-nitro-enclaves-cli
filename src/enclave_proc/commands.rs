@@ -7,16 +7,13 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{self, Write};
 
-use crate::common::commands_parser::{ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs};
+use crate::common::commands_parser::{ConsoleArgs, RunEnclavesArgs};
 use crate::common::NitroCliResult;
-use crate::enclave_proc::cli_dev::{
-    CliDev, NitroEnclavesCmdReply, NitroEnclavesNextSlot, NitroEnclavesSlotCount,
-    NitroEnclavesSlotInfo,
-};
+use crate::enclave_proc::cli_dev::{CliDev, NitroEnclavesSlotInfo};
 use crate::enclave_proc::cpu_info::CpuInfos;
 use crate::enclave_proc::json_output::get_enclave_describe_info;
 use crate::enclave_proc::json_output::EnclaveDescribeInfo;
-use crate::enclave_proc::resource_manager::EnclaveManager;
+use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
 use crate::enclave_proc::utils::get_slot_id;
 use crate::enclave_proc::utils::Console;
 
@@ -28,6 +25,7 @@ pub const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
 pub const ENCLAVE_VSOCK_LOADER_PORT: u32 = 7000;
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
 pub const BUFFER_SIZE: usize = 1024;
+pub const DEBUG_FLAG: u16 = 0x1;
 
 pub fn run_enclaves(args: &RunEnclavesArgs) -> NitroCliResult<EnclaveManager> {
     debug!("run_enclaves");
@@ -55,6 +53,7 @@ pub fn run_enclaves(args: &RunEnclavesArgs) -> NitroCliResult<EnclaveManager> {
     )
     .map_err(|err| format!("Could not create enclave: {:?}", err))?;
     enclave_manager.run_enclave()?;
+    enclave_manager.update_state(EnclaveState::Running)?;
 
     Ok(enclave_manager)
 }
@@ -62,56 +61,36 @@ pub fn run_enclaves(args: &RunEnclavesArgs) -> NitroCliResult<EnclaveManager> {
 pub fn terminate_enclaves(enclave_manager: &mut EnclaveManager) -> NitroCliResult<()> {
     debug!("terminate_enclaves");
 
+    enclave_manager.update_state(EnclaveState::Terminating)?;
     if let Err(err) = enclave_manager.terminate_enclave() {
         println!(
             "Warning: Failed to stop enclave {}\nError message: {:?}",
             enclave_manager.enclave_id, err
         );
+        return Err(err);
     }
 
     eprintln!(
         "Successfully terminated enclave {}.",
         enclave_manager.enclave_id
     );
+    enclave_manager.update_state(EnclaveState::Empty)?;
+
     Ok(())
 }
 
-pub fn describe_enclaves(
-    _describe_args: DescribeEnclaveArgs,
-) -> NitroCliResult<Vec<NitroEnclavesCmdReply>> {
+pub fn describe_enclaves(enclave_manager: &EnclaveManager) -> NitroCliResult<()> {
     debug!("describe_enclaves");
-    let mut cli_dev = CliDev::new()?;
-    if !cli_dev.enable()? {
-        return Err("Failed to enable the CLI device".to_string());
-    }
-    let slot_count = NitroEnclavesSlotCount::new();
-    let reply = slot_count.submit(&mut cli_dev)?;
 
-    let num_slots = reply.slot_count;
-
-    let mut current_slot = 0;
-    let mut replies: Vec<NitroEnclavesCmdReply> = Vec::new();
-    let mut infos: Vec<EnclaveDescribeInfo> = Vec::new();
-
-    for _i in { 0..num_slots } {
-        let next_slot = NitroEnclavesNextSlot::new(current_slot);
-        let reply = next_slot.submit(&mut cli_dev)?;
-
-        let slot_info = NitroEnclavesSlotInfo::new(reply.slot_uid);
-        let reply = slot_info.submit(&mut cli_dev)?;
-        let info = get_enclave_describe_info(reply)?;
-        replies.push(reply.clone());
-        infos.push(info);
-
-        current_slot = reply.slot_uid + 1;
-    }
+    let info = get_enclave_describe_info(enclave_manager)?;
+    let infos: Vec<EnclaveDescribeInfo> = vec![info];
 
     println!(
         "{}",
         serde_json::to_string_pretty(&infos).map_err(|err| format!("{:?}", err))?
     );
 
-    Ok(replies)
+    Ok(())
 }
 
 pub fn console_enclaves(args: ConsoleArgs) -> NitroCliResult<()> {

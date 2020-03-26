@@ -12,7 +12,7 @@ pub mod resource_allocator_driver;
 pub mod resource_manager;
 pub mod utils;
 
-use log::info;
+use log::{info, warn};
 use nix::sys::signal::{signal, SigHandler, Signal};
 use nix::unistd::*;
 use procinfo::pid;
@@ -22,14 +22,14 @@ use std::io::{self, Read};
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::process;
-use std::thread;
+use std::thread::{self, JoinHandle};
 
 use super::common::MSG_ENCLAVE_CONFIRM;
-use super::common::{read_u64_le, receive_command_type, write_u64_le};
-use super::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
-use crate::common::commands_parser::{
-    ConsoleArgs, DescribeEnclaveArgs, RunEnclavesArgs,
+use super::common::{
+    enclave_proc_command_send_single, read_u64_le, receive_command_type, write_u64_le,
 };
+use super::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
+use crate::common::commands_parser::{ConsoleArgs, EmptyArgs, RunEnclavesArgs};
 use crate::common::logger::EnclaveProcLogWriter;
 
 use commands::{console_enclaves, describe_enclaves, run_enclaves, terminate_enclaves};
@@ -82,10 +82,51 @@ fn get_logger_id(enclave_id: &str) -> String {
     format!("enc-{}", tokens[0])
 }
 
+/// Perform enclave termination.
+fn run_terminate(
+    connection: Connection,
+    mut thread_stream: UnixStream,
+    mut enclave_manager: EnclaveManager,
+) {
+    safe_route_output(
+        &mut enclave_manager,
+        connection.as_raw_fd(),
+        |mut enclave_manager| terminate_enclaves(&mut enclave_manager),
+    )
+    .ok_or_exit("Failed to terminate enclave.");
+
+    // Notify the main thread that enclave termination has completed.
+    enclave_proc_command_send_single::<EmptyArgs>(
+        &EnclaveProcessCommandType::TerminateComplete,
+        None,
+        &mut thread_stream,
+    )
+    .ok_or_exit("Failed to send termination completion.");
+    thread_stream
+        .shutdown(std::net::Shutdown::Both)
+        .ok_or_exit("Failed to shut down termination thread stream.");
+}
+
+/// Start enclave termination.
+fn notify_terminate(
+    connection: Connection,
+    conn_listener: &ConnectionListener,
+    enclave_manager: EnclaveManager,
+) -> Option<JoinHandle<()>> {
+    let (local_stream, thread_stream) =
+        UnixStream::pair().ok_or_exit("Failed to create stream pair.");
+
+    conn_listener.add_stream_to_epoll(local_stream);
+    Some(thread::spawn(move || {
+        run_terminate(connection, thread_stream, enclave_manager)
+    }))
+}
+
 /// The main event loop of the enclave process.
 fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     let mut conn_listener = ConnectionListener::new();
     let mut enclave_manager = EnclaveManager::default();
+    let mut terminate_thread: Option<std::thread::JoinHandle<()>> = None;
 
     // Add the CLI communication channel to epoll.
     conn_listener.handle_new_connection(comm_stream);
@@ -107,7 +148,7 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
                     safe_route_output(
                         &mut run_args,
                         connection.as_raw_fd(),
-                        |mut run_args| { run_enclaves(&mut run_args) },
+                        |mut run_args| run_enclaves(&mut run_args),
                     )
                     .ok_or_exit("Failed to run enclave.");
 
@@ -121,14 +162,21 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
             }
 
             EnclaveProcessCommandType::Terminate => {
-                safe_route_output(
-                    &mut enclave_manager,
-                    connection.as_raw_fd(),
-                    |mut enclave_manager| terminate_enclaves(&mut enclave_manager),
-                )
-                .ok_or_exit("Failed to terminate enclave.");
+                terminate_thread =
+                    notify_terminate(connection, &conn_listener, enclave_manager.clone());
 
                 //TODO: terminate_enclaves(terminate_args).ok_or_exit(args.usage());
+            }
+
+            EnclaveProcessCommandType::TerminateComplete => {
+                info!("Enclave has completed termination.");
+                match terminate_thread {
+                    Some(handle) => handle
+                        .join()
+                        .ok_or_exit("Failed to retrieve termination thread."),
+                    None => warn!("Received termination confirmation on an invalid thread handle."),
+                };
+
                 break;
             }
 
@@ -143,16 +191,17 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
             }
 
             EnclaveProcessCommandType::Describe => {
-                let describe_args =
-                    receive_command_args::<DescribeEnclaveArgs>(connection.as_reader())
-                        .ok_or_exit("Failed to get describe arguments.");
                 write_u64_le(connection.as_writer(), MSG_ENCLAVE_CONFIRM)
                     .ok_or_exit("Failed to write confirmation.");
-                info!("Describe args = {:?}", describe_args);
-                let output_fd = route_output_to(connection.as_raw_fd());
-                describe_enclaves(describe_args).ok_or_exit("Failed to describe enclave.");
+
+                safe_route_output(
+                    &mut enclave_manager,
+                    connection.as_raw_fd(),
+                    |mut enclave_manager| describe_enclaves(&mut enclave_manager),
+                )
+                .ok_or_exit("Failed to describe enclave.");
+
                 //TODO: describe_enclaves(describe_args).ok_or_exit(args.usage());
-                route_output_to(output_fd);
             }
 
             EnclaveProcessCommandType::ConnectionListenerStop => (),

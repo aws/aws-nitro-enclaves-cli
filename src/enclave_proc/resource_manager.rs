@@ -14,7 +14,7 @@ use std::time::Duration;
 use crate::common::notify_error;
 use crate::common::{ExitGracefully, NitroCliResult};
 use crate::enclave_proc::commands::{
-    ENCLAVE_READY_VSOCK_PORT, ENCLAVE_VSOCK_LOADER_PORT, VMADDR_CID_PARENT,
+    DEBUG_FLAG, ENCLAVE_READY_VSOCK_PORT, ENCLAVE_VSOCK_LOADER_PORT, VMADDR_CID_PARENT,
 };
 use crate::enclave_proc::json_output::{get_enclave_id, get_run_enclaves_info};
 
@@ -30,6 +30,13 @@ const NE_ENCLAVE_START: u64 =
 
 // The maximum allowable size of an enclave is 4 GB
 const ENCLAVE_MEMORY_MAX_SIZE: u64 = 1 << 32;
+
+#[derive(Clone)]
+pub enum EnclaveState {
+    Empty,
+    Running,
+    Terminating,
+}
 
 #[derive(Clone)]
 struct MemoryRegion {
@@ -76,23 +83,41 @@ struct EnclaveHandle {
     allocated_memory_mib: u64,
     /// The enclave slot ID.
     slot_uid: u64,
+    /// The enclave CID.
+    enclave_cid: Option<u64>,
+    /// Enclave flags (including the enclave debug mode flag).
+    flags: u64,
     /// The driver-provided enclave descriptor.
     enc_fd: RawFd,
     /// The allocator used to manage enclave memory.
     resource_allocator: ResourceAllocator,
-    /// The enclave CID.
-    enclave_cid: Option<u64>,
-    /// Flag indicating if the enclave is running in debug mode.
-    #[allow(dead_code)]
-    debug_mode: bool,
     /// The enclave image file.
     eif_file: Option<File>,
+    /// The current state the enclave is in.
+    state: EnclaveState,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct EnclaveManager {
     pub enclave_id: String,
     enclave_handle: Arc<Mutex<EnclaveHandle>>,
+}
+
+impl ToString for EnclaveState {
+    fn to_string(&self) -> String {
+        match self {
+            EnclaveState::Empty => "EMPTY",
+            EnclaveState::Running => "RUNNING",
+            EnclaveState::Terminating => "TERMINATING",
+        }
+        .to_string()
+    }
+}
+
+impl Default for EnclaveState {
+    fn default() -> Self {
+        EnclaveState::Empty
+    }
 }
 
 impl MemoryRegion {
@@ -254,6 +279,7 @@ impl EnclaveHandle {
             .ok_or_exit("Failed to open device file.");
         let enc_type: c_ulong = 0;
         let enc_fd = unsafe { libc::ioctl(dev_file.as_raw_fd(), KVM_CREATE_VM as _, &enc_type) };
+        let flags: u64 = if debug_mode { DEBUG_FLAG as u64 } else { 0 };
 
         if enc_fd < 0 {
             panic!("Failed to get enclave device descriptor.")
@@ -264,12 +290,13 @@ impl EnclaveHandle {
             cpu_fds: vec![],
             allocated_memory_mib: 0,
             slot_uid: 0,
+            enclave_cid,
+            flags,
+            enc_fd,
             resource_allocator: ResourceAllocator::new(requested_mem)
                 .ok_or_exit("Failed to create resource allocator."),
-            enc_fd,
-            enclave_cid,
-            debug_mode,
             eif_file: Some(eif_file),
+            state: EnclaveState::default(),
         })
     }
 
@@ -470,7 +497,7 @@ impl EnclaveStartMetadata {
         EnclaveStartMetadata {
             slot_uid: 0,
             enclave_cid: enclave_handle.enclave_cid.unwrap_or(0),
-            flags: 0,
+            flags: enclave_handle.flags,
             vsock_loader_token: 0,
         }
     }
@@ -505,6 +532,23 @@ impl EnclaveManager {
         Ok(())
     }
 
+    /// Get the resources needed for enclave description.
+    ///
+    /// The enclave handle is locked during this operation.
+    pub fn get_description_resources(
+        &self,
+    ) -> NitroCliResult<(u64, u64, u64, u64, u16, EnclaveState)> {
+        let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        Ok((
+            locked_handle.slot_uid,
+            locked_handle.enclave_cid.unwrap(),
+            locked_handle.cpu_ids.len() as u64,
+            locked_handle.allocated_memory_mib,
+            locked_handle.flags as u16,
+            locked_handle.state.clone(),
+        ))
+    }
+
     /// Get the resources needed for enclave termination.
     ///
     /// The enclave handle is locked during this operation.
@@ -515,6 +559,15 @@ impl EnclaveManager {
             locked_handle.cpu_fds.clone(),
             locked_handle.resource_allocator.clone(),
         ))
+    }
+
+    /// Update the state the enclave is in.
+    ///
+    /// The enclave handle is locked during this operation.
+    pub fn update_state(&mut self, state: EnclaveState) -> NitroCliResult<()> {
+        let mut locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        locked_handle.state = state;
+        Ok(())
     }
 
     /// Terminate the owned enclave.

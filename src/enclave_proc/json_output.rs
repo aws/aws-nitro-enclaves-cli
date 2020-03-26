@@ -6,7 +6,8 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 
 use crate::common::NitroCliResult;
-use crate::enclave_proc::cli_dev::NitroEnclavesCmdReply;
+use crate::enclave_proc::commands::DEBUG_FLAG;
+use crate::enclave_proc::resource_manager::EnclaveManager;
 use crate::enclave_proc::utils::generate_enclave_id;
 
 #[derive(Serialize)]
@@ -89,16 +90,27 @@ impl EnclaveBuildInfo {
     }
 }
 
+pub fn flags_to_string(flags: u16) -> String {
+    if flags & DEBUG_FLAG == DEBUG_FLAG {
+        "DEBUG_MODE"
+    } else {
+        "NONE"
+    }
+    .to_string()
+}
+
 pub fn get_enclave_describe_info(
-    reply: NitroEnclavesCmdReply,
+    enclave_manager: &EnclaveManager,
 ) -> NitroCliResult<EnclaveDescribeInfo> {
+    let (slot_uid, enclave_cid, cpus_count, memory_mib, flags, state) =
+        enclave_manager.get_description_resources()?;
     let info = EnclaveDescribeInfo::new(
-        generate_enclave_id(reply.slot_uid)?,
-        { reply.enclave_cid },
-        { reply.nr_cpus },
-        reply.mem_size / 1024 / 1024,
-        reply.state_to_string(),
-        reply.flags_to_string(),
+        generate_enclave_id(slot_uid)?,
+        enclave_cid,
+        cpus_count,
+        memory_mib,
+        state.to_string(),
+        flags_to_string(flags),
     );
     Ok(info)
 }

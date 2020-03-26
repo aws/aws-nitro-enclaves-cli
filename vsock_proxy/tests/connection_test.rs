@@ -1,36 +1,21 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use nix::sys::socket::sockopt::ReuseAddr;
-use nix::sys::socket::{connect, setsockopt, socket};
-use nix::sys::socket::{AddressFamily, IpAddr, Ipv4Addr, SockAddr, SockFlag, SockType};
-use std::fs::File;
+use nix::sys::socket::SockAddr;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::net::{IpAddr, Ipv4Addr};
 use std::str;
 use std::sync::mpsc;
 use std::{process, thread};
 use tempfile::NamedTempFile;
+use vsock::VsockStream;
 
 use vsock_proxy::starter::{Proxy, ProxyError};
 
-fn vsock_connect(port: u32) -> Result<RawFd, ProxyError> {
-    let socket_fd = socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::empty(),
-        None,
-    )
-    .map_err(|_err| ProxyError::SocketCreationError)?;
-
+fn vsock_connect(port: u32) -> Result<VsockStream, ProxyError> {
     let sockaddr = SockAddr::new_vsock(vsock_proxy::starter::VSOCK_PROXY_CID, port);
-
-    setsockopt(socket_fd, ReuseAddr, &true).map_err(|_err| ProxyError::SetSockOptError)?;
-
-    connect(socket_fd, &sockaddr).map_err(|_err| ProxyError::ConnectError)?;
-
-    Ok(socket_fd)
+    VsockStream::connect(&sockaddr).map_err(|_e| ProxyError::ConnectError)
 }
 
 /// Test connection with both client and server sending each other messages
@@ -76,11 +61,11 @@ fn test_tcp_connection() {
     let (tx, rx) = mpsc::channel();
 
     // Start proxy in a different thread
-    let sock = proxy.sock_listen();
-    let sock = sock.expect("proxy listen");
+    let ret = proxy.sock_listen();
+    let listener = ret.expect("proxy listen");
     let proxy_handle = thread::spawn(move || {
         tx.send(true).expect("proxy send event");
-        let _ret = proxy.sock_accept(sock).expect("proxy accept");
+        let _ret = proxy.sock_accept(&listener).expect("proxy accept");
     });
 
     let _ret = rx.recv().expect("main recv event");
@@ -92,7 +77,7 @@ fn test_tcp_connection() {
             eprintln!("{:?}", ret.err());
             process::exit(1);
         }
-        let mut stream = unsafe { File::from_raw_fd(ret.unwrap()) };
+        let mut stream = ret.unwrap();
 
         // Write request
         stream.write_all(b"client2server").expect("client write");

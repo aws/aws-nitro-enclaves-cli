@@ -61,17 +61,6 @@ impl TerminateEnclavesArgs {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DescribeEnclaveArgs {}
-
-impl DescribeEnclaveArgs {
-    pub fn new_with(_args: &ArgMatches) -> NitroCliResult<Self> {
-        // Nothing to parse for describe-enclaves, but keep it consistent
-        // with parsing of the other commands.
-        Ok(DescribeEnclaveArgs {})
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsoleArgs {
     pub enclave_id: String,
 }

@@ -20,6 +20,7 @@ use std::thread::sleep;
 use std::time;
 
 use crate::common::NitroCliResult;
+use crate::enclave_proc::commands::DEBUG_FLAG;
 use crate::enclave_proc::utils::FileLock;
 
 // Command types for sending requests to the NitroEnclaves device.
@@ -60,7 +61,6 @@ pub const NITRO_ENCLAVES_SEND_DATA: usize = 0x010;
 // 240 Bytes) Buffer for reading a reply.
 pub const NITRO_ENCLAVES_RECV_DATA: usize = 0x100;
 const DEV_ENABLE_MASK: u8 = 0x1;
-const DEBUG_FLAG: u16 = 0x1;
 
 #[derive(Default, Debug, Copy, Clone, Deserialize)]
 #[repr(packed)]
@@ -275,29 +275,7 @@ impl NitroEnclavesDestroy {
     }
 }
 
-impl NitroEnclavesCmdReply {
-    pub fn state_to_string(&self) -> String {
-        match self.state {
-            0 => "UNUSED",
-            1 => "EMPTY",
-            2 => "RUNNING",
-            3 => "ZOMBIE",
-            4 => "SCRUBBING",
-            std::u16::MAX => "ZOMBIE",
-            _ => "UNKNOWN_STATE",
-        }
-        .to_string()
-    }
-
-    pub fn flags_to_string(&self) -> String {
-        if self.flags & DEBUG_FLAG == DEBUG_FLAG {
-            "DEBUG_MODE"
-        } else {
-            "NONE"
-        }
-        .to_string()
-    }
-}
+impl NitroEnclavesCmdReply {}
 
 pub struct CliDev {
     mmap: MmapMut,

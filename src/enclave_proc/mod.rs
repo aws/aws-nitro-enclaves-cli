@@ -29,7 +29,7 @@ use super::common::{
     enclave_proc_command_send_single, read_u64_le, receive_command_type, write_u64_le,
 };
 use super::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
-use crate::common::commands_parser::{ConsoleArgs, EmptyArgs, RunEnclavesArgs};
+use crate::common::commands_parser::{EmptyArgs, RunEnclavesArgs};
 use crate::common::logger::EnclaveProcLogWriter;
 
 use commands::{console_enclaves, describe_enclaves, run_enclaves, terminate_enclaves};
@@ -181,13 +181,14 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
             }
 
             EnclaveProcessCommandType::Console => {
-                let console_args = receive_command_args::<ConsoleArgs>(connection.as_reader())
-                    .ok_or_exit("Failed to get console arguments.");
-                info!("Console args = {:?}", console_args);
-                let output_fd = route_output_to(connection.as_raw_fd());
-                console_enclaves(console_args).ok_or_exit("Failed to open console to enclave.");
+                safe_route_output(
+                    &mut enclave_manager,
+                    connection.as_raw_fd(),
+                    |mut enclave_manager| console_enclaves(&mut enclave_manager),
+                )
+                .ok_or_exit("Failed to open console to enclave.");
+
                 // TODO: console_enclaves(describe_args).ok_or_exit(args.usage());
-                route_output_to(output_fd);
             }
 
             EnclaveProcessCommandType::Describe => {

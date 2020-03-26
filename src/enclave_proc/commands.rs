@@ -7,14 +7,12 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{self, Write};
 
-use crate::common::commands_parser::{ConsoleArgs, RunEnclavesArgs};
+use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::NitroCliResult;
-use crate::enclave_proc::cli_dev::{CliDev, NitroEnclavesSlotInfo};
 use crate::enclave_proc::cpu_info::CpuInfos;
 use crate::enclave_proc::json_output::get_enclave_describe_info;
 use crate::enclave_proc::json_output::EnclaveDescribeInfo;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
-use crate::enclave_proc::utils::get_slot_id;
 use crate::enclave_proc::utils::Console;
 
 // Hypervisor cid as defined by:
@@ -93,19 +91,10 @@ pub fn describe_enclaves(enclave_manager: &EnclaveManager) -> NitroCliResult<()>
     Ok(())
 }
 
-pub fn console_enclaves(args: ConsoleArgs) -> NitroCliResult<()> {
+pub fn console_enclaves(enclave_manager: &EnclaveManager) -> NitroCliResult<()> {
     debug!("console_enclaves");
 
-    let mut cli_dev = CliDev::new()?;
-    if !cli_dev.enable()? {
-        return Err("Failed to enable cli dev".to_string());
-    }
-
-    let slot_id = get_slot_id(args.enclave_id)?;
-    let slot_info = NitroEnclavesSlotInfo::new(slot_id);
-    let reply = slot_info.submit(&mut cli_dev)?;
-    drop(cli_dev);
-    let enclave_cid = reply.enclave_cid;
+    let enclave_cid = enclave_manager.get_console_resources()?;
 
     println!("Connecting to the console for enclave {}...", enclave_cid);
     enclave_console(enclave_cid)

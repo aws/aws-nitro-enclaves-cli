@@ -23,10 +23,8 @@ mod tests {
         "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:enclave-sdk";
 
     pub const MAX_BOOT_TIMEOUT_SEC: u64 = 9;
-    pub const THREAD_SLEEP_SEC: u64 = 5;
 
     use std::convert::TryFrom;
-    use std::thread;
     use std::time::Duration;
 
     fn setup_env() {
@@ -70,11 +68,11 @@ mod tests {
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "4b2f5387783d0c23167299fbe5a69622490a9bdf82e94a0a1a48b0e7c56130c0c1e6555de7c0aa3d7901fbc58b0c43a3"
+            "cc0749fddbb889480234b93192ae55609c91dd415028ce3474d26d363c61722b87e0ce86086782c649e14d9629467c2b"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "710e082180efd5139074c80ec7492d80613bb7f29a038cedfbf92a50c3029069197872304d68f1a93bcc34db07da20d9"
+            "7f661d8929cfc7b5d5a87a9f2548adf4de80bda5354284ae82c34f63e04a6220c5e852503bea378224dcb58619cc62b3"
         );
     }
 
@@ -113,11 +111,11 @@ mod tests {
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "4b2f5387783d0c23167299fbe5a69622490a9bdf82e94a0a1a48b0e7c56130c0c1e6555de7c0aa3d7901fbc58b0c43a3"
+            "cc0749fddbb889480234b93192ae55609c91dd415028ce3474d26d363c61722b87e0ce86086782c649e14d9629467c2b"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "4ff0fbad5e1f4766a210a8a4466918b0e4de9d30606a992aae1ffaf4d1e57bb22486084aa58ad02b683561aaf5e90766"
+            "964f18254b4168518161df05bcec57edca87ff36d19704ef258ef2a72011e5efa6d36e1cadf140e34d5cdb1886fadbb0"
         );
     }
 
@@ -189,8 +187,6 @@ mod tests {
         if let Some(req_enclave_cid) = req_enclave_cid {
             assert_eq!(req_enclave_cid, enclave_cid);
         }
-
-        thread::sleep(Duration::from_secs(THREAD_SLEEP_SEC));
 
         let cid_copy = enclave_cid;
 

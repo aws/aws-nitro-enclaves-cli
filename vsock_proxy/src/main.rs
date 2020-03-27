@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(warnings)]
 
 /// Simple proxy for translating vsock traffic to TCP traffic
 /// Example of usage:
@@ -79,7 +80,7 @@ fn main() {
     let remote_addrs =
         Proxy::parse_addr(&remote_addr, only_4, only_6).expect("Could not parse remote address");
     let remote_addr = remote_addrs[0];
-    info!("Using IP {:?} for the given server", remote_addr.to_std());
+    info!("Using IP {:?} for the given server", remote_addr);
 
     let remote_port = matches
         .value_of("remote_port")
@@ -107,13 +108,13 @@ fn main() {
         only_6,
     );
 
-    let sock = proxy
+    let listener = proxy
         .sock_listen()
         .expect("Could not listen for connections");
     info!("Proxy is now in listening state");
     loop {
         proxy
-            .sock_accept(sock)
+            .sock_accept(&listener)
             .expect("Could not accept connection");
     }
 }

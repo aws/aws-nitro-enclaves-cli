@@ -1,6 +1,7 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
+
 use crate::NitroCliResult;
 use nix::fcntl::{flock, FlockArg};
 use nix::poll::poll;
@@ -19,6 +20,7 @@ use std::thread::{sleep, spawn};
 use std::time::{Duration, SystemTime};
 
 use libc::c_void;
+use libc::close;
 use nix::sys::time::TimeVal;
 use nix::sys::time::TimeValLike;
 use std::mem::size_of;
@@ -79,6 +81,12 @@ pub fn handle_signals() {
 
 pub struct Console {
     fd: RawFd,
+}
+
+impl Drop for Console {
+    fn drop(&mut self) {
+        unsafe { close(self.fd) };
+    }
 }
 
 impl Console {

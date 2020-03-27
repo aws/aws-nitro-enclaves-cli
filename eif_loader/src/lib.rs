@@ -3,20 +3,19 @@
 #![deny(warnings)]
 
 use eif_defs::{EifHeader, EifSectionHeader};
-use nix::sys::socket::{accept, bind, connect, listen, recv, socket};
-use nix::sys::socket::{AddressFamily, MsgFlags, SockAddr, SockFlag, SockType};
+use nix::poll::poll;
+use nix::poll::{PollFd, PollFlags};
+use nix::sys::socket::SockAddr;
 use std::ffi::CString;
 use std::fs::File;
 use std::io::Write;
 use std::io::{Read, Seek, SeekFrom};
 use std::mem::size_of;
 use std::os::raw::c_char;
-use std::os::unix::io::FromRawFd;
+use std::os::unix::io::AsRawFd;
 use std::thread::sleep;
 use std::time::Duration;
-
-use nix::poll::poll;
-use nix::poll::{PollFd, PollFlags};
+use vsock::{VsockListener, VsockStream};
 
 const MAX_VSOCK_PACKET: usize = 4096;
 const MAX_PAYLOAD: usize = MAX_VSOCK_PACKET - 8;
@@ -26,12 +25,10 @@ const ACCEPT_TIMEOUT: i32 = 20000; // millis
 #[derive(Debug, PartialEq)]
 /// Internal errors while sending an Eif file
 pub enum EifLoaderError {
-    SocketCreationError,
     SocketPollingError,
     VsockAcceptingError,
     VsockBindingError,
     VsockConnectingError,
-    VsockListeningError,
     VsockReceivingError,
     VsockTimeoutError,
     ImagePathError,
@@ -44,18 +41,9 @@ pub enum EifLoaderError {
 
 /// Creates a vsock_connection to the given cid and port and returns
 /// a file  handle to that connection
-fn vsock_connect(cid: u32, port: u32) -> Result<File, EifLoaderError> {
-    let socket_fd = socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::empty(),
-        None,
-    )
-    .map_err(|_err| EifLoaderError::SocketCreationError)?;
-
+fn vsock_connect(cid: u32, port: u32) -> Result<VsockStream, EifLoaderError> {
     let sockaddr = SockAddr::new_vsock(cid, port);
-    connect(socket_fd, &sockaddr).map_err(|_err| EifLoaderError::VsockConnectingError)?;
-    Ok(unsafe { File::from_raw_fd(socket_fd) })
+    VsockStream::connect(&sockaddr).map_err(|_e| EifLoaderError::VsockConnectingError)
 }
 
 fn send_packet(
@@ -211,19 +199,10 @@ pub extern "C" fn eif_loader_send_image(
 }
 
 pub fn enclave_ready(cid: u32, port: u32) -> Result<(), EifLoaderError> {
-    let socket_fd = socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::empty(),
-        None,
-    )
-    .map_err(|_err| EifLoaderError::SocketCreationError)?;
-
     let sockaddr = SockAddr::new_vsock(cid, port);
-    bind(socket_fd, &sockaddr).map_err(|_err| EifLoaderError::VsockBindingError)?;
-    listen(socket_fd, 5).map_err(|_err| EifLoaderError::VsockListeningError)?;
-
-    let mut poll_fds = [PollFd::new(socket_fd, PollFlags::POLLIN)];
+    let listener =
+        VsockListener::bind(&sockaddr).map_err(|_err| EifLoaderError::VsockBindingError)?;
+    let mut poll_fds = [PollFd::new(listener.as_raw_fd(), PollFlags::POLLIN)];
     let result = poll(&mut poll_fds, ACCEPT_TIMEOUT);
     if result == Ok(0) {
         return Err(EifLoaderError::VsockTimeoutError);
@@ -231,13 +210,22 @@ pub fn enclave_ready(cid: u32, port: u32) -> Result<(), EifLoaderError> {
         return Err(EifLoaderError::SocketPollingError);
     }
 
-    let client_fd = accept(socket_fd).map_err(|_err| EifLoaderError::VsockAcceptingError)?;
+    let mut stream = listener
+        .accept()
+        .map_err(|_err| EifLoaderError::VsockAcceptingError)?;
+
     // Wait until the other end is closed
-    let mut buf = [0u8; 1];
-    recv(client_fd, &mut buf, MsgFlags::empty())
+    let mut buf = [0u8];
+    let bytes = stream
+        .0
+        .read(&mut buf)
         .map_err(|_err| EifLoaderError::VsockReceivingError)?;
 
-    Ok(())
+    if bytes != 0 {
+        Err(EifLoaderError::VsockReceivingError)
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

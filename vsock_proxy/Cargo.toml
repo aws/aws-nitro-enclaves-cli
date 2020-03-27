@@ -15,6 +15,7 @@ log = "0.4"
 nix = "0.15.0"
 yaml-rust = "0.4.3"
 threadpool = "1.7.1"
+vsock = "0.1.5"
 
 [dev-dependencies]
 rand = "0.7.0"

@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(warnings)]
 
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
@@ -8,15 +9,13 @@ use dns_lookup::lookup_host;
 use idna;
 use log::info;
 use nix::sys::select::{select, FdSet};
-use nix::sys::socket::sockopt::ReuseAddr;
-use nix::sys::socket::IpAddr as NixIpAddr;
-use nix::sys::socket::{accept, bind, connect, listen, setsockopt, socket};
-use nix::sys::socket::{AddressFamily, InetAddr, SockAddr, SockFlag, SockType};
+use nix::sys::socket::{SockAddr, SockType};
 use std::fs::File;
 use std::io::{Read, Write};
-use std::net::IpAddr as StdIpAddr;
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::net::{IpAddr, SocketAddr, TcpStream};
+use std::os::unix::io::AsRawFd;
 use threadpool::ThreadPool;
+use vsock::VsockListener;
 use yaml_rust::YamlLoader;
 
 const BUFF_SIZE: usize = 8192;
@@ -26,14 +25,10 @@ pub const VSOCK_PROXY_PORT: u32 = 8000;
 #[derive(Debug, PartialEq)]
 /// Internal errors while setting up proxy
 pub enum ProxyError {
-    SocketCreationError,
-    SetSockOptError,
+    SocketTypeNotImplemented,
     BindError,
-    ListenError,
     AcceptError,
     ConnectError,
-    IOError,
-    SelectError,
     WhitelistError,
     NoValidIPError,
     OpenFileError,
@@ -45,7 +40,7 @@ pub enum ProxyError {
 
 /// Checks if the forwarded server is whitelisted
 pub fn check_whitelist(
-    remote_addr: NixIpAddr,
+    remote_addr: IpAddr,
     remote_port: u16,
     config_file: Option<&str>,
     only_4: bool,
@@ -90,7 +85,7 @@ pub fn check_whitelist(
 /// Configuration parameters for port listening and remote destination
 pub struct Proxy {
     local_port: u32,
-    remote_addr: NixIpAddr,
+    remote_addr: IpAddr,
     remote_port: u16,
     pool: ThreadPool,
     sock_type: SockType,
@@ -99,7 +94,7 @@ pub struct Proxy {
 impl Proxy {
     pub fn new(
         local_port: u32,
-        remote_addr: NixIpAddr,
+        remote_addr: IpAddr,
         remote_port: u16,
         num_workers: usize,
         config_file: Option<&str>,
@@ -122,11 +117,7 @@ impl Proxy {
     }
 
     /// Resolve a DNS name (IDNA format) into an IP address (v4 or v6)
-    pub fn parse_addr(
-        addr: &str,
-        only_4: bool,
-        only_6: bool,
-    ) -> Result<Vec<NixIpAddr>, ProxyError> {
+    pub fn parse_addr(addr: &str, only_4: bool, only_6: bool) -> Result<Vec<IpAddr>, ProxyError> {
         // IDNA parsing
         let addr = idna::domain_to_ascii(&addr).map_err(|_err| ProxyError::DomainError)?;
 
@@ -140,22 +131,16 @@ impl Proxy {
 
         // If there is no restriction, choose randomly
         if !only_4 && !only_6 {
-            return Ok(ips.into_iter().map(|ip| NixIpAddr::from_std(&ip)).collect());
+            return Ok(ips.into_iter().collect());
         }
 
         // Split the IPs in v4 and v6
-        let (ips_v4, ips_v6): (Vec<_>, Vec<_>) = ips.into_iter().partition(StdIpAddr::is_ipv4);
+        let (ips_v4, ips_v6): (Vec<_>, Vec<_>) = ips.into_iter().partition(IpAddr::is_ipv4);
 
         if only_4 && ips_v4.len() != 0 {
-            return Ok(ips_v4
-                .into_iter()
-                .map(|ip| NixIpAddr::from_std(&ip))
-                .collect());
+            return Ok(ips_v4.into_iter().collect());
         } else if only_6 && ips_v6.len() != 0 {
-            return Ok(ips_v6
-                .into_iter()
-                .map(|ip| NixIpAddr::from_std(&ip))
-                .collect());
+            return Ok(ips_v6.into_iter().collect());
         } else {
             return Err(ProxyError::NoValidIPError);
         }
@@ -163,70 +148,53 @@ impl Proxy {
 
     /// Creates a listening socket
     /// Returns the file descriptor for it or the appropriate error
-    pub fn sock_listen(&self) -> Result<RawFd, ProxyError> {
-        let socket_fd = socket(
-            AddressFamily::Vsock,
-            self.sock_type,
-            SockFlag::empty(),
-            None,
-        )
-        .map_err(|_err| ProxyError::SocketCreationError)?;
-
+    pub fn sock_listen(&self) -> Result<VsockListener, ProxyError> {
         let sockaddr = SockAddr::new_vsock(VSOCK_PROXY_CID, self.local_port);
-
-        setsockopt(socket_fd, ReuseAddr, &true).map_err(|_err| ProxyError::SetSockOptError)?;
-
-        bind(socket_fd, &sockaddr).map_err(|_err| ProxyError::BindError)?;
+        let listener = VsockListener::bind(&sockaddr).map_err(|_e| ProxyError::BindError)?;
         info!("Binded to {:?}", sockaddr);
 
-        listen(socket_fd, 5).map_err(|_err| ProxyError::ListenError)?;
-
-        Ok(socket_fd)
+        Ok(listener)
     }
 
-    /// Accepts an incoming connection coming on socked_fd and handles it on a
+    /// Accepts an incoming connection coming on listener and handles it on a
     /// different thread
     /// Returns the handle for the new thread or the appropriate error
-    pub fn sock_accept(&self, socket_fd: RawFd) -> Result<(), ProxyError> {
-        let vsock_sock = accept(socket_fd).map_err(|_err| ProxyError::AcceptError)?;
-        info!("Accepted connection on fd {:?}", vsock_sock);
+    pub fn sock_accept(&self, listener: &VsockListener) -> Result<(), ProxyError> {
+        let (mut client, client_addr) =
+            listener.accept().map_err(|_err| ProxyError::AcceptError)?;
+        info!("Accepted connection on {:?}", client_addr);
 
-        let addr = InetAddr::new(self.remote_addr, self.remote_port);
-        let sockaddr = SockAddr::new_inet(addr);
+        let sockaddr = SocketAddr::new(self.remote_addr, self.remote_port);
         let sock_type = self.sock_type;
         self.pool.execute(move || {
-            let tcp_sock =
-                socket(AddressFamily::Inet, sock_type, SockFlag::empty(), None).expect("socket");
+            let mut server = match sock_type {
+                SockType::Stream => {
+                    TcpStream::connect(sockaddr).map_err(|_e| ProxyError::ConnectError)
+                }
+                _ => Err(ProxyError::SocketTypeNotImplemented),
+            }
+            .expect("Could not create connection");
+            info!("Connected client from {:?} to {:?}", client_addr, sockaddr);
 
-            connect(tcp_sock, &sockaddr).expect("connect");
-            info!(
-                "Connected client on fd {:?} to {:?}",
-                vsock_sock,
-                sockaddr.to_str()
-            );
-
-            let client_clone = vsock_sock.clone();
-            let server_clone = tcp_sock.clone();
-
-            let mut client = unsafe { File::from_raw_fd(vsock_sock) };
-            let mut server = unsafe { File::from_raw_fd(tcp_sock) };
+            let client_socket = client.as_raw_fd();
+            let server_socket = server.as_raw_fd();
 
             let mut disconnected = false;
             while !disconnected {
                 let mut set = FdSet::new();
-                set.insert(client_clone);
-                set.insert(server_clone);
+                set.insert(client_socket);
+                set.insert(server_socket);
 
                 select(None, Some(&mut set), None, None, None).expect("select");
 
-                if set.contains(client_clone) {
+                if set.contains(client_socket) {
                     disconnected = transfer(&mut client, &mut server);
                 }
-                if set.contains(server_clone) {
+                if set.contains(server_socket) {
                     disconnected = transfer(&mut server, &mut client);
                 }
             }
-            info!("Client on fd {:?} disconnected", vsock_sock);
+            info!("Client on {:?} disconnected", client_addr);
         });
 
         Ok(())

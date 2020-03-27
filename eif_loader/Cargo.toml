@@ -10,6 +10,7 @@ edition = "2018"
 eif_defs = { path = "../eif_defs"}
 nix = "0.15.0"
 libc = "0.2"
+vsock = "0.1.5"
 
 [dev-dependencies]
 eif_utils = { path = "../eif_utils"}

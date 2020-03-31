@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-pub mod cli_dev;
 pub mod commands;
 pub mod connection;
 pub mod connection_listener;
 pub mod cpu_info;
 pub mod json_output;
-pub mod resource_allocator_driver;
 pub mod resource_manager;
 pub mod utils;
 

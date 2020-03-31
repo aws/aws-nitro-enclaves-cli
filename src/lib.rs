@@ -2,14 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-#[macro_use]
-extern crate enum_primitive_derive;
-extern crate num_traits;
-
 pub mod common;
 pub mod enclave_proc;
 pub mod enclave_proc_comm;
-pub mod testing_commands;
 
 use log::debug;
 use serde::Serialize;

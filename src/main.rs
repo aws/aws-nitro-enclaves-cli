@@ -19,8 +19,6 @@ use nitro_cli::enclave_proc_comm::{
     enclave_proc_command_send_all, enclave_proc_connect_to_single, enclave_proc_connection_close,
     enclave_proc_fetch_output, enclave_proc_spawn,
 };
-#[cfg(feature = "power_user")]
-use nitro_cli::testing_commands;
 
 fn main() {
     // Command line specification for NitroEnclaves CLI.
@@ -31,12 +29,7 @@ fn main() {
     info!("Start Nitro CLI");
 
     let app = create_app!();
-    #[cfg(feature = "power_user")]
-    let app = testing_commands::initialize(app);
     let args = app.get_matches();
-
-    #[cfg(feature = "power_user")]
-    testing_commands::match_cmd(&args);
 
     match args.subcommand() {
         ("run-enclave", Some(args)) => {

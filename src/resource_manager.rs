@@ -187,8 +187,11 @@ impl EnclaveResourceManager {
         self.init_memory()?;
         self.init_cpus()?;
         let enclave_cid = self.start()?;
-        eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT)
-            .map_err(|err| format!("Waiting on enclave to boot failed with error {:?}", err))?;
+        eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT).map_err(|err| {
+            let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
+            self.terminate_enclave_error(&err_msg);
+            err_msg
+        })?;
         Ok((enclave_cid, self.slot_id))
     }
 
@@ -266,27 +269,28 @@ impl EnclaveResourceManager {
             between_packets_delay(),
         )
         .map_err(|err| {
-            let err_msg =
-                format!(
-                    "Sending the image to the enclave failed with error {:?}. Could not terminate the enclave.",
-                    err
-                );
-            let fd = self.cli_dev._lock._file.as_raw_fd();
-            flock(fd, FlockArg::Unlock).ok_or_exit(&err_msg);
-            let enclave_id = generate_enclave_id(self.slot_id).ok_or_exit(&err_msg);
-            eprintln!("Sending the image to the enclave failed");
-            eprintln!("Terminating the enclave...");
-            let terminate_args = TerminateEnclavesArgs { enclave_id };
-            terminate_enclaves(terminate_args).ok_or_exit(&err_msg);
-
-            format!(
+            let err_msg = format!(
                 "Sending the image to the enclave failed with error {:?}",
                 err
-            )
+            );
+            self.terminate_enclave_error(&err_msg);
+            err_msg
         })?;
         let enclave_cid = self.enclave_cid.ok_or("Invalid CID")?;
 
         Ok(enclave_cid)
+    }
+
+    // Terminate the enclave if run-enclave failed
+    pub fn terminate_enclave_error(&mut self, err: &str) {
+        let err_msg = format!("{}. Could not terminate the enclave.", err);
+        let fd = self.cli_dev._lock._file.as_raw_fd();
+        flock(fd, FlockArg::Unlock).ok_or_exit(&err_msg);
+        let enclave_id = generate_enclave_id(self.slot_id).ok_or_exit(&err_msg);
+        eprintln!("{}.", err);
+        eprintln!("Terminating the enclave...");
+        let terminate_args = TerminateEnclavesArgs { enclave_id };
+        terminate_enclaves(terminate_args).ok_or_exit(&err_msg);
     }
 }
 

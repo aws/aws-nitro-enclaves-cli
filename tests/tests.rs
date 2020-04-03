@@ -297,6 +297,55 @@ mod tests {
     }
 
     #[test]
+    fn console_multiple_connect() {
+        let dir = tempdir().unwrap();
+        let eif_path = dir.path().join("test.eif");
+        setup_env();
+        let build_args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path.to_str().unwrap().to_string(),
+        };
+
+        build_from_docker(
+            &build_args.docker_uri,
+            &build_args.docker_dir,
+            &build_args.output,
+        )
+        .expect("Docker build failed");
+
+        let run_args = RunEnclavesArgs {
+            enclave_cid: None,
+            eif_path: build_args.output,
+            cpu_ids: None,
+            cpu_count: Some(2),
+            memory_mib: 128,
+            debug_mode: Some(true),
+        };
+
+        let enclave_cid = run_enclaves(run_args).expect("Run enclaves failed");
+
+        let replies = describe_enclaves(DescribeEnclaveArgs {}).expect("Describe enclaves failed");
+        let reply = replies[0];
+        let enclave_id = generate_enclave_id(reply.slot_uid).expect("Describe enclaves failed");
+
+        for _ in 0..3 {
+            let console = Console::new(
+                VMADDR_CID_HYPERVISOR,
+                u32::try_from(enclave_cid).unwrap() + CID_TO_CONSOLE_PORT_OFFSET,
+            )
+            .expect("Failed to connect to the console");
+
+            drop(console);
+
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+
+        let terminate_args = TerminateEnclavesArgs { enclave_id };
+        terminate_enclaves(terminate_args).expect("Terminate enclaves failed");
+    }
+
+    #[test]
     fn run_describe_terminate_simple_docker_image_loop() {
         for _ in 0..5 {
             run_describe_terminate_simple_docker_image();

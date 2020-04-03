@@ -302,6 +302,7 @@ pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
             .map_err(|err| format!("Failed to connect to the enclave: {}", err))?
             + CID_TO_CONSOLE_PORT_OFFSET,
     )?;
+    println!("Successfully connected to the console.");
     console.read_to(io::stdout().by_ref())?;
 
     Ok(())

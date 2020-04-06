@@ -8,6 +8,11 @@ Prerequisites:
      for details of how to install docker on your host.
   2. Install gcc, make, git.
 
+Driver information:
+  The Nitro Enclaves device driver is currently at version 0.2. It is based on the
+  kernel tree head commit b335e6094dff (tag: v0.2, origin/ne-driver-mainline-kernel,
+  "nitro_enclaves: Add hrtimer support for polling") and supports out-of-tree driver builds.
+
 How to install:
   1. Clone the repository.
   2. Set NITRO_CLI_INSTALL_DIR to the desired location, by default everything will be

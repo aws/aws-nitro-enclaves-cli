@@ -28,7 +28,7 @@ log = "0.4"
 tempfile = "3.1"
 
 [workspace]
-members = [".", "eif_defs", "eif_loader", "eif_utils", "enclave_build", "vsock_proxy"]
+members = [".", "cli_poweruser", "eif_defs", "eif_loader", "eif_utils", "enclave_build", "vsock_proxy"]
 
 [features]
 default = []

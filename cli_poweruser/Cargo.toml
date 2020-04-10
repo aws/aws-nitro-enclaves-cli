@@ -1,0 +1,27 @@
+[package]
+name = "nitro-cli-poweruser"
+version = "0.1.0"
+authors = ["Alexandru Gheorghe <aggh@amazon.com>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = ">=1.0", features = ["derive"] }
+clap = "2.33"
+enum-primitive-derive = "0.1"
+env_logger = "0.6"
+libc = "0.2"
+log = "0.4"
+memmap = "0.7"
+page_size = "0.4"
+serde_json = "1.0"
+signal-hook = "0.1"
+nix = "0.15.0"
+num-traits = "0.2"
+eif_loader = { path = "../eif_loader" }
+
+[dev-dependencies]
+log = "0.4"
+tempfile = "3.1"
+
+[features]
+default = []

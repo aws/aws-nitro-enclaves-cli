@@ -113,7 +113,7 @@ nitro-tests: $(BASE_PATH)/src/main.rs build-setup  build-container
 			chmod -R 777 nitro_build '
 
 .PHONY: nitro-cli-poweruser
-nitro-cli-poweruser: $(BASE_PATH)/src/main.rs build-setup build-container
+nitro-cli-poweruser: $(BASE_PATH)/cli_poweruser/src/main.rs build-setup build-container
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -121,10 +121,9 @@ nitro-cli-poweruser: $(BASE_PATH)/src/main.rs build-setup build-container
 			'source /root/.cargo/env && \
 			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ cargo build \
 				--release \
-				--manifest-path=/nitro_src/Cargo.toml \
+				--manifest-path=/nitro_src/cli_poweruser/Cargo.toml \
 				--target=x86_64-unknown-linux-musl \
-				--features=power_user \
-				--target-dir=/nitro_build/nitro_cli_poweruser  && \
+				--target-dir=/nitro_build/cli_poweruser  && \
 			chmod -R 777 nitro_build '
 
 .PHONY: vsock-proxy

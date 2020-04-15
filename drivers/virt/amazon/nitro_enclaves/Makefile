@@ -20,7 +20,7 @@ obj-m += nitro_enclaves.o
 
 nitro_enclaves-y := ne_pci_dev.o ne_main.o
 
-ccflags-y += -Wall -I$(src)/../../../../include
+ccflags-y += -Wall -I$(src)/../../../../include -I$(src)/include/
 
 KERNEL_RELEASE := $(shell uname -r)
 
@@ -34,3 +34,4 @@ all:
 
 clean:
 	$(MAKE) -C $(KERNEL_BUILD_DIR) M=$(shell pwd) clean
+

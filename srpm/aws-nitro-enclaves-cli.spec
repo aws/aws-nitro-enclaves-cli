@@ -28,6 +28,7 @@ Requires: systemd
 Requires: docker
 Requires: openssl
 Requires: openssl-libs
+Requires: curl
 
 
 %description

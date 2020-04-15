@@ -1,5 +1,5 @@
 [Unit]
-Description=start, reload and stop vsock-proxy service
+Description=start and stop vsock-proxy service
 After=sysinit.target
 DefaultDependencies=no
 
@@ -8,9 +8,8 @@ Type=simple
 StandardOutput=none
 StandardError=none
 SyslogIdentifier=vsock-proxy
-Environment=REGION=$(/bin/bash -ce "echo $HOSTNAME | cut -d '.' -f 2")
-ExecStart=/bin/bash -ce "exec /usr/sbin/vsock-proxy 8000 kms.${REGION}.amazonaws.com 443 >> /var/log/vsock-proxy.log 2>&1"
-ExecReload=/bin/bash -ce "exec /usr/sbin/vsock-proxy 8000 kms.${REGION}.amazonaws.com 443 >> /var/log/vsock-proxy.log 2>&1"
+ExecStart=/bin/bash -ce "REGION=$(curl --silent http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region) ; \
+			exec /usr/sbin/vsock-proxy 8000 kms.$${REGION}.amazonaws.com 443 --config /etc/vsock_proxy/config.yaml"
 Restart=always
 TimeoutSec=0
 

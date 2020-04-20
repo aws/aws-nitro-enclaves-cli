@@ -1,4 +1,4 @@
-# Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2019-2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 ##############################
 #                            #
@@ -16,7 +16,7 @@ DOCKER  = docker
 
 SRC_PATH = .
 BASE_PATH ?= $(SRC_PATH)
-OBJ_PATH = $(BASE_PATH)/build
+OBJ_PATH ?= $(BASE_PATH)/build
 NITRO_CLI_INSTALL_DIR ?= $(OBJ_PATH)/install
 
 CONTAINER_TAG="nitro_cli:1.0"
@@ -49,6 +49,16 @@ build-container: tools/Dockerfile1804
 .PHONY: build-setup
 build-setup:
 	$(MKDIR) -p $(OBJ_PATH)
+
+nitro_enclaves: drivers/virt/amazon/nitro_enclaves/ne_main.c driver-deps
+	PREV_DIR=$$PWD && cd drivers/virt/amazon/nitro_enclaves/ && make && cd $$PREV_DIR
+
+.PHONY: nitro_enclaves-clean
+nitro_enclaves-clean:
+	PREV_DIR=$$PWD && cd drivers/virt/amazon/nitro_enclaves/ && make clean && cd $$PREV_DIR
+
+.PHONY: driver-clean
+driver-clean: nitro_enclaves-clean
 
 .PHONY: nc-vsock
 nc-vsock: nc-vsock.c build-setup
@@ -122,11 +132,11 @@ vsock-proxy: $(BASE_PATH)/vsock_proxy/src/main.rs build-setup  build-container
 			chmod -R 777 nitro_build '
 
 .PHONY: install
-install: vsock-proxy nitro-cli nitro_cli_resource_allocator
+install: vsock-proxy nitro-cli nitro_enclaves
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/usr/sbin
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/var/vsock_proxy
-	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/nitro_cli_resource_allocator
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/nitro_enclaves
 	$(INSTALL) -D -m 0700 $(OBJ_PATH)/nitro_cli/x86_64-unknown-linux-musl/release/nitro-cli ${NITRO_CLI_INSTALL_DIR}/usr/sbin/nitro-cli
 	$(INSTALL) -D -m 0700 $(OBJ_PATH)/vsock_proxy/x86_64-unknown-linux-musl/release/vsock-proxy ${NITRO_CLI_INSTALL_DIR}/usr/sbin/vsock-proxy
 	$(INSTALL) -D -m 0700 blobs/bzImage ${NITRO_CLI_INSTALL_DIR}/var/nitro_cli/bzImage
@@ -140,8 +150,8 @@ install: vsock-proxy nitro-cli nitro_cli_resource_allocator
 	fi
 	$(INSTALL) -D -m 0644 vsock_proxy/service/vsock-proxy.logrotate.conf ${NITRO_CLI_INSTALL_DIR}/etc/logrotate.d/vsock-proxy
 	$(INSTALL) -D -m 0644 vsock_proxy/configs/config.yaml ${NITRO_CLI_INSTALL_DIR}/var/vsock_proxy/config.yaml
-	$(INSTALL) -D -m 0755 drivers/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko \
-		${NITRO_CLI_INSTALL_DIR}/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko
+	$(INSTALL) -D -m 0755 drivers/virt/amazon/nitro_enclaves/nitro_enclaves.ko \
+		${NITRO_CLI_INSTALL_DIR}/nitro_enclaves/nitro_enclaves.ko
 	$(INSTALL) -m 0644 tools/env.sh ${NITRO_CLI_INSTALL_DIR}/env.sh
 	sed -i "2 a NITRO_CLI_INSTALL_DIR=$$(readlink -f ${NITRO_CLI_INSTALL_DIR})" ${NITRO_CLI_INSTALL_DIR}/env.sh
 	echo "Installation finished"
@@ -156,7 +166,9 @@ uninstall:
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/lib/systemd/system/vsock-proxy.service
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/etc/rc.d/init.d/vsock-proxy
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/etc/logrotate.d/vsock-proxy
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/env.sh
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/nitro_enclaves/nitro_enclaves.ko
 
 .PHONY: clean
-clean:
+clean: driver-clean
 	$(RM) -rf $(OBJ_PATH)

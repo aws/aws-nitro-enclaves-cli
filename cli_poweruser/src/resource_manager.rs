@@ -117,13 +117,13 @@ impl ResourceAllocator {
 /// It owns all the resources needed for creating an enclave(slot_id,
 /// memory regions) and it releases them only after the enclave started.
 pub struct EnclaveResourceManager {
-    slot_id: u64,
-    resource_allocator: ResourceAllocator,
+    pub slot_id: u64,
+    pub resource_allocator: ResourceAllocator,
     enclave_cid: Option<u64>,
     pub allocated_memory_mib: u64,
     pub cpu_ids: Vec<u32>,
     eif_file: File,
-    cli_dev: CliDev,
+    pub cli_dev: CliDev,
     owns_resources: bool,
     debug_mode: bool,
 }
@@ -322,7 +322,7 @@ pub fn online_slot_cpus(
     let cpu_mapping = resource_allocator_driver.cpu_mapping(slot_id, None)?;
     let mut cpus = Vec::new();
 
-    for i in { 0..size_of_val(&cpu_mapping.cpu_mask) * 8 } {
+    for i in 0..size_of_val(&cpu_mapping.cpu_mask) * 8 {
         if cpu_mapping.cpu_mask[i / 64] & 1 << (i % 64) != 0 {
             online_cpu(i as u32);
             cpus.push(i as u32);

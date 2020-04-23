@@ -12,9 +12,8 @@ use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::common::safe_create_npe_resources_dir;
 use crate::common::ExitGracefully;
-use crate::common::ENCLAVE_PROC_RESOURCES_DIR;
+use crate::common::{create_resources_dir, get_resources_dir};
 
 const DEFAULT_LOG_LEVEL: &str = "info";
 const LOG_FILE_NAME: &str = "nitro-cli.log";
@@ -33,8 +32,8 @@ pub struct EnclaveProcLogWriter {
 impl EnclaveProcLogWriter {
     /// Create a new log writer.
     pub fn new(log_file_name: &str) -> Result<Self> {
-        safe_create_npe_resources_dir()?;
-        let path = format!("{}/{}", ENCLAVE_PROC_RESOURCES_DIR, log_file_name);
+        create_resources_dir()?;
+        let path = format!("{}/{}", get_resources_dir()?, log_file_name);
 
         // All logging shall be directed to a centralized file.
         Ok(EnclaveProcLogWriter {
@@ -47,7 +46,7 @@ impl EnclaveProcLogWriter {
     /// Check if the log file is present and if it is not, (re)open it.
     fn safe_open_log_file(&self) {
         if !Path::new(&self.out_file_path).exists() {
-            safe_create_npe_resources_dir().ok_or_exit("Failed to create NPE resource directory.");
+            create_resources_dir().ok_or_exit("Failed to create NPE resource directory.");
             let new_file = open_log_file(&self.out_file_path);
             let mut file_ref = self.out_file.lock().ok_or_exit("Failed to lock log file.");
             *file_ref.deref_mut() = new_file;

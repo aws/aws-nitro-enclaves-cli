@@ -5,6 +5,6 @@ files:
     destination: /
 hooks:
   AfterInstall:
-    - location: run_tests.sh
+    - location: ci_entrypoint.sh
       timeout: 3600
 

@@ -16,7 +16,6 @@ use std::thread::spawn;
 
 pub type NitroCliResult<T> = Result<T, String>;
 
-pub const ENCLAVE_PROC_RESOURCES_DIR: &str = "/root/.npe";
 pub const ENCLAVE_PROC_WAIT_TIMEOUT_MSEC: isize = 3000;
 pub const MSG_ENCLAVE_CONFIRM: u64 = 0xEEC0;
 
@@ -67,10 +66,11 @@ pub fn write_u64_le(socket: &mut dyn Write, value: u64) -> io::Result<()> {
 }
 
 /// Create the NPE resources directory if it not already present.
-pub fn safe_create_npe_resources_dir() -> io::Result<()> {
-    let proc_dir_path = Path::new(ENCLAVE_PROC_RESOURCES_DIR);
+pub fn create_resources_dir() -> io::Result<()> {
+    let resources_dir = get_resources_dir()?;
+    let proc_dir_path = Path::new(resources_dir.as_str());
     if !proc_dir_path.exists() {
-        std::fs::create_dir_all(ENCLAVE_PROC_RESOURCES_DIR)?;
+        std::fs::create_dir_all(resources_dir.as_str())?;
     }
     Ok(())
 }
@@ -119,10 +119,11 @@ pub fn receive_command_type(input_stream: &mut dyn Read) -> io::Result<EnclavePr
 }
 
 /// Get the path to our Unix socket.
-pub fn get_socket_path(enclave_id: &String) -> String {
+pub fn get_socket_path(enclave_id: &String) -> io::Result<String> {
     // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
+    let resources_dir = get_resources_dir()?;
     let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
-    format!("{}/{}.sock", ENCLAVE_PROC_RESOURCES_DIR, tokens[0])
+    Ok(format!("{}/{}.sock", resources_dir, tokens[0]))
 }
 
 pub fn handle_signals() {
@@ -135,4 +136,17 @@ pub fn handle_signals() {
             }
         }
     });
+}
+
+/// Get the path to the enclave resources directory
+pub fn get_resources_dir() -> io::Result<String> {
+    let home_dir = dirs::home_dir().ok_or(io::Error::new(
+        io::ErrorKind::NotFound,
+        "Failed to read home directory.",
+    ))?;
+    let home_dir_str = home_dir.to_str().ok_or(io::Error::new(
+        io::ErrorKind::InvalidData,
+        "Invalid home directory.",
+    ))?;
+    Ok(format!("{}/.npe", home_dir_str))
 }

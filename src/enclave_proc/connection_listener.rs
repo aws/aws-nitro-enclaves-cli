@@ -13,8 +13,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::common::commands_parser::EmptyArgs;
 use crate::common::{
-    enclave_proc_command_send_single, get_socket_path, receive_command_type,
-    safe_create_npe_resources_dir,
+    create_resources_dir, enclave_proc_command_send_single, get_socket_path, receive_command_type,
 };
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 
@@ -58,8 +57,8 @@ impl ConnectionListener {
     /// Initialize the connection listener.
     pub fn start(&mut self, enclave_id: &String) -> io::Result<()> {
         // Obtain the path of the socket to listen on.
-        safe_create_npe_resources_dir()?;
-        self.socket_path = get_socket_path(enclave_id);
+        create_resources_dir()?;
+        self.socket_path = get_socket_path(enclave_id)?;
 
         let self_clone = self.clone();
         self.listener_thread = Some(thread::spawn(move || self_clone.connection_listener_run()));

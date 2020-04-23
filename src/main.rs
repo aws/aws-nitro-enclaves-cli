@@ -12,7 +12,7 @@ use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::common::logger;
-use nitro_cli::common::{enclave_proc_command_send_single, handle_signals};
+use nitro_cli::common::{create_resources_dir, enclave_proc_command_send_single, handle_signals};
 use nitro_cli::common::{EnclaveProcessCommandType, ExitGracefully};
 use nitro_cli::create_app;
 use nitro_cli::enclave_proc_comm::{
@@ -24,6 +24,9 @@ fn main() {
     // Command line specification for NitroEnclaves CLI.
     let logger = logger::init_logger();
     let mut replies: Vec<UnixStream> = vec![];
+
+    // Initialize the resources directory.
+    create_resources_dir().ok_or_exit("Failed to create resources directory.");
 
     logger.update_logger_id(format!("nitro-cli:{}", std::process::id()).as_str());
     info!("Start Nitro CLI");

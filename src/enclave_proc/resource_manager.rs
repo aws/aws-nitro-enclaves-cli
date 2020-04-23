@@ -273,7 +273,6 @@ impl EnclaveHandle {
 
         let dev_file = OpenOptions::new()
             .read(true)
-            .write(true)
             .open("/dev/nitro_enclaves")
             .ok_or_exit("Failed to open device file.");
         let enc_type: c_ulong = 0;

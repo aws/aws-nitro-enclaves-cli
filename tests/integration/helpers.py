@@ -57,12 +57,16 @@ def run_subprocess(args):
         return result
 
 def get_pids(name):
-        return check_output(["pidof",name]).decode('UTF-8')
+        try:
+                return check_output(["pidof",name]).decode('UTF-8')
+        except:
+                return ""
 
 def kill_all_nitro_processes():
         pids = get_pids("nitro-cli")
         for pid in pids.split():
-                os.kill(int(pid), signal.SIGKILL)
+                if pid:
+                        os.kill(int(pid), signal.SIGKILL)
 
 # Runs a process and checks it returned success
 # Returns an instance of a CompletedProcess

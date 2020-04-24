@@ -551,7 +551,7 @@ impl EnclaveManager {
     /// Get the resources needed for connecting to the enclave console.
     ///
     /// The enclave handle is locked during this operation.
-    pub fn get_console_resources(&self) -> NitroCliResult<(u64)> {
+    pub fn get_console_resources(&self) -> NitroCliResult<u64> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
         Ok(locked_handle.enclave_cid.unwrap())
     }

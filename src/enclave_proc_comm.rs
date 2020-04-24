@@ -13,9 +13,11 @@ use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::process;
 
-use crate::common::enclave_proc_command_send_single;
+use crate::common::commands_parser::EmptyArgs;
 use crate::common::logger::EnclaveProcLogWriter;
-use crate::common::{get_resources_dir, get_socket_path, read_u64_le};
+use crate::common::{
+    enclave_proc_command_send_single, get_resources_dir, get_socket_path, read_u64_le,
+};
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 use crate::common::{ENCLAVE_PROC_WAIT_TIMEOUT_MSEC, MSG_ENCLAVE_CONFIRM};
 use crate::enclave_proc::enclave_process_run;
@@ -204,4 +206,23 @@ pub fn enclave_proc_connection_close(conns: &Vec<UnixStream>) {
         conn.shutdown(std::net::Shutdown::Both)
             .ok_or_exit("Failed to shut down connection.");
     }
+}
+
+/// Obtain an enclave's CID given its full ID.
+pub fn enclave_proc_get_cid(enclave_id: &String) -> io::Result<u64> {
+    let mut comm = enclave_proc_connect_to_single(enclave_id)?;
+    // TODO: Replicate output of old CLI on invalid enclave IDs.
+    enclave_proc_command_send_single::<EmptyArgs>(
+        &EnclaveProcessCommandType::GetEnclaveCID,
+        None,
+        &mut comm,
+    )?;
+
+    info!("Sent command: GetEnclaveCID");
+    let enclave_cid = read_u64_le(&mut comm)?;
+
+    // We got the CID, so shut the connection down.
+    comm.shutdown(std::net::Shutdown::Both)?;
+
+    Ok(enclave_cid)
 }

@@ -5,16 +5,24 @@
 pub mod common;
 pub mod enclave_proc;
 pub mod enclave_proc_comm;
+pub mod utils;
 
 use log::debug;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::fs::{File, OpenOptions};
-use std::io::Read;
+use std::io::{self, Read, Write};
 
 use common::commands_parser::BuildEnclavesArgs;
 use common::NitroCliResult;
 use enclave_build;
+use utils::Console;
+
+// Hypervisor cid as defined by:
+// http://man7.org/linux/man-pages/man7/vsock.7.html
+const VMADDR_CID_HYPERVISOR: u32 = 0;
+const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
 
 #[derive(Serialize)]
 pub struct EnclaveBuildInfo {
@@ -139,6 +147,29 @@ fn artifacts_path() -> NitroCliResult<String> {
             )
         }
     }
+}
+
+/// Wrapper over the console connection function.
+pub fn console_enclaves(enclave_cid: u64) -> NitroCliResult<()> {
+    debug!("console_enclaves");
+    println!("Connecting to the console for enclave {}...", enclave_cid);
+    enclave_console(enclave_cid)
+        .map_err(|err| format!("Failed to start enclave logger: {:?}", err))?;
+    Ok(())
+}
+
+/// Connects to the enclave console and prints it continously.
+pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
+    let console = Console::new(
+        VMADDR_CID_HYPERVISOR,
+        u32::try_from(enclave_cid)
+            .map_err(|err| format!("Failed to connect to the enclave: {}", err))?
+            + CID_TO_CONSOLE_PORT_OFFSET,
+    )?;
+    println!("Successfully connected to the console.");
+    console.read_to(io::stdout().by_ref())?;
+
+    Ok(())
 }
 
 #[macro_export]

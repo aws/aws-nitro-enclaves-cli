@@ -26,7 +26,7 @@ pub enum EnclaveProcessCommandType {
     Terminate,
     TerminateComplete,
     Describe,
-    Console,
+    GetEnclaveCID,
     ConnectionListenerStop,
 }
 

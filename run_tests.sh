@@ -1,29 +1,57 @@
-#!/bin/bash -xe
-
+#!/bin/bash -x
+#
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Script used for running all the tests we have on a EC2 instance that has
+# --enclave-options set to true
+#
 TEST_SUITES_FAILED=0
 TEST_SUITES_TOTAL=0
 
+SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export NITRO_CLI_BLOBS="${SCRIPTDIR}/blobs"
 export NITRO_CLI_ARTIFACTS="${SCRIPTDIR}/build"
+
 $(aws ecr get-login --no-include-email --region us-east-1)
 
-make nitro-tests
-make nitro_cli_resource_allocator
-insmod drivers/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko
+function test_failed() {
+	TEST_SUITES_FAILED=$((TEST_SUITES_FAILED + 1))
+}
 
+# First run the instalation test, before we change the environement
+pytest-3 tests/integration/test_installation.py \
+	|| test_failed
+
+# Setup the environement with everything needed to run the integration tests
+make nitro-tests || test_failed
+make nitro_enclaves || test_failed
+make install || test_failed
+# Preallocate 2048Gb, that should be enough for all the tests
+echo 1024 > /proc/sys/vm/nr_hugepages
+source build/install/env.sh
+
+# Build EIFS for testing
+nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample --output-file test_images/vsock-sample.eif
+
+
+# Run all unittests
 while IFS= read -r test_exec_path
 do
 	TEST_SUITES_TOTAL=$((TEST_SUITES_TOTAL + 1))
 	test_exec_name=$(basename "${test_exec_path}")
-	set +e
 	./build/nitro_cli/x86_64-unknown-linux-musl/release/"${test_exec_name}" \
 		--test-threads=1 --nocapture \
-		|| TEST_SUITES_FAILED=$((TEST_SUITES_FAILED + 1))
-	set -e
+		|| test_failed
 
 done < <(grep -v '^ *#' < build/test_executables.txt)
 
-rmmod nitro_cli_resource_allocator
+# Run integration tests except the instalation test
+pytest-3 tests/integration/ --ignore tests/integration/test_installation.py \
+	|| test_failed
+
+rmmod nitro_enclaves
 make clean
+rm -rf test_images
 
 exit $TEST_SUITES_FAILED

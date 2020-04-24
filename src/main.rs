@@ -6,7 +6,6 @@ use clap::{App, AppSettings, Arg, SubCommand};
 use log::info;
 use std::os::unix::net::UnixStream;
 
-use nitro_cli::build_enclaves;
 use nitro_cli::common::commands_parser::EmptyArgs;
 use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, RunEnclavesArgs, TerminateEnclavesArgs,
@@ -17,8 +16,9 @@ use nitro_cli::common::{EnclaveProcessCommandType, ExitGracefully};
 use nitro_cli::create_app;
 use nitro_cli::enclave_proc_comm::{
     enclave_proc_command_send_all, enclave_proc_connect_to_single, enclave_proc_connection_close,
-    enclave_proc_fetch_output, enclave_proc_spawn,
+    enclave_proc_fetch_output, enclave_proc_get_cid, enclave_proc_spawn,
 };
+use nitro_cli::{build_enclaves, console_enclaves};
 
 fn main() {
     // Command line specification for NitroEnclaves CLI.
@@ -87,19 +87,9 @@ fn main() {
         }
         ("console", Some(args)) => {
             let console_args = ConsoleArgs::new_with(args).ok_or_exit(args.usage());
-            let mut comm = enclave_proc_connect_to_single(&console_args.enclave_id)
-                .ok_or_exit("Failed to open socket.");
-            // TODO: Replicate output of old CLI on invalid enclave IDs.
-            enclave_proc_command_send_single::<EmptyArgs>(
-                &EnclaveProcessCommandType::Console,
-                None,
-                &mut comm,
-            )
-            .ok_or_exit("Failed to send console command.");
-            info!("Sent command: Console");
-            replies.push(comm);
-            enclave_proc_fetch_output(&replies);
-            enclave_proc_connection_close(&replies);
+            let enclave_cid = enclave_proc_get_cid(&console_args.enclave_id)
+                .ok_or_exit("Failed to read enclave CID.");
+            console_enclaves(enclave_cid).ok_or_exit(args.usage());
         }
         (&_, _) => {}
     }

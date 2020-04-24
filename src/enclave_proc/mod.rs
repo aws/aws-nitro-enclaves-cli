@@ -30,7 +30,7 @@ use super::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
 use crate::common::commands_parser::{EmptyArgs, RunEnclavesArgs};
 use crate::common::logger::EnclaveProcLogWriter;
 
-use commands::{console_enclaves, describe_enclaves, run_enclaves, terminate_enclaves};
+use commands::{describe_enclaves, run_enclaves, terminate_enclaves};
 use connection::Connection;
 use connection_listener::ConnectionListener;
 use resource_manager::EnclaveManager;
@@ -178,15 +178,12 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
                 break;
             }
 
-            EnclaveProcessCommandType::Console => {
-                safe_route_output(
-                    &mut enclave_manager,
-                    connection.as_raw_fd(),
-                    |mut enclave_manager| console_enclaves(&mut enclave_manager),
-                )
-                .ok_or_exit("Failed to open console to enclave.");
-
-                // TODO: console_enclaves(describe_args).ok_or_exit(args.usage());
+            EnclaveProcessCommandType::GetEnclaveCID => {
+                let enclave_cid = enclave_manager
+                    .get_console_resources()
+                    .ok_or_exit("Failed to get enclave CID.");
+                write_u64_le(connection.as_writer(), enclave_cid)
+                    .ok_or_exit("Failed to send enclave CID.");
             }
 
             EnclaveProcessCommandType::Describe => {

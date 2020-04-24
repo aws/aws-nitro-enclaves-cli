@@ -3,9 +3,7 @@
 #![deny(warnings)]
 
 use log::debug;
-use std::convert::TryFrom;
 use std::fs::File;
-use std::io::{self, Write};
 
 use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::NitroCliResult;
@@ -13,13 +11,10 @@ use crate::enclave_proc::cpu_info::CpuInfos;
 use crate::enclave_proc::json_output::get_enclave_describe_info;
 use crate::enclave_proc::json_output::EnclaveDescribeInfo;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
-use crate::enclave_proc::utils::Console;
 
 // Hypervisor cid as defined by:
 // http://man7.org/linux/man-pages/man7/vsock.7.html
-pub const VMADDR_CID_HYPERVISOR: u32 = 0;
 pub const VMADDR_CID_PARENT: u32 = 3;
-pub const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
 pub const ENCLAVE_VSOCK_LOADER_PORT: u32 = 7000;
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
 pub const BUFFER_SIZE: usize = 1024;
@@ -87,31 +82,6 @@ pub fn describe_enclaves(enclave_manager: &EnclaveManager) -> NitroCliResult<()>
         "{}",
         serde_json::to_string_pretty(&infos).map_err(|err| format!("{:?}", err))?
     );
-
-    Ok(())
-}
-
-pub fn console_enclaves(enclave_manager: &EnclaveManager) -> NitroCliResult<()> {
-    debug!("console_enclaves");
-
-    let enclave_cid = enclave_manager.get_console_resources()?;
-
-    println!("Connecting to the console for enclave {}...", enclave_cid);
-    enclave_console(enclave_cid)
-        .map_err(|err| format!("Failed to start enclave logger: {:?}", err))?;
-    Ok(())
-}
-
-/// Connects to the enclave console and prints it continously
-pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
-    let console = Console::new(
-        VMADDR_CID_HYPERVISOR,
-        u32::try_from(enclave_cid)
-            .map_err(|err| format!("Failed to connect to the enclave: {}", err))?
-            + CID_TO_CONSOLE_PORT_OFFSET,
-    )?;
-    println!("Successfully connected to the console.");
-    console.read_to(io::stdout().by_ref())?;
 
     Ok(())
 }

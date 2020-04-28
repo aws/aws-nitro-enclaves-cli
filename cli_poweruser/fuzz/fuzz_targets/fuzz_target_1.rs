@@ -1,4 +1,4 @@
-#![no_main]
+//#![no_main]
 #[macro_use]
 extern crate libfuzzer_sys;
 extern crate nitro_cli_poweruser;
@@ -6,6 +6,7 @@ extern crate num_traits;
 
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use std::fs;
 use std::fs::File;
 
 #[allow(unused_imports)]
@@ -361,51 +362,59 @@ fn enclave_destroy() {
     }
 }
 
+fn eif_exists() -> bool {
+    fs::metadata(EIF_PATH).is_ok()
+}
+
 #[allow(dead_code)]
 #[allow(unused_must_use)]
 fuzz_target!(|data: &[u8]| {
-    if data.len() >= 10 {
-        let cmd_type: u8 = data[0];
-        match FromPrimitive::from_u8(cmd_type) {
-            Some(NitroEnclavesCmdType::NitroEnclavesEnclaveStart) => {
-                enclave_start(data[9] as u64);
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesGetSlot) => {
-                enclave_get_slot(get_u64(data, 1));
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesEnclaveStop) => {
-                enclave_stop(get_u64(data, 1));
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesSlotAlloc) => {
-                enclave_slot_alloc();
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesSlotFree) => {
-                enclave_slot_free(get_u64(data, 1));
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesSlotAddMem) => {
-                enclave_slot_add_mem();
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesSlotAddVcpu) => {
-                enclave_slot_add_vcpu();
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesSlotCount) => {
-                enclave_slot_count();
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesNextSlot) => {
-                enclave_next_slot(get_u64(data, 1));
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesSlotInfo) => {
-                enclave_slot_info();
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesSlotAddBulkVcpu) => {
-                enclave_slot_add_bulk_vcpu();
-            }
-            Some(NitroEnclavesCmdType::NitroEnclavesDestroy) => {
-                enclave_destroy();
-            }
-            None => {
-                // Invalid command; do nothing
+    if eif_exists() {
+        if data.len() >= 10 {
+            let cmd_type: u8 = data[0];
+            match FromPrimitive::from_u8(cmd_type) {
+                Some(NitroEnclavesCmdType::NitroEnclavesEnclaveStart) => {
+                    enclave_start(data[9] as u64);
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesGetSlot) => {
+                    enclave_get_slot(get_u64(data, 1));
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesEnclaveStop) => {
+                    enclave_stop(get_u64(data, 1));
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesSlotAlloc) => {
+                    enclave_slot_alloc();
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesSlotFree) => {
+                    enclave_slot_free(get_u64(data, 1));
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesSlotAddMem) => {
+                    enclave_slot_add_mem();
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesSlotAddVcpu) => {
+                    enclave_slot_add_vcpu();
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesSlotCount) => {
+                    enclave_slot_count();
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesNextSlot) => {
+                    enclave_next_slot(get_u64(data, 1));
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesSlotInfo) => {
+                    enclave_slot_info();
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesSlotAddBulkVcpu) => {
+                    enclave_slot_add_bulk_vcpu();
+                }
+                Some(NitroEnclavesCmdType::NitroEnclavesDestroy) => {
+                    enclave_destroy();
+                }
+                None => {
+                    // Invalid command; do nothing
+                }
             }
         }
+    } else {
+        eprintln!("EIF file not found in current directory. Download it from https://drive.corp.amazon.com/documents/bercarug@/command_executer.eif and place it in <project_dir>/cli_poweruser/");
     }
 });

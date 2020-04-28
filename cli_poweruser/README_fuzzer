@@ -1,0 +1,20 @@
+===== Stronghold Device Fuzzer =====
+
+Prerequisite: install all the components required for building the CLI by
+running
+```
+./install_cargo_deps.sh
+```
+
+The fuzzer uses a sample EIF which can be downloaded from
+https://drive.corp.amazon.com/documents/bercarug@/command_executer.eif
+It must be scp'ed on the instance the fuzzer will run on, inside the
+cli_poweruser/ directory of the repository.
+
+In order to start the fuzzer, run (as normal user)
+```
+./run_fuzzer.sh
+```
+
+The fuzzer output will be available in a file called `nohup.out`, inside the
+same cli_poweruser/ directory.

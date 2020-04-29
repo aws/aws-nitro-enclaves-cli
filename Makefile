@@ -43,7 +43,7 @@ driver-deps:
 	&& echo "Successfully installed the driver deps"
 
 build-container: tools/Dockerfile1804
-	docker image build -t $(CONTAINER_TAG) -f tools/Dockerfile1804 $(OBJ_PATH)/ \
+	docker image build -t $(CONTAINER_TAG) -f tools/Dockerfile1804 tools/ \
 		> $(OBJ_PATH)/build_container_output.log
 
 .PHONY: build-setup

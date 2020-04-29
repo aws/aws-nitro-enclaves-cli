@@ -15,9 +15,7 @@ use std::time::Duration;
 
 use crate::common::notify_error;
 use crate::common::{ExitGracefully, NitroCliResult};
-use crate::enclave_proc::commands::{
-    DEBUG_FLAG, ENCLAVE_READY_VSOCK_PORT, ENCLAVE_VSOCK_LOADER_PORT, VMADDR_CID_PARENT,
-};
+use crate::enclave_proc::commands::{DEBUG_FLAG, ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 use crate::enclave_proc::json_output::{get_enclave_id, get_run_enclaves_info};
 
 const KVM_CREATE_VM: u64 = nix::request_code_none!(KVMIO, 0x01) as _;
@@ -60,6 +58,7 @@ struct EnclaveStartMetadata {
     /// Slot-unique ID mapped to the enclave to start.
     slot_uid: u64,
     /// Token used by user space to send the enclave image to the enclave VMM endpoint via vsock.
+    #[allow(dead_code)]
     vsock_loader_token: u64,
 }
 
@@ -427,29 +426,6 @@ impl EnclaveHandle {
             self.allocated_memory_mib,
             self.cpu_ids
         );
-
-        eprintln!(
-            "Sending image to cid: {} port: {}",
-            { start.enclave_cid },
-            ENCLAVE_VSOCK_LOADER_PORT
-        );
-
-        eif_loader::send_image(
-            &mut self.eif_file.as_mut().unwrap(),
-            // It is safe to unwrap here, by now we should know what cid we are going to use.
-            start.enclave_cid as u32,
-            ENCLAVE_VSOCK_LOADER_PORT,
-            start.vsock_loader_token.to_be_bytes(),
-            between_packets_delay(),
-        )
-        .map_err(|err| {
-            let err_msg = format!(
-                "Sending the image to the enclave failed with error {:?}",
-                err
-            );
-            self.terminate_enclave_error(&err_msg);
-            err_msg
-        })?;
 
         Ok(start)
     }

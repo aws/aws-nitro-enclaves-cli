@@ -6,6 +6,8 @@ use kvm_bindings::kvm_userspace_memory_region;
 use kvm_bindings::KVMIO;
 use log::{debug, error, info};
 use std::fs::{File, OpenOptions};
+use std::io::prelude::*;
+use std::io::SeekFrom;
 use std::os::raw::c_ulong;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::{Arc, Mutex};
@@ -30,6 +32,9 @@ const NE_ENCLAVE_START: u64 =
 
 // The maximum allowable size of an enclave is 4 GB
 const ENCLAVE_MEMORY_MAX_SIZE: u64 = 1 << 32;
+
+// Offset from where the image format(EIF) should be loaded
+const OFFSET_IMGFORMAT: usize = 8 * 1024 * 1024;
 
 #[derive(Clone)]
 pub enum EnclaveState {
@@ -159,6 +164,23 @@ impl MemoryRegion {
         // Set the address and length to 0 to avoid double-freeing.
         self.mem_addr = 0;
         self.mem_size = 0;
+
+        Ok(())
+    }
+
+    /// Write the content from file, into memory, from offset from_offset
+    fn fill_from_file(&self, file: &mut File, region_offset: usize, size: usize) -> NitroCliResult<()> {
+        if region_offset.checked_add(size)
+            .ok_or("Memory overflow".to_string())? > self.mem_size as usize {
+            return Err("Out of region".to_string());
+        }
+
+        let bytes = unsafe {
+            std::slice::from_raw_parts_mut(self.mem_addr as *mut u8, self.mem_size as usize)
+        };
+
+        file.read_exact(&mut bytes[region_offset..region_offset+size])
+            .map_err(|err| format!("Error while reading from enclave image: %{:?}", err))?;
 
         Ok(())
     }
@@ -336,6 +358,13 @@ impl EnclaveHandle {
             acc += val.mem_size;
             acc
         }) >> 20;
+
+        let eif_file = self
+            .eif_file
+            .as_mut()
+            .ok_or("Cannot get eif_file".to_string())?;
+
+        write_eif_to_regions(eif_file, regions)?;
 
         // Provide the regions to the driver for ownership change.
         for region in regions {
@@ -591,6 +620,50 @@ impl EnclaveManager {
             .clear();
         Ok(())
     }
+}
+
+fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroCliResult<()> {
+    let file_size = eif_file.metadata()
+        .map_err(|err| format!("Error during fs::metadata: {}", err))?
+        .len() as usize;
+
+    eif_file
+        .seek(SeekFrom::Start(0))
+        .map_err(|err| format!("Error during file seek: {}", err))?;
+
+    let mut total_written: usize = 0;
+
+    for region in regions {
+        if total_written >=
+            file_size.checked_add(OFFSET_IMGFORMAT)
+            .ok_or("Memory overflow".to_string())?
+        {
+            // All bytes have been written
+            break;
+        }
+        if total_written
+            .checked_add(region.mem_size as usize)
+            .ok_or("Memory overflow".to_string())?
+            < OFFSET_IMGFORMAT
+        {
+            // All bytes need to be skiped to get to OFFSET_IMGFORMAT
+        } else {
+            let offset = OFFSET_IMGFORMAT
+                .checked_sub(total_written)
+                .unwrap_or(0);
+            let bytes_left_in_file = file_size
+                .checked_add(OFFSET_IMGFORMAT)
+                .ok_or("Memory overflow".to_string())?
+                .checked_sub(total_written)
+                .ok_or("Corruption, written more than file size".to_string())?;
+            let size = std::cmp::min(bytes_left_in_file,
+                region.mem_size as usize - offset);
+            region.fill_from_file(eif_file, offset, size)?;
+        }
+        total_written += region.mem_size as usize;
+    }
+
+    Ok(())
 }
 
 /// Release the enclave and vCPU descriptors.

@@ -4,17 +4,14 @@
 
 use log::{debug, info, warn};
 use nix::sys::epoll::{self, EpollEvent, EpollFlags, EpollOp};
-use std::format;
-use std::fs;
 use std::io;
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread::{self, JoinHandle};
 
+use super::socket::EnclaveProcSock;
 use crate::common::commands_parser::EmptyArgs;
-use crate::common::{
-    create_resources_dir, enclave_proc_command_send_single, get_socket_path, receive_command_type,
-};
+use crate::common::{enclave_proc_command_send_single, receive_command_type};
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 
 /// A listener which waits for external connections.
@@ -23,8 +20,8 @@ pub struct ConnectionListener {
     epoll_fd: RawFd,
     /// The thread which actually listens for new connections
     listener_thread: Option<JoinHandle<()>>,
-    /// The path of the Unix socket that the listener binds to.
-    socket_path: String,
+    /// The Unix socket that the listener binds to.
+    socket: EnclaveProcSock,
 }
 
 /// The listener must be cloned when launching the listening thread.
@@ -34,7 +31,7 @@ impl Clone for ConnectionListener {
         ConnectionListener {
             epoll_fd: self.epoll_fd,
             listener_thread: None,
-            socket_path: self.socket_path.clone(),
+            socket: self.socket.clone(),
         }
     }
 }
@@ -45,7 +42,7 @@ impl ConnectionListener {
         ConnectionListener {
             epoll_fd: epoll::epoll_create().ok_or_exit("Could not create epoll_fd."),
             listener_thread: None,
-            socket_path: String::new(),
+            socket: EnclaveProcSock::default(),
         }
     }
 
@@ -56,9 +53,8 @@ impl ConnectionListener {
 
     /// Initialize the connection listener.
     pub fn start(&mut self, enclave_id: &String) -> io::Result<()> {
-        // Obtain the path of the socket to listen on.
-        create_resources_dir()?;
-        self.socket_path = get_socket_path(enclave_id)?;
+        // Obtain the socket to listen on.
+        self.socket = EnclaveProcSock::new(enclave_id)?;
 
         let self_clone = self.clone();
         self.listener_thread = Some(thread::spawn(move || self_clone.connection_listener_run()));
@@ -87,12 +83,15 @@ impl ConnectionListener {
     }
 
     /// Wait for and handle new connections.
-    fn connection_listener_run(&self) {
+    fn connection_listener_run(mut self) {
         // Bind the listener to the socket and spawn the listener thread.
-        let listener = UnixListener::bind(&self.socket_path).ok_or_exit("Error binding.");
+        let listener = UnixListener::bind(self.socket.get_path()).ok_or_exit("Error binding.");
+        self.socket
+            .start_monitoring()
+            .ok_or_exit("Error monitoring socket.");
         debug!(
             "Connection listener started on socket: {}",
-            self.socket_path
+            self.socket.get_path()
         );
 
         // Accept connections and process them (this is a blocking call).
@@ -115,16 +114,8 @@ impl ConnectionListener {
         }
 
         // Remove the listener's socket.
-        self.remove_socket();
+        self.socket.close();
         debug!("Connection listener has finished.");
-    }
-
-    /// Remove the listener socket.
-    fn remove_socket(&self) {
-        if !self.socket_path.is_empty() {
-            fs::remove_file(&self.socket_path)
-                .ok_or_exit(&format!("Failed to remove socket '{}'.", self.socket_path));
-        }
     }
 
     /// Terminate the connection listener.
@@ -135,7 +126,7 @@ impl ConnectionListener {
         }
 
         // Send termination notification to the listener thread.
-        let mut self_conn = UnixStream::connect(&self.socket_path)
+        let mut self_conn = UnixStream::connect(self.socket.get_path())
             .ok_or_exit("Failed to connect to our own socket.");
         enclave_proc_command_send_single::<EmptyArgs>(
             &EnclaveProcessCommandType::ConnectionListenerStop,

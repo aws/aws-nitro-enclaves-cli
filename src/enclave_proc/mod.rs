@@ -8,6 +8,7 @@ pub mod connection_listener;
 pub mod cpu_info;
 pub mod json_output;
 pub mod resource_manager;
+pub mod socket;
 pub mod utils;
 
 use log::{info, warn};

@@ -20,7 +20,7 @@ use vsock::{VsockListener, VsockStream};
 const MAX_VSOCK_PACKET: usize = 4096;
 const MAX_PAYLOAD: usize = MAX_VSOCK_PACKET - 8;
 
-const ACCEPT_TIMEOUT: i32 = 20000; // millis
+const ACCEPT_TIMEOUT: i32 = 60000; // millis
 
 #[derive(Debug, PartialEq)]
 /// Internal errors while sending an Eif file

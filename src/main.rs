@@ -11,14 +11,13 @@ use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::common::logger;
-use nitro_cli::common::{create_resources_dir, enclave_proc_command_send_single, handle_signals};
+use nitro_cli::common::{create_resources_dir, enclave_proc_command_send_single};
 use nitro_cli::common::{EnclaveProcessCommandType, ExitGracefully};
-use nitro_cli::create_app;
 use nitro_cli::enclave_proc_comm::{
     enclave_proc_command_send_all, enclave_proc_connect_to_single, enclave_proc_connection_close,
     enclave_proc_fetch_output, enclave_proc_get_cid, enclave_proc_spawn,
 };
-use nitro_cli::{build_enclaves, console_enclaves};
+use nitro_cli::{build_enclaves, console_enclaves, create_app};
 
 fn main() {
     // Command line specification for NitroEnclaves CLI.
@@ -36,10 +35,10 @@ fn main() {
 
     match args.subcommand() {
         ("run-enclave", Some(args)) => {
-            handle_signals();
             let run_args = RunEnclavesArgs::new_with(args).ok_or_exit(args.usage());
             let mut comm =
                 enclave_proc_spawn(&logger).ok_or_exit("Enclave process spawning failed.");
+
             enclave_proc_command_send_single(
                 &EnclaveProcessCommandType::Run,
                 Some(&run_args),
@@ -52,7 +51,6 @@ fn main() {
             enclave_proc_connection_close(&replies);
         }
         ("terminate-enclave", Some(args)) => {
-            handle_signals();
             let terminate_args = TerminateEnclavesArgs::new_with(args).ok_or_exit(args.usage());
             let mut comm = enclave_proc_connect_to_single(&terminate_args.enclave_id)
                 .ok_or_exit("Failed to open socket.");

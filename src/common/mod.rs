@@ -4,15 +4,13 @@
 
 pub mod commands_parser;
 pub mod logger;
+pub mod signal_handler;
 
 use log::error;
 use serde::{Deserialize, Serialize};
-use signal_hook::iterator::Signals;
-use signal_hook::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
-use std::thread::spawn;
 
 pub type NitroCliResult<T> = Result<T, String>;
 
@@ -124,18 +122,6 @@ pub fn get_socket_path(enclave_id: &String) -> io::Result<String> {
     let resources_dir = get_resources_dir()?;
     let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
     Ok(format!("{}/{}.sock", resources_dir, tokens[0]))
-}
-
-pub fn handle_signals() {
-    let signals =
-        Signals::new(&[SIGINT, SIGQUIT, SIGTERM, SIGHUP]).ok_or_exit("Could not handle signals");
-    spawn(move || {
-        for sig in signals.forever() {
-            if sig != SIGHUP {
-                eprintln!("Warning! Trying to stop a command could leave the enclave in an unsafe state. If you think something is wrong please use SIGKILL to terminate the command.");
-            }
-        }
-    });
 }
 
 /// Get the path to the enclave resources directory

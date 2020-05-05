@@ -12,13 +12,13 @@ pub mod socket;
 pub mod utils;
 
 use log::{info, warn};
-use nix::sys::signal::{signal, SigHandler, Signal};
+use nix::sys::signal::{Signal, SIGHUP};
 use nix::unistd::*;
 use procinfo::pid;
 use serde::de::DeserializeOwned;
 use std::fs::OpenOptions;
 use std::io::{self, Read};
-use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::process;
 use std::thread::{self, JoinHandle};
@@ -30,6 +30,7 @@ use super::common::{
 use super::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
 use crate::common::commands_parser::{EmptyArgs, RunEnclavesArgs};
 use crate::common::logger::EnclaveProcLogWriter;
+use crate::common::signal_handler::SignalHandler;
 
 use commands::{describe_enclaves, run_enclaves, terminate_enclaves};
 use connection::Connection;
@@ -81,6 +82,14 @@ fn get_logger_id(enclave_id: &str) -> String {
     format!("enc-{}", tokens[0])
 }
 
+fn send_command_and_close(cmd: &EnclaveProcessCommandType, stream: &mut UnixStream) {
+    enclave_proc_command_send_single::<EmptyArgs>(cmd, None, stream)
+        .ok_or_exit("Failed to send command.");
+    stream
+        .shutdown(std::net::Shutdown::Both)
+        .ok_or_exit("Failed to shut down stream.");
+}
+
 /// Perform enclave termination.
 fn run_terminate(
     connection: Connection,
@@ -95,15 +104,10 @@ fn run_terminate(
     .ok_or_exit("Failed to terminate enclave.");
 
     // Notify the main thread that enclave termination has completed.
-    enclave_proc_command_send_single::<EmptyArgs>(
+    send_command_and_close(
         &EnclaveProcessCommandType::TerminateComplete,
-        None,
         &mut thread_stream,
-    )
-    .ok_or_exit("Failed to send termination completion.");
-    thread_stream
-        .shutdown(std::net::Shutdown::Both)
-        .ok_or_exit("Failed to shut down termination thread stream.");
+    );
 }
 
 /// Start enclave termination.
@@ -121,11 +125,41 @@ fn notify_terminate(
     }))
 }
 
+fn enclave_proc_configure_signal_handler(conn_listener: &ConnectionListener) {
+    let mut signal_handler = SignalHandler::new_with_defaults().mask_all();
+    let (local_stream, thread_stream) =
+        UnixStream::pair().ok_or_exit("Failed to create stream pair.");
+
+    conn_listener.add_stream_to_epoll(local_stream);
+    signal_handler.start_handler(thread_stream.into_raw_fd(), enclave_proc_handle_signals);
+}
+
+fn enclave_proc_handle_signals(comm_fd: RawFd, signal: Signal) -> bool {
+    let mut stream = unsafe { UnixStream::from_raw_fd(comm_fd) };
+
+    warn!(
+        "Received signal {:?}. The enclave process will now close.",
+        signal
+    );
+    send_command_and_close(
+        &EnclaveProcessCommandType::ConnectionListenerStop,
+        &mut stream,
+    );
+
+    true
+}
+
 /// The main event loop of the enclave process.
 fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     let mut conn_listener = ConnectionListener::new();
     let mut enclave_manager = EnclaveManager::default();
     let mut terminate_thread: Option<std::thread::JoinHandle<()>> = None;
+
+    // Start the signal handler before spawning any other threads. This is done since the
+    // handler will mask all relevant signals from the current thread and this setting will
+    // be automatically inherited by all threads spawned from this point on; we want this
+    // because only the dedicated thread spawned by the handler should listen for signals.
+    enclave_proc_configure_signal_handler(&conn_listener);
 
     // Add the CLI communication channel to epoll.
     conn_listener.handle_new_connection(comm_stream);
@@ -199,31 +233,12 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
                 //TODO: describe_enclaves(describe_args).ok_or_exit(args.usage());
             }
 
-            EnclaveProcessCommandType::ConnectionListenerStop => (),
+            EnclaveProcessCommandType::ConnectionListenerStop => break,
         };
     }
 
     info!("Enclave process {} exited event loop.", process::id());
     conn_listener.stop();
-}
-
-/// Ignore a list of signals.
-fn ignore_signal_handlers(ign_signals: &[Signal]) -> Vec<(Signal, SigHandler)> {
-    let mut handlers: Vec<(Signal, SigHandler)> = vec![];
-    for &ign_signal in ign_signals.iter() {
-        let handler =
-            unsafe { signal(ign_signal, SigHandler::SigIgn) }.ok_or_exit("Failed to set signal.");
-        handlers.push((ign_signal, handler));
-    }
-
-    handlers
-}
-
-/// Restore the signal handlers that were previously ignored.
-fn restore_signal_handlers(handlers: &[(Signal, SigHandler)]) {
-    for &(ign_signal, old_handler) in handlers.iter() {
-        unsafe { signal(ign_signal, old_handler) }.ok_or_exit("Failed to restore signal handler.");
-    }
 }
 
 /// Redirect STDIN, STDOUT and STDERR to "/dev/null"
@@ -247,7 +262,7 @@ fn create_enclave_process() {
     // (2) Fork a child process.
     // (3) Terminate the parent (at which point the child becomes orphaned).
     // (4) Restore signal handlers.
-    let old_sig_handlers = ignore_signal_handlers(&[Signal::SIGHUP]);
+    let signal_handler = SignalHandler::new(&[SIGHUP]).mask_all();
 
     // We need to redirect the standard descriptors to "/dev/null" in the
     // intermediate process since we want its child (the detached enclave
@@ -280,7 +295,7 @@ fn create_enclave_process() {
     }
 
     // Restore signal handlers.
-    restore_signal_handlers(&old_sig_handlers);
+    signal_handler.unmask_all();
 }
 
 /// Launch the enclave process.

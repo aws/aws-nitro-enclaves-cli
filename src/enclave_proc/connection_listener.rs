@@ -5,10 +5,11 @@
 use log::{debug, info, warn};
 use nix::sys::epoll::{self, EpollEvent, EpollFlags, EpollOp};
 use std::io;
-use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread::{self, JoinHandle};
 
+use super::connection::Connection;
 use super::socket::EnclaveProcSock;
 use crate::common::commands_parser::EmptyArgs;
 use crate::common::{enclave_proc_command_send_single, receive_command_type};
@@ -68,6 +69,16 @@ impl ConnectionListener {
         let mut cli_evt = EpollEvent::new(EpollFlags::EPOLLIN, stream.into_raw_fd() as u64);
         epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, stream_fd, &mut cli_evt)
             .ok_or_exit("Could not add new connection descriptor to epoll.");
+    }
+
+    /// Add the enclave descriptor to epoll.
+    pub fn register_enclave_descriptor(&mut self, enc_fd: RawFd) {
+        let mut enc_event = EpollEvent::new(
+            EpollFlags::EPOLLIN | EpollFlags::EPOLLERR | EpollFlags::EPOLLHUP,
+            enc_fd as u64,
+        );
+        epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, enc_fd, &mut enc_event)
+            .ok_or_exit("Could not add enclave descriptor to epoll.");
     }
 
     /// Handle a new connection.
@@ -146,5 +157,35 @@ impl ConnectionListener {
             .join()
             .ok_or_exit("Failed to join listener thread.");
         info!("The connection listener has been stopped.");
+    }
+
+    /// Fetch the next available connection.
+    pub fn get_next_connection(&self, enc_fd: Option<RawFd>) -> Connection {
+        // Wait on epoll until a valid event is received.
+        let mut events = [EpollEvent::empty(); 1];
+
+        loop {
+            let num_events = epoll::epoll_wait(self.epoll_fd, &mut events, -1)
+                .ok_or_exit("Waiting on epoll failed.");
+            if num_events > 0 {
+                break;
+            }
+        }
+
+        let fd = events[0].data() as RawFd;
+        let input_stream = match enc_fd {
+            // This is a connection to an enclave.
+            Some(enc_fd) if enc_fd == fd => None,
+            // This is a connection to a CLI instance or to ourselves.
+            _ => Some(unsafe { UnixStream::from_raw_fd(fd) }),
+        };
+
+        // Remove the fetched descriptor from epoll. We are doing this here since
+        // otherwise the Connection would have to do it when dropped and we prefer
+        // the Connection not touch epoll directly.
+        epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlDel, fd, None)
+            .ok_or_exit("Failed to remove fd from epoll.");
+
+        Connection::new(events[0].events(), input_stream)
     }
 }

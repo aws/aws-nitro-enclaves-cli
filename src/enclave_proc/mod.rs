@@ -12,6 +12,7 @@ pub mod socket;
 pub mod utils;
 
 use log::{info, warn};
+use nix::sys::epoll::EpollFlags;
 use nix::sys::signal::{Signal, SIGHUP};
 use nix::unistd::{daemon, getpid, getppid};
 use serde::de::DeserializeOwned;
@@ -34,6 +35,16 @@ use commands::{describe_enclaves, run_enclaves, terminate_enclaves};
 use connection::Connection;
 use connection_listener::ConnectionListener;
 use resource_manager::EnclaveManager;
+
+/// The type of enclave event that has been handled.
+enum HandledEnclaveEvent {
+    /// A hang-up event.
+    HangUp,
+    /// An unexpected but non-critical event.
+    Unexpected,
+    /// There was no event that needed handling.
+    None,
+}
 
 /// Read the arguments of the CLI command.
 fn receive_command_args<T>(input_stream: &mut dyn Read) -> io::Result<T>
@@ -147,6 +158,31 @@ fn enclave_proc_handle_signals(comm_fd: RawFd, signal: Signal) -> bool {
     true
 }
 
+/// Handle an event coming from an enclave.
+fn try_handle_enclave_event(connection: &Connection) -> HandledEnclaveEvent {
+    // Check if this is an enclave connection.
+    if let Some(mut enc_events) = connection.get_enclave_event_flags() {
+        let enc_hup = enc_events.contains(EpollFlags::EPOLLHUP);
+
+        // Check if non-hang-up events have occurred.
+        enc_events.remove(EpollFlags::EPOLLHUP);
+        if !enc_events.is_empty() {
+            warn!("Received unexpected enclave event(s): {:?}", enc_events);
+        }
+
+        // If we received the hang-up event we need to terminate cleanly.
+        if enc_hup {
+            warn!("Received hang-up event from the enclave. Enclave process will shut down.");
+            return HandledEnclaveEvent::HangUp;
+        }
+
+        // Non-hang-up enclave events are not fatal.
+        return HandledEnclaveEvent::Unexpected;
+    }
+
+    HandledEnclaveEvent::None
+}
+
 /// The main event loop of the enclave process.
 fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     let mut conn_listener = ConnectionListener::new();
@@ -163,8 +199,18 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     conn_listener.handle_new_connection(comm_stream);
 
     loop {
-        // We can get connections to CLI instances, to the resource driver or to ourselves.
-        let mut connection = Connection::new(conn_listener.get_epoll_fd());
+        // We can get connections to CLI instances, to the enclave or to ourselves.
+        let mut connection =
+            conn_listener.get_next_connection(enclave_manager.get_enclave_descriptor().ok());
+
+        // If this is an enclave event, handle it.
+        match try_handle_enclave_event(&connection) {
+            HandledEnclaveEvent::HangUp => break,
+            HandledEnclaveEvent::Unexpected => continue,
+            HandledEnclaveEvent::None => (),
+        }
+
+        // At this point we have a connection that is not coming from an enclave.
         let cmd =
             receive_command_type(connection.as_reader()).ok_or_exit("Failed to receive command.");
         info!("Received command: {:?}", cmd);
@@ -186,6 +232,15 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
                 conn_listener
                     .start(&enclave_manager.enclave_id)
                     .ok_or_exit("Failed to start connection listener.");
+
+                // Add the enclave descriptor to epoll to listen for enclave events.
+                match enclave_manager.get_enclave_descriptor() {
+                    Ok(enc_fd) => conn_listener.register_enclave_descriptor(enc_fd),
+                    Err(_) => {
+                        warn!("Failed to get enclave descriptor. Enclave process will shut down.");
+                        break;
+                    }
+                }
 
                 // TODO: run_enclaves(run_args).ok_or_exit(args.usage());
             }

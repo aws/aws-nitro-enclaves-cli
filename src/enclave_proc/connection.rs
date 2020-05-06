@@ -2,77 +2,60 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-use nix::sys::epoll::{self, EpollEvent, EpollOp};
+use nix::sys::epoll::EpollFlags;
 use std::io::{Read, Write};
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 
 use crate::common::ExitGracefully;
 
-/// An enclave process connection to a CLI instance or itself.
+/// An enclave process connection to a CLI instance, an enclave or itself.
 pub struct Connection {
-    epoll_fd: RawFd,
-    input_stream: UnixStream,
+    epoll_flags: EpollFlags,
+    input_stream: Option<UnixStream>,
 }
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        // Close the stream.
-        self.input_stream
-            .shutdown(std::net::Shutdown::Both)
-            .ok_or_exit("Failed to shut down.");
-
-        // Remove the descriptor from epoll.
-        epoll::epoll_ctl(
-            self.epoll_fd,
-            EpollOp::EpollCtlDel,
-            self.input_stream.as_raw_fd(),
-            None,
-        )
-        .ok_or_exit("Failed to remove fd from epoll.");
+        if let Some(input_stream) = &self.input_stream {
+            // Close the stream.
+            input_stream
+                .shutdown(std::net::Shutdown::Both)
+                .ok_or_exit("Failed to shut down.");
+        }
     }
 }
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.input_stream.as_raw_fd()
+        self.input_stream.as_ref().unwrap().as_raw_fd()
     }
 }
 
 impl Connection {
-    /// Create a new connection instance.
-    pub fn new(epoll_fd: RawFd) -> Self {
-        // Wait on epoll until a valid event is received.
-        let mut events = [EpollEvent::empty(); 1];
-
-        loop {
-            let num_events =
-                epoll::epoll_wait(epoll_fd, &mut events, -1).ok_or_exit("Waiting on epoll failed.");
-            if num_events > 0 {
-                break;
-            }
-        }
-
-        // Obtain a unix stream for reading and writing data.
-        let input_stream = unsafe { UnixStream::from_raw_fd(events[0].data() as RawFd) };
+    /// Create a new connection.
+    pub fn new(epoll_flags: EpollFlags, input_stream: Option<UnixStream>) -> Self {
         Connection {
-            epoll_fd,
+            epoll_flags,
             input_stream,
         }
     }
 
     /// Expose the connection for reading.
     pub fn as_reader(&mut self) -> &mut dyn Read {
-        &mut self.input_stream
+        self.input_stream.as_mut().unwrap()
     }
 
     /// Expose the connection for writing.
     pub fn as_writer(&mut self) -> &mut dyn Write {
-        &mut self.input_stream
+        self.input_stream.as_mut().unwrap()
     }
 
-    /// Get the epoll descriptor.
-    pub fn get_epoll_fd(&self) -> RawFd {
-        self.epoll_fd
+    // Get the enclave event flags.
+    pub fn get_enclave_event_flags(&self) -> Option<EpollFlags> {
+        match self.input_stream {
+            None => Some(self.epoll_flags),
+            _ => None,
+        }
     }
 }

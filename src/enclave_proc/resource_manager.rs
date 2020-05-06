@@ -598,6 +598,14 @@ impl EnclaveManager {
         ))
     }
 
+    /// Get the enclave descriptor.
+    ///
+    /// The enclave handle is locked during this operation.
+    pub fn get_enclave_descriptor(&self) -> NitroCliResult<RawFd> {
+        let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        Ok(locked_handle.enc_fd)
+    }
+
     /// Update the state the enclave is in.
     ///
     /// The enclave handle is locked during this operation.

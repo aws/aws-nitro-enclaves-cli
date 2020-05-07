@@ -41,7 +41,7 @@ impl<T, E: std::fmt::Debug> ExitGracefully<T, E> for Result<T, E> {
         match self {
             Ok(val) => val,
             Err(err) => {
-                notify_error(&format!("{:?}: {}", err, message));
+                notify_error(&format!("{}: {:?}", message, err));
                 std::process::exit(1);
             }
         }

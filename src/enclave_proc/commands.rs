@@ -23,8 +23,8 @@ pub const DEBUG_FLAG: u16 = 0x1;
 pub fn run_enclaves(args: &RunEnclavesArgs) -> NitroCliResult<EnclaveManager> {
     debug!("run_enclaves");
 
-    let eif_file = File::open(&args.eif_path)
-        .map_err(|err| format!("Failed to open the eif file: {:?}", err))?;
+    let eif_file =
+        File::open(&args.eif_path).map_err(|e| format!("Failed to open the eif file: {}", e))?;
 
     let cpu_infos = CpuInfos::new()?;
     let cpu_ids = if let Some(cpu_ids) = args.cpu_ids.clone() {
@@ -44,9 +44,13 @@ pub fn run_enclaves(args: &RunEnclavesArgs) -> NitroCliResult<EnclaveManager> {
         eif_file,
         args.debug_mode.unwrap_or(false),
     )
-    .map_err(|err| format!("Could not create enclave: {:?}", err))?;
-    enclave_manager.run_enclave()?;
-    enclave_manager.update_state(EnclaveState::Running)?;
+    .map_err(|e| format!("Failed to create enclave: {}", e))?;
+    enclave_manager
+        .run_enclave()
+        .map_err(|e| format!("Failed to run enclave: {}", e))?;
+    enclave_manager
+        .update_state(EnclaveState::Running)
+        .map_err(|e| format!("Failed to update state: {}", e))?;
 
     Ok(enclave_manager)
 }

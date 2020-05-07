@@ -210,10 +210,12 @@ impl Drop for MemoryRegion {
 impl ResourceAllocator {
     /// Create a new resource allocator instance.
     fn new(requested_mem: u64) -> NitroCliResult<Self> {
-        let mem_info = procfs::Meminfo::new().ok_or_exit("Failed to read memory information.");
+        let mem_info = procfs::Meminfo::new()
+            .map_err(|e| format!("Failed to read platform memory information: {:?}", e))?;
         let region_size = match mem_info.hugepagesize {
             Some(value) => value,
-            None => procfs::page_size().ok_or_exit("Failed to read page size.") as u64,
+            None => procfs::page_size().map_err(|e| format!("Failed to read page size: {:?}", e))?
+                as u64,
         };
         let mut max_regions = match mem_info.hugepages_total {
             Some(value) => value,
@@ -225,6 +227,10 @@ impl ResourceAllocator {
             "Region size = {}, Maximum number of regions = {}",
             region_size, max_regions
         );
+
+        if max_regions == 0 {
+            return Err("Maximum number of memory regions cannot be 0.".to_string());
+        }
 
         Ok(ResourceAllocator {
             requested_mem,
@@ -286,7 +292,7 @@ impl ResourceAllocator {
 
 impl Drop for ResourceAllocator {
     fn drop(&mut self) {
-        self.free().ok_or_exit("Failed to drop memroy.");
+        self.free().ok_or_exit("Failed to drop resource allocator.");
     }
 }
 
@@ -302,7 +308,7 @@ impl EnclaveHandle {
         let requested_mem = memory_mib << 20;
         let eif_size = eif_file
             .metadata()
-            .map_err(|err| format!("{:?}", err))?
+            .map_err(|e| format!("Failed to get enclave file metadata: {:?}", e))?
             .len();
         if eif_size > requested_mem {
             return Err(format!("Requested memory is lower than the enclave image. At least {} MiB must be allocated.", eif_size >> 20));
@@ -312,13 +318,13 @@ impl EnclaveHandle {
             .read(true)
             .write(true)
             .open("/dev/nitro_enclaves")
-            .ok_or_exit("Failed to open device file.");
+            .map_err(|e| format!("Failed to open device file: {:?}", e))?;
         let enc_type: c_ulong = 0;
         let enc_fd = unsafe { libc::ioctl(dev_file.as_raw_fd(), KVM_CREATE_VM as _, &enc_type) };
         let flags: u64 = if debug_mode { DEBUG_FLAG as u64 } else { 0 };
 
         if enc_fd < 0 {
-            panic!("Failed to get enclave device descriptor.")
+            return Err("Failed to get enclave device descriptor.".to_string());
         }
 
         Ok(EnclaveHandle {
@@ -329,8 +335,7 @@ impl EnclaveHandle {
             enclave_cid,
             flags,
             enc_fd,
-            resource_allocator: ResourceAllocator::new(requested_mem)
-                .ok_or_exit("Failed to create resource allocator."),
+            resource_allocator: ResourceAllocator::new(requested_mem)?,
             eif_file: Some(eif_file),
             state: EnclaveState::default(),
         })

@@ -3,6 +3,7 @@
 #![deny(warnings)]
 
 pub mod commands_parser;
+pub mod json_output;
 pub mod logger;
 pub mod signal_handler;
 
@@ -23,7 +24,7 @@ pub const SOCKETS_DIR_PATH_ENV_VAR: &str = "NITRO_CLI_SOCKETS_PATH";
 const SOCKETS_DIR_PATH: &str = "/var/run/nitro_enclaves";
 
 /// The type of commands that can be sent to an enclave process.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum EnclaveProcessCommandType {
     Run = 0,
     Terminate,
@@ -35,7 +36,7 @@ pub enum EnclaveProcessCommandType {
 
 /// The type of replies that the enclave process can send to a CLI.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum EnclaveProcessReplyType {
+pub enum EnclaveProcessReply {
     StdOutMessage(String),
     StdErrMessage(String),
     Status(i32),

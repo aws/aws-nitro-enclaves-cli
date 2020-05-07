@@ -9,11 +9,12 @@ use std::os::unix::net::UnixStream;
 use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, EmptyArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
+use nitro_cli::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
 use nitro_cli::common::{enclave_proc_command_send_single, logger};
 use nitro_cli::common::{EnclaveProcessCommandType, ExitGracefully};
 use nitro_cli::enclave_proc_comm::{
-    enclave_proc_command_send_all, enclave_proc_connect_to_single, enclave_proc_fetch_output,
-    enclave_proc_get_cid, enclave_proc_output_failed_conns, enclave_proc_spawn,
+    enclave_proc_command_send_all, enclave_proc_connect_to_single, enclave_proc_get_cid,
+    enclave_proc_spawn, enclave_process_handle_all_replies,
 };
 use nitro_cli::{build_enclaves, console_enclaves, create_app};
 
@@ -42,8 +43,8 @@ fn main() {
             info!("Sent command: Run");
             replies.push(comm);
 
-            let empty_conns = enclave_proc_fetch_output(&replies[..]);
-            enclave_proc_output_failed_conns(empty_conns);
+            enclave_process_handle_all_replies::<EnclaveRunInfo>(&mut replies, 0, false)
+                .ok_or_exit(args.usage());
         }
         ("terminate-enclave", Some(args)) => {
             let terminate_args = TerminateEnclavesArgs::new_with(args).ok_or_exit(args.usage());
@@ -56,11 +57,11 @@ fn main() {
                 &mut comm,
             )
             .ok_or_exit("Failed to send terminate command.");
+
             info!("Sent command: Terminate");
             replies.push(comm);
-
-            let empty_conns = enclave_proc_fetch_output(&replies[..]);
-            enclave_proc_output_failed_conns(empty_conns);
+            enclave_process_handle_all_replies::<EnclaveTerminateInfo>(&mut replies, 0, false)
+                .ok_or_exit(args.usage());
         }
         ("describe-enclaves", _) => {
             let (comms, comm_errors) = enclave_proc_command_send_all::<EmptyArgs>(
@@ -68,16 +69,15 @@ fn main() {
                 None,
             )
             .ok_or_exit("Failed to broadcast describe command.");
-            replies.extend(comms);
+
             info!("Sent command: Describe");
-
-            let empty_conns = enclave_proc_fetch_output(&replies[..]);
-            enclave_proc_output_failed_conns(comm_errors + empty_conns);
-
-            // If no connection could be read, print an empty JSON array.
-            if replies.len() == empty_conns {
-                println!("[]");
-            }
+            replies.extend(comms);
+            enclave_process_handle_all_replies::<EnclaveDescribeInfo>(
+                &mut replies,
+                comm_errors,
+                true,
+            )
+            .ok_or_exit(args.usage());
         }
         ("build-enclave", Some(args)) => {
             let build_args = BuildEnclavesArgs::new_with(args).ok_or_exit(args.usage());

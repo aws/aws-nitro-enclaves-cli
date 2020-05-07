@@ -6,18 +6,20 @@ use log::{debug, info};
 use nix::sys::epoll;
 use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
 use nix::unistd::*;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fs;
-use std::io::{self, Error, ErrorKind, Read};
+use std::io::{self, Error, ErrorKind};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 
 use crate::common::commands_parser::EmptyArgs;
 use crate::common::logger::EnclaveProcLogWriter;
 use crate::common::{
-    enclave_proc_command_send_single, get_socket_path, get_sockets_dir_path, read_u64_le,
+    enclave_proc_command_send_single, get_socket_path, get_sockets_dir_path, notify_error,
+    read_u64_le, receive_from_stream,
 };
-use crate::common::{EnclaveProcessCommandType, ExitGracefully};
+use crate::common::{EnclaveProcessCommandType, EnclaveProcessReply, ExitGracefully};
 use crate::common::{ENCLAVE_PROC_WAIT_TIMEOUT_MSEC, MSG_ENCLAVE_CONFIRM};
 use crate::enclave_proc::enclave_process_run;
 
@@ -170,47 +172,91 @@ where
     Ok((replies, num_errors))
 }
 
-/// Print a stream's output. Returns the number of streams with no output.
-pub fn enclave_proc_fetch_output(conns: &[UnixStream]) -> usize {
-    let mut empty_conns = 0;
+/// Print the output from a single enclave process.
+fn enclave_proc_handle_output<T>(conn: &mut UnixStream) -> (Option<T>, Option<i32>)
+where
+    T: DeserializeOwned,
+{
+    let mut stdout_str = String::new();
+    let mut status: Option<i32> = None;
 
-    for conn in conns.iter() {
-        let mut bytes_read = 0u32;
-
-        // Fetch all stream contents.
-        for byte in conn.bytes() {
-            match byte {
-                Ok(data) => print!("{}", data as char),
-                Err(_) => break,
-            }
-
-            bytes_read = bytes_read + 1;
-        }
-
-        // Shut the stream down.
-        conn.shutdown(std::net::Shutdown::Both)
-            .ok_or_exit("Failed to shut down connection.");
-
-        if bytes_read == 0 {
-            empty_conns = empty_conns + 1;
+    // The contents received on STDOUT must always form a valid JSON object.
+    while let Ok(reply) = receive_from_stream::<EnclaveProcessReply>(conn) {
+        match reply {
+            EnclaveProcessReply::StdOutMessage(msg) => stdout_str.push_str(&msg),
+            EnclaveProcessReply::StdErrMessage(msg) => eprint!("{}", msg),
+            EnclaveProcessReply::Status(status_code) => status = Some(status_code),
         }
     }
 
-    empty_conns
+    // Shut the connection down.
+    match conn.shutdown(std::net::Shutdown::Both) {
+        Ok(()) => (),
+        Err(e) => {
+            notify_error(&format!("Failed to shut connection down: {}", e));
+            status = Some(-1);
+        }
+    }
+
+    // Decode the JSON object.
+    let json_obj = serde_json::from_str::<T>(&stdout_str).ok();
+    (json_obj, status)
 }
 
-/// Output a message for the connections that have failed.
-pub fn enclave_proc_output_failed_conns(failed_conns: usize) {
-    // Don't print anything if there were no failed connections.
-    if failed_conns == 0 {
-        return;
+/// Fetch JSON objects and statuses from all connected enclave processes.
+pub fn enclave_proc_handle_outputs<T>(conns: &mut [UnixStream]) -> Vec<(T, i32)>
+where
+    T: DeserializeOwned,
+{
+    let mut objects: Vec<(T, i32)> = Vec::new();
+
+    for conn in conns.iter_mut() {
+        // We only count connections that have yielded a valid JSON object and a status
+        let (object, status) = enclave_proc_handle_output::<T>(conn);
+        if object.is_some() && status.is_some() {
+            objects.push((object.unwrap(), status.unwrap()));
+        }
     }
 
-    // Print a JSON object with the number of failed connections.
-    eprintln!(
-        "{}",
-        serde_json::json!({ "FailedConnections": failed_conns })
-    );
+    objects
+}
+
+/// Process reply messages from all connected enclave processes.
+pub fn enclave_process_handle_all_replies<T>(
+    replies: &mut [UnixStream],
+    prev_failed_conns: usize,
+    print_as_vec: bool,
+) -> io::Result<()>
+where
+    T: Clone + DeserializeOwned + Serialize,
+{
+    let objects = enclave_proc_handle_outputs::<T>(replies);
+    let failed_conns = prev_failed_conns + replies.len() - objects.len();
+
+    // Print a message if we have any connections that have failed.
+    if failed_conns > 0 {
+        eprintln!("Failed connections: {}", failed_conns);
+    }
+
+    // Output the received objects either individually or as an array.
+    if print_as_vec {
+        let obj_vec: Vec<T> = objects.iter().map(|v| v.0.clone()).collect();
+        println!("{}", serde_json::to_string_pretty(&obj_vec)?);
+    } else {
+        for object in objects.iter().map(|v| v.0.clone()) {
+            println!("{}", serde_json::to_string_pretty(&object)?);
+        }
+    }
+
+    // We fail on any error codes or failed connections.
+    if objects.iter().filter(|v| v.1 != 0).count() > 0 || failed_conns > 0 {
+        return Err(Error::new(
+            ErrorKind::Other,
+            "Failed to handle enclave process replies.",
+        ));
+    }
+
+    Ok(())
 }
 
 /// Obtain an enclave's CID given its full ID.

@@ -16,7 +16,8 @@ use std::time::Duration;
 use crate::common::notify_error;
 use crate::common::{ExitGracefully, NitroCliResult};
 use crate::enclave_proc::commands::{DEBUG_FLAG, ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
-use crate::enclave_proc::json_output::{get_enclave_id, get_run_enclaves_info};
+use crate::enclave_proc::connection::Connection;
+use crate::enclave_proc::utils::get_run_enclaves_info;
 
 pub const KVM_CREATE_VM: u64 = nix::request_code_none!(KVMIO, 0x01) as _;
 pub const KVM_SET_USER_MEMORY_REGION: u64 = nix::request_code_write!(
@@ -262,7 +263,6 @@ impl ResourceAllocator {
             "Allocating {} regions to hold {} bytes.",
             requested_regions, self.requested_mem
         );
-        eprintln!("Start allocating memory...");
 
         loop {
             // Map an individual region
@@ -342,10 +342,10 @@ impl EnclaveHandle {
     }
 
     /// Initialize the enclave environment and start the enclave.
-    fn create_enclave(&mut self) -> NitroCliResult<String> {
-        self.init_memory()?;
+    fn create_enclave(&mut self, connection: &Connection) -> NitroCliResult<String> {
+        self.init_memory(connection)?;
         self.init_cpus()?;
-        let enclave_start = self.start()?;
+        let enclave_start = self.start(connection)?;
         eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
             self.terminate_enclave_error(&err_msg);
@@ -362,17 +362,20 @@ impl EnclaveHandle {
             self.allocated_memory_mib,
         )?;
 
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&info).map_err(|err| format!("{:?}", err))?
-        );
+        connection.println(
+            serde_json::to_string_pretty(&info)
+                .map_err(|err| format!("{:?}", err))?
+                .as_str(),
+        )?;
 
-        Ok(get_enclave_id(&info))
+        Ok(info.enclave_id)
     }
 
     /// Allocate memory and provide it to the enclave.
-    fn init_memory(&mut self) -> NitroCliResult<()> {
+    fn init_memory(&mut self, connection: &Connection) -> NitroCliResult<()> {
         // Allocate the memory regions needed by the enclave.
+        connection.eprintln("Start allocating memory...")?;
+
         let regions = self.resource_allocator.allocate()?;
         self.allocated_memory_mib = regions.iter().fold(0, |mut acc, val| {
             acc += val.mem_size;
@@ -433,7 +436,7 @@ impl EnclaveHandle {
     }
 
     /// Start an enclave after providing it with its necessary resources.
-    fn start(&mut self) -> NitroCliResult<EnclaveStartMetadata> {
+    fn start(&mut self, connection: &Connection) -> NitroCliResult<EnclaveStartMetadata> {
         let mut start = EnclaveStartMetadata::new(&self);
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_ENCLAVE_START as _, &mut start) };
 
@@ -441,12 +444,15 @@ impl EnclaveHandle {
             return Err(format!("Failed to start enclave: {}", rc).to_string());
         }
 
-        eprintln!(
-            "Started enclave with enclave-cid: {}, memory: {} MiB, cpu-ids: {:?}",
-            { start.enclave_cid },
-            self.allocated_memory_mib,
-            self.cpu_ids
-        );
+        connection.eprintln(
+            format!(
+                "Started enclave with enclave-cid: {}, memory: {} MiB, cpu-ids: {:?}",
+                { start.enclave_cid },
+                self.allocated_memory_mib,
+                self.cpu_ids
+            )
+            .as_str(),
+        )?;
 
         Ok(start)
     }
@@ -557,12 +563,12 @@ impl EnclaveManager {
     ///
     /// The enclave handle is locked throughout enclave creation. This is fine, since we
     /// only expose the socket for CLI queries only after creation has completed.
-    pub fn run_enclave(&mut self) -> NitroCliResult<()> {
+    pub fn run_enclave(&mut self, connection: &Connection) -> NitroCliResult<()> {
         self.enclave_id = self
             .enclave_handle
             .lock()
             .map_err(|e| e.to_string())?
-            .create_enclave()?;
+            .create_enclave(connection)?;
         Ok(())
     }
 

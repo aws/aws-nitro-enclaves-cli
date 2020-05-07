@@ -5,13 +5,12 @@
 use nix::sys::epoll::EpollFlags;
 use serde::de::DeserializeOwned;
 use std::io::Write;
-use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::string::ToString;
 use std::sync::{Arc, Mutex};
 
 use crate::common::{receive_from_stream, write_u64_le};
-use crate::common::{EnclaveProcessReplyType, ExitGracefully, NitroCliResult};
+use crate::common::{EnclaveProcessReply, ExitGracefully, NitroCliResult};
 
 struct ConnectionData {
     epoll_flags: EpollFlags,
@@ -32,16 +31,6 @@ impl Drop for ConnectionData {
                 .shutdown(std::net::Shutdown::Both)
                 .ok_or_exit("Failed to shut down.");
         }
-    }
-}
-
-impl AsRawFd for Connection {
-    fn as_raw_fd(&self) -> RawFd {
-        let lock = self
-            .data
-            .lock()
-            .ok_or_exit("Failed to get connection lock.");
-        lock.input_stream.as_ref().unwrap().as_raw_fd()
     }
 }
 
@@ -88,7 +77,7 @@ impl Connection {
         // Append a new-line at the end of the string.
         msg_str.push('\n');
 
-        let reply = EnclaveProcessReplyType::StdOutMessage(msg_str);
+        let reply = EnclaveProcessReply::StdOutMessage(msg_str);
         self.write_reply(&reply)
     }
 
@@ -99,13 +88,13 @@ impl Connection {
         // Append a new-line at the end of the string.
         msg_str.push('\n');
 
-        let reply = EnclaveProcessReplyType::StdErrMessage(msg_str);
+        let reply = EnclaveProcessReply::StdErrMessage(msg_str);
         self.write_reply(&reply)
     }
 
     /// Write an operation's status to the connection's other end.
     pub fn write_status(&self, status: i32) -> NitroCliResult<()> {
-        let reply = EnclaveProcessReplyType::Status(status);
+        let reply = EnclaveProcessReply::Status(status);
         self.write_reply(&reply)
     }
 
@@ -122,7 +111,7 @@ impl Connection {
     }
 
     /// Write a string and its corresponding destination to a socket.
-    fn write_reply(&self, reply: &EnclaveProcessReplyType) -> NitroCliResult<()> {
+    fn write_reply(&self, reply: &EnclaveProcessReply) -> NitroCliResult<()> {
         let mut lock = self.data.lock().map_err(|e| e.to_string())?;
         if lock.input_stream.is_none() {
             return Err("Cannot write a message to this connection.".to_string());

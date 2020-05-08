@@ -7,6 +7,7 @@ pub mod logger;
 pub mod signal_handler;
 
 use log::error;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::io::{self, Read, Write};
@@ -30,6 +31,14 @@ pub enum EnclaveProcessCommandType {
     Describe,
     GetEnclaveCID,
     ConnectionListenerStop,
+}
+
+/// The type of replies that the enclave process can send to a CLI.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum EnclaveProcessReplyType {
+    StdOutMessage(String),
+    StdErrMessage(String),
+    Status(i32),
 }
 
 pub trait ExitGracefully<T, E> {
@@ -100,14 +109,17 @@ where
     Ok(())
 }
 
-/// Read the type of the CLI command.
-pub fn receive_command_type(input_stream: &mut dyn Read) -> io::Result<EnclaveProcessCommandType> {
-    let cmd_size = read_u64_le(input_stream)? as usize;
-    let mut cmd_data: Vec<u8> = vec![0; cmd_size];
-    input_stream.read_exact(&mut cmd_data[..])?;
-    let cmd_type = serde_cbor::from_slice(&cmd_data[..])
+/// Read the arguments of the CLI command.
+pub fn receive_from_stream<T>(input_stream: &mut dyn Read) -> io::Result<T>
+where
+    T: DeserializeOwned,
+{
+    let size = read_u64_le(input_stream)? as usize;
+    let mut raw_data: Vec<u8> = vec![0; size];
+    input_stream.read_exact(&mut raw_data[..])?;
+    let data: T = serde_cbor::from_slice(&raw_data[..])
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    Ok(cmd_type)
+    Ok(data)
 }
 
 /// Get the path to the sockets directory.

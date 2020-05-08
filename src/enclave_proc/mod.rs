@@ -15,17 +15,13 @@ use log::{info, warn};
 use nix::sys::epoll::EpollFlags;
 use nix::sys::signal::{Signal, SIGHUP};
 use nix::unistd::{daemon, getpid, getppid};
-use serde::de::DeserializeOwned;
-use std::io::{self, Read};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::process;
 use std::thread::{self, JoinHandle};
 
+use super::common::enclave_proc_command_send_single;
 use super::common::MSG_ENCLAVE_CONFIRM;
-use super::common::{
-    enclave_proc_command_send_single, read_u64_le, receive_command_type, write_u64_le,
-};
 use super::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
 use crate::common::commands_parser::{EmptyArgs, RunEnclavesArgs};
 use crate::common::logger::EnclaveProcLogWriter;
@@ -44,19 +40,6 @@ enum HandledEnclaveEvent {
     Unexpected,
     /// There was no event that needed handling.
     None,
-}
-
-/// Read the arguments of the CLI command.
-fn receive_command_args<T>(input_stream: &mut dyn Read) -> io::Result<T>
-where
-    T: DeserializeOwned,
-{
-    let arg_size = read_u64_le(input_stream)? as usize;
-    let mut arg_data: Vec<u8> = vec![0; arg_size];
-    input_stream.read_exact(&mut arg_data[..])?;
-    let args: T = serde_cbor::from_slice(&arg_data[..])
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    Ok(args)
 }
 
 /// Route STDOUT and STDERR also to the CLI socket. Also provide
@@ -200,7 +183,7 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
 
     loop {
         // We can get connections to CLI instances, to the enclave or to ourselves.
-        let mut connection =
+        let connection =
             conn_listener.get_next_connection(enclave_manager.get_enclave_descriptor().ok());
 
         // If this is an enclave event, handle it.
@@ -211,13 +194,15 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
         }
 
         // At this point we have a connection that is not coming from an enclave.
-        let cmd =
-            receive_command_type(connection.as_reader()).ok_or_exit("Failed to receive command.");
+        let cmd = connection
+            .read::<EnclaveProcessCommandType>()
+            .ok_or_exit("Failed to receive command.");
         info!("Received command: {:?}", cmd);
 
         match cmd {
             EnclaveProcessCommandType::Run => {
-                let mut run_args = receive_command_args::<RunEnclavesArgs>(connection.as_reader())
+                let mut run_args = connection
+                    .read::<RunEnclavesArgs>()
                     .ok_or_exit("Failed to get run arguments.");
                 info!("Run args = {:?}", run_args);
 
@@ -268,12 +253,14 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
                 let enclave_cid = enclave_manager
                     .get_console_resources()
                     .ok_or_exit("Failed to get enclave CID.");
-                write_u64_le(connection.as_writer(), enclave_cid)
+                connection
+                    .write_u64(enclave_cid)
                     .ok_or_exit("Failed to send enclave CID.");
             }
 
             EnclaveProcessCommandType::Describe => {
-                write_u64_le(connection.as_writer(), MSG_ENCLAVE_CONFIRM)
+                connection
+                    .write_u64(MSG_ENCLAVE_CONFIRM)
                     .ok_or_exit("Failed to write confirmation.");
 
                 safe_route_output(

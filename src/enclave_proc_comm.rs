@@ -11,7 +11,6 @@ use std::fs;
 use std::io::{self, Read};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
-use std::process;
 
 use crate::common::commands_parser::EmptyArgs;
 use crate::common::logger::EnclaveProcLogWriter;
@@ -36,15 +35,13 @@ pub fn enclave_proc_spawn(logger: &EnclaveProcLogWriter) -> io::Result<UnixStrea
 
     // Spawn an intermediate child process. This will fork again in order to
     // create the detached enclave process.
-    match fork() {
-        Ok(ForkResult::Parent { child }) => {
-            info!("Parent = {} with child = {:?}", process::id(), child);
-        }
-        Ok(ForkResult::Child) => {
-            // This is our intermediate child process.
-            process::exit(enclave_process_run(enclave_proc_socket, logger));
-        }
-        Err(e) => panic!("Failed to create child: {}", e),
+    let fork_status = fork();
+
+    if let Ok(ForkResult::Child) = fork_status {
+        // This is our intermediate child process.
+        enclave_process_run(enclave_proc_socket, logger);
+    } else {
+        fork_status.ok_or_exit("Failed to create intermediate process");
     }
 
     // The enclave process will open a socket named "<enclave_id>.sock", but this

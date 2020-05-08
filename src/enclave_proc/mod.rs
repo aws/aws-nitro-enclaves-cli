@@ -13,10 +13,8 @@ pub mod utils;
 
 use log::{info, warn};
 use nix::sys::signal::{Signal, SIGHUP};
-use nix::unistd::*;
-use procinfo::pid;
+use nix::unistd::{daemon, getpid, getppid};
 use serde::de::DeserializeOwned;
-use std::fs::OpenOptions;
 use std::io::{self, Read};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
@@ -241,56 +239,26 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     conn_listener.stop();
 }
 
-/// Redirect STDIN, STDOUT and STDERR to "/dev/null"
-fn hide_standard_descriptors() {
-    let null_fd = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .append(true)
-        .open("/dev/null")
-        .ok_or_exit("Failed to open '/dev/null'")
-        .into_raw_fd();
-    unsafe { libc::dup2(null_fd, libc::STDIN_FILENO) };
-    unsafe { libc::dup2(null_fd, libc::STDOUT_FILENO) };
-    unsafe { libc::dup2(null_fd, libc::STDERR_FILENO) };
-}
-
 /// Create the enclave process.
 fn create_enclave_process() {
     // To get a detached process, we first:
     // (1) Temporarily ignore specific signals (SIGHUP).
-    // (2) Fork a child process.
-    // (3) Terminate the parent (at which point the child becomes orphaned).
+    // (2) Daemonize the current process.
+    // (3) Wait until the detached process is orphaned.
     // (4) Restore signal handlers.
     let signal_handler = SignalHandler::new(&[SIGHUP]).mask_all();
+    let ppid = getpid();
 
-    // We need to redirect the standard descriptors to "/dev/null" in the
-    // intermediate process since we want its child (the detached enclave
-    // process) to not have terminal access.
-    hide_standard_descriptors();
+    // Daemonize the current process. The working directory remains
+    // unchanged and the standard descriptors are routed to '/dev/null'.
+    daemon(true, false).ok_or_exit("Failed to create enclave process");
 
-    // The current process must first become session leader.
-    setsid().ok_or_exit("setsid() failed.");
+    // This is our detached process.
+    info!("Enclave process PID: {}", process::id());
 
-    match fork() {
-        Ok(ForkResult::Parent { child }) => {
-            info!("Parent = {} with child = {:?}", process::id(), child);
-            process::exit(0);
-        }
-        Ok(ForkResult::Child) => {
-            // This is our detached process.
-            info!("Enclave process PID: {}", process::id());
-        }
-        Err(e) => panic!("Failed to create child: {}", e),
-    }
-
-    // The detached process is not a session leader and thus cannot attach
-    // to a terminal. Next, we must wait until we're 100% orphaned.
-    loop {
-        let stat = pid::stat_self().ok_or_exit("Failed to get process stat.");
-        if stat.ppid == 1 {
-            break;
-        }
+    // We must wait until we're 100% orphaned. That is, our parent must
+    // no longer be the pre-fork process.
+    while getppid() == ppid {
         thread::sleep(std::time::Duration::from_millis(10));
     }
 
@@ -302,10 +270,9 @@ fn create_enclave_process() {
 ///
 /// * `comm_fd` - A descriptor used for initial communication with the parent Nitro CLI instance.
 /// * `logger` - The current log writer, whose ID gets updated when an enclave is launched.
-pub fn enclave_process_run(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) -> i32 {
+pub fn enclave_process_run(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     logger.update_logger_id("enc-xxxxxxxxxxxx");
     create_enclave_process();
     process_event_loop(comm_stream, logger);
-
-    0
+    process::exit(0);
 }

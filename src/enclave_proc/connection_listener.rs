@@ -12,7 +12,7 @@ use std::thread::{self, JoinHandle};
 use super::connection::Connection;
 use super::socket::EnclaveProcSock;
 use crate::common::commands_parser::EmptyArgs;
-use crate::common::{enclave_proc_command_send_single, receive_command_type};
+use crate::common::{enclave_proc_command_send_single, receive_from_stream};
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 
 /// A listener which waits for external connections.
@@ -83,7 +83,8 @@ impl ConnectionListener {
 
     /// Handle a new connection.
     pub fn handle_new_connection(&self, mut stream: UnixStream) -> EnclaveProcessCommandType {
-        let cmd_type = receive_command_type(&mut stream).ok_or_exit("Failed to read command type.");
+        let cmd_type = receive_from_stream::<EnclaveProcessCommandType>(&mut stream)
+            .ok_or_exit("Failed to read command type.");
 
         // All connections must be registered with epoll, with the exception of the shutdown one.
         if cmd_type != EnclaveProcessCommandType::ConnectionListenerStop {

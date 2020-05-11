@@ -8,7 +8,7 @@ use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
 use nix::unistd::*;
 use serde::Serialize;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Error, ErrorKind, Read};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 
@@ -99,10 +99,9 @@ where
     T: Serialize,
 {
     // Open a connection to each valid socket.
-    let epoll_fd = epoll::epoll_create().ok_or_exit("Could not create epoll_fd.");
     let mut replies: Vec<UnixStream> = vec![];
-    let mut sockets = enclave_proc_connect_to_all()?;
-    let comms: Vec<io::Result<()>> = sockets
+    let epoll_fd = epoll::epoll_create().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    let comms: Vec<io::Result<()>> = enclave_proc_connect_to_all()?
         .iter_mut()
         .map(|socket| {
             // Add each valid connection to epoll.
@@ -128,7 +127,7 @@ where
     }
 
     // Get the number of transmission errors.
-    let num_errors = comms
+    let mut num_errors = comms
         .iter()
         .filter(|result| result.is_err())
         .collect::<Vec<_>>()
@@ -136,53 +135,46 @@ where
 
     // Get the number of expected replies.
     let mut num_replies_expected = comms.len() - num_errors;
-    let mut events = vec![EpollEvent::empty(); num_replies_expected as usize];
-    let ret: io::Result<()> = loop {
+    let mut events = vec![EpollEvent::empty(); 1];
+
+    while num_replies_expected > 0 {
         let num_events = loop {
             match epoll::epoll_wait(epoll_fd, &mut events[..], ENCLAVE_PROC_WAIT_TIMEOUT_MSEC) {
                 Ok(num_events) => break num_events,
                 Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => continue,
                 // TODO: Handle bad descriptors (closed remote connections).
-                Err(x) => panic!("epoll_wait failed: {:?}", x),
+                Err(e) => return Err(Error::new(ErrorKind::Other, e)),
             }
         };
 
+        // We will handle this reply, irrespective of its status (successful or failed).
+        num_replies_expected -= 1;
+
+        // Check if a time-out has occurred.
         if num_events == 0 {
-            // Timeout occurred
-            break Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "Timed out waiting for replies.",
-            ));
+            continue;
         }
 
-        assert!(num_events <= num_replies_expected, "Got too many replies!");
-
-        // Handle all replies.
-        for event in events.iter() {
-            let mut input_stream = unsafe { UnixStream::from_raw_fd(event.data() as RawFd) };
-            if let Ok(reply) = read_u64_le(&mut input_stream) {
-                if reply == MSG_ENCLAVE_CONFIRM {
-                    num_replies_expected -= 1;
-                    debug!("Got confirmation from {:?}", input_stream);
-                    replies.push(input_stream);
-                }
+        // Handle the reply we received.
+        let mut input_stream = unsafe { UnixStream::from_raw_fd(events[0].data() as RawFd) };
+        if let Ok(reply) = read_u64_le(&mut input_stream) {
+            if reply == MSG_ENCLAVE_CONFIRM {
+                debug!("Got confirmation from {:?}", input_stream);
+                replies.push(input_stream);
             }
         }
-
-        if num_replies_expected == 0 {
-            info!("Got all expected replies.");
-            break Ok(());
-        }
-    };
-
-    if (num_errors > 0) || ret.is_err() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Communication with at least one process failed.",
-        ));
     }
 
-    Ok(replies)
+    // Update the number of connections that have yielded errors.
+    num_errors = comms.len() - replies.len();
+
+    match num_errors {
+        0 => Ok(replies),
+        _ => Err(Error::new(
+            ErrorKind::Other,
+            format!("Failed to communicate with {} process(es).", num_errors),
+        )),
+    }
 }
 
 /// Print a stream's output.

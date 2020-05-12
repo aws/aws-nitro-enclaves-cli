@@ -469,5 +469,78 @@ mod test_dev_driver {
         assert_eq!(result.is_err(), true);
 
         drop(enclave);
+
+        let mut enclave = driver.create_enclave().unwrap();
+
+        // Add memory to the enclave.
+        for region in &mut mem_regions {
+            let result = enclave.add_mem_region(kvm_userspace_memory_region {
+                slot: 0,
+                flags: 0,
+                userspace_addr: region.mem_addr(),
+                guest_phys_addr: 0,
+                memory_size: region.mem_size(),
+            });
+            assert_eq!(result.is_err(), false);
+        }
+
+        // Add the first available cpu.
+        let result = enclave.add_cpu(candidates[0]);
+        assert_eq!(result.is_err(), false);
+
+        // Start without cpu pair.
+        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        assert_eq!(result.is_err(), true);
+
+        // Add the first cpu pair.
+        let result = enclave.add_cpu(candidates[1]);
+        assert_eq!(result.is_err(), false);
+
+        let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
+        check_dmesg
+            .record_current_line()
+            .expect("Failed to record current line");
+
+        // Start the enclave.
+        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        assert_eq!(result.is_err(), false);
+
+        check_dmesg.expect_no_changes().unwrap();
+
+        // Try starting an already running enclave.
+        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        assert_eq!(result.is_err(), true);
+
+        // Try adding an already added memory region
+        // after the enclave start.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: mem_regions[0].mem_addr(),
+            guest_phys_addr: 0,
+            memory_size: mem_regions[0].mem_size(),
+        });
+        assert_eq!(result.is_err(), true);
+
+        // Try adding a new memory region after the enclave start.
+        let mut region = MemoryRegion::new(2 * MiB).unwrap();
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: 0,
+            memory_size: region.mem_size(),
+        });
+        assert_eq!(result.is_err(), true);
+
+        // Try adding an already added vcpu after enclave start.
+        let result = enclave.add_cpu(candidates[0]);
+        assert_eq!(result.is_err(), true);
+
+        // Try adding a new vcpu after enclave start.
+        if candidates.len() >= 3 {
+            let result = enclave.add_cpu(candidates[2]);
+            assert_eq!(result.is_err(), true);
+        }
     }
 }

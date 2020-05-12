@@ -221,7 +221,7 @@ pub fn enclave_ready(cid: u32, port: u32) -> Result<(), EifLoaderError> {
         .read(&mut buf)
         .map_err(|_err| EifLoaderError::VsockReceivingError)?;
 
-    if bytes != 0 {
+    if bytes != 1 || buf[0] != 0xb7 {
         Err(EifLoaderError::VsockReceivingError)
     } else {
         Ok(())

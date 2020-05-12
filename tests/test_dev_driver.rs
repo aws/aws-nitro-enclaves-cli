@@ -10,13 +10,15 @@ use std::process::Command;
 use nitro_cli::common::NitroCliResult;
 use nitro_cli::enclave_proc::cpu_info::CpuInfos;
 use nitro_cli::enclave_proc::resource_manager::{
-    MemoryRegion, KVM_CREATE_VCPU, KVM_CREATE_VM, KVM_SET_USER_MEMORY_REGION,
+    EnclaveStartMetadata, MemoryRegion, KVM_CREATE_VCPU, KVM_CREATE_VM, KVM_SET_USER_MEMORY_REGION,
+    NE_ENCLAVE_START,
 };
 
 use kvm_bindings::kvm_userspace_memory_region;
 
 #[allow(non_upper_case_globals)]
 pub const MiB: u64 = 1024 * 1024;
+const ENCLAVE_MEM_CHUNKS: u64 = 40;
 pub const NE_DEVICE_PATH: &str = "/dev/nitro_enclaves";
 
 /// Class that covers communication with the NE driver.
@@ -118,6 +120,15 @@ impl NitroEnclave {
         }
 
         Ok(EnclaveVcpu::new(vcpu_fd).unwrap())
+    }
+
+    pub fn start(&mut self, start_metadata: EnclaveStartMetadata) -> NitroCliResult<()> {
+        let rc = unsafe { libc::ioctl(self.enc_fd, NE_ENCLAVE_START as _, &start_metadata) };
+        if rc < 0 {
+            return Err(format!("Could not start enclave: {}.", rc));
+        }
+
+        Ok(())
     }
 }
 
@@ -403,5 +414,60 @@ mod test_dev_driver {
             assert_eq!(result.is_err(), false);
         }
         check_dmesg.expect_no_changes().unwrap();
+    }
+
+    #[test]
+    pub fn test_enclave_start() {
+        let mut mem_regions = Vec::new();
+        let mut driver = NitroEnclavesDeviceDriver::new().expect("Failed to open NE device");
+        let mut enclave = driver.create_enclave().unwrap();
+
+        // Start enclave without resources.
+        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        assert_eq!(result.is_err(), true);
+
+        // Allocate memory for the enclave.
+        for _i in 0..ENCLAVE_MEM_CHUNKS {
+            mem_regions.push(MemoryRegion::new(2 * MiB).unwrap());
+        }
+
+        // Add memory to the enclave.
+        for region in &mut mem_regions {
+            let result = enclave.add_mem_region(kvm_userspace_memory_region {
+                slot: 0,
+                flags: 0,
+                userspace_addr: region.mem_addr(),
+                guest_phys_addr: 0,
+                memory_size: region.mem_size(),
+            });
+            assert_eq!(result.is_err(), false);
+        }
+
+        // Start the enclave without cpus.
+        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        assert_eq!(result.is_err(), true);
+
+        let cpu_infos = CpuInfos::new().expect("Failed to obtain CpuInfos.");
+        let candidates = cpu_infos.get_cpu_candidates();
+        // Instance does not have the appropriate number of cpus.
+        if candidates.len() < 2 {
+            return;
+        }
+
+        // Clear the enclave.
+        drop(enclave);
+
+        let mut enclave = driver.create_enclave().unwrap();
+
+        for cpu in &candidates {
+            let result = enclave.add_cpu(*cpu);
+            assert_eq!(result.is_err(), false);
+        }
+
+        // Start enclave without memory.
+        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        assert_eq!(result.is_err(), true);
+
+        drop(enclave);
     }
 }

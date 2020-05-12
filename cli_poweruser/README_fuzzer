@@ -1,20 +1,13 @@
 ===== Stronghold Device Fuzzer =====
 
-Prerequisite: install all the components required for building the CLI by
-running
-```
-./install_cargo_deps.sh
-```
+All prerequisites handling is done by run_fuzzer.sh.
+The script should be run from inside a cloud desktop environment
+and it will do the following:
+  * launch an ec2 instance with enclaves support
+  * download the fuzzer source code from s3, inside the instance
+  * install the required packages and set the correct rust version
+  * start the fuzzer
 
-The fuzzer uses a sample EIF which can be downloaded from
-https://drive.corp.amazon.com/documents/bercarug@/command_executer.eif
-It must be scp'ed on the instance the fuzzer will run on, inside the
-cli_poweruser/ directory of the repository.
-
-In order to start the fuzzer, run (as normal user)
-```
-./run_fuzzer.sh
-```
-
-The fuzzer output will be available in a file called `nohup.out`, inside the
-same cli_poweruser/ directory.
+The fuzzer output will be available inside a file called
+'nohup.out', located under the cli_poweruser/ directory,
+inside de nitro-cli repository.

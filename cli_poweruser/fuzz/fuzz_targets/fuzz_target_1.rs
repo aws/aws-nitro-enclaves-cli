@@ -1,4 +1,4 @@
-//#![no_main]
+#![no_main]
 #[macro_use]
 extern crate libfuzzer_sys;
 extern crate nitro_cli_poweruser;
@@ -26,6 +26,7 @@ use nitro_cli_poweruser::cli_dev::{
     NitroEnclavesSlotAddBulkVcpu,
     NitroEnclavesDestroy,
 };
+use nitro_cli_poweruser::cpu_info::CpuInfos;
 use nitro_cli_poweruser::resource_allocator_driver::ResourceAllocatorDriver;
 use nitro_cli_poweruser::resource_manager::online_slot_cpus;
 use nitro_cli_poweruser::resource_manager::EnclaveResourceManager;
@@ -48,63 +49,55 @@ enum NitroEnclavesCmdType {
 
 const EIF_PATH: &str = "command_executer.eif";
 
-#[allow(dead_code)]
-fn get_u64(data: &[u8], offset: usize) -> u64 {
-    let mut res: u64 = 0;
-
-    res += data[offset] as u64;
-    res += (data[offset + 1] as u64) << 8;
-    res += (data[offset + 2] as u64) << 16;
-    res += (data[offset + 3] as u64) << 24;
-    res += (data[offset + 4] as u64) << 32;
-    res += (data[offset + 5] as u64) << 40;
-    res += (data[offset + 6] as u64) << 48;
-    res += (data[offset + 7] as u64) << 56;
-
-    res
-}
-
 fn enclave_start(memory_mib: u64) {
     let eif_file = File::open(EIF_PATH)
         .map_err(|err| format!("Failed to open to eif file: {:?}", err));
 
     if let Ok(eif_file) = eif_file {
         let enclave_cid: Option<u64> = Some(0);
-        let mut cpu_ids: Vec<u32> = Vec::new();
-        cpu_ids.push(1);
-        cpu_ids.push(3);
+        let cpu_infos = CpuInfos::new();
 
-        let resource_manager = EnclaveResourceManager::new(
-            enclave_cid,
-            memory_mib,
-            cpu_ids,
-            eif_file,
-            true
-        )
-        .map_err(|err| format!("Could not create enclave: {:?}", err));
+        if let Ok(cpu_infos) = cpu_infos {
+            let cpu_ids = cpu_infos.get_cpu_ids(2);
 
-        if let Ok(mut resource_manager) = resource_manager {
-            let enclave_create_result = resource_manager.create_enclave();
+            if let Ok(cpu_ids) = cpu_ids {
+                let resource_manager = EnclaveResourceManager::new(
+                    enclave_cid,
+                    memory_mib,
+                    cpu_ids,
+                    eif_file,
+                    true
+                )
+                .map_err(|err| format!("Could not create enclave: {:?}", err));
 
-            if let Ok(enclave_create_result) = enclave_create_result {
-                let (_enclave_cid, _slot_id) = enclave_create_result;
-                let crt_slot_uid: u64 = _slot_id;
+                if let Ok(mut resource_manager) = resource_manager {
+                    let enclave_create_result = resource_manager.create_enclave();
 
-                // Stop enclave
-                let stop = NitroEnclavesEnclaveStop::new(_slot_id);
-                let _ = stop.submit(&mut resource_manager.cli_dev);
+                    if let Ok(enclave_create_result) = enclave_create_result {
+                        let (_enclave_cid, _slot_id) = enclave_create_result;
+                        let crt_slot_uid: u64 = _slot_id;
 
-                // Slot_free
-                let slot_free = NitroEnclavesSlotFree::new(crt_slot_uid);
-                let _ = slot_free.submit(&mut resource_manager.cli_dev);
+                        // Stop enclave
+                        let stop = NitroEnclavesEnclaveStop::new(_slot_id);
+                        let _ = stop.submit(&mut resource_manager.cli_dev);
 
-                let resource_allocator_driver = ResourceAllocatorDriver::new();
-                if let Ok(resource_allocator_driver) = resource_allocator_driver {
-                    let _ = online_slot_cpus(&resource_allocator_driver, crt_slot_uid);
+                        // Slot_free
+                        let slot_free = NitroEnclavesSlotFree::new(crt_slot_uid);
+                        let _ = slot_free.submit(&mut resource_manager.cli_dev);
 
-                    let _ = resource_allocator_driver.free(crt_slot_uid);
+                        let resource_allocator_driver = ResourceAllocatorDriver::new();
+                        if let Ok(resource_allocator_driver) = resource_allocator_driver {
+                            let _ = online_slot_cpus(&resource_allocator_driver, crt_slot_uid);
+
+                            let _ = resource_allocator_driver.free(crt_slot_uid);
+                        }
+                    }
                 }
+            } else {
+                eprintln!("Could not add the requested number of cpus");
             }
+        } else {
+            eprintln!("CpuInfos init failed");
         }
     }
 }
@@ -168,41 +161,50 @@ fn enclave_slot_add_mem() {
     if let Ok(eif_file) = eif_file {
         let enclave_cid: Option<u64> = Some(0);
         let memory_mib: u64 = 32;
-        let mut cpu_ids: Vec<u32> = Vec::new();
-        cpu_ids.push(1);
-        cpu_ids.push(3);
-        let resource_manager = EnclaveResourceManager::new(
-            enclave_cid,
-            memory_mib,
-            cpu_ids,
-            eif_file,
-            false,
-        )
-        .map_err(|err| format!("Could not create enclave: {:?}", err));
+        let cpu_infos = CpuInfos::new();
 
-        if let Ok(mut resource_manager) = resource_manager {
-            // Only add memory, without vCPUs
-            let crt_slot_uid: u64 = resource_manager.slot_id;
-            let regions = resource_manager.resource_allocator.allocate();
+        if let Ok(cpu_infos) = cpu_infos {
+            let cpu_ids = cpu_infos.get_cpu_ids(2);
 
-            if let Ok(regions) = regions {
-                for region in regions {
-                    let add_mem = NitroEnclavesSlotAddMem::new(resource_manager.slot_id, region.mem_gpa, region.mem_size);
-                    let _ = add_mem.submit(&mut resource_manager.cli_dev);
+            if let Ok(cpu_ids) = cpu_ids {
+                let resource_manager = EnclaveResourceManager::new(
+                    enclave_cid,
+                    memory_mib,
+                    cpu_ids,
+                    eif_file,
+                    false,
+                )
+                .map_err(|err| format!("Could not create enclave: {:?}", err));
+
+                if let Ok(mut resource_manager) = resource_manager {
+                    // Only add memory, without vCPUs
+                    let crt_slot_uid: u64 = resource_manager.slot_id;
+                    let regions = resource_manager.resource_allocator.allocate();
+
+                    if let Ok(regions) = regions {
+                        for region in regions {
+                            let add_mem = NitroEnclavesSlotAddMem::new(resource_manager.slot_id, region.mem_gpa, region.mem_size);
+                            let _ = add_mem.submit(&mut resource_manager.cli_dev);
+                        }
+
+                        // Slot_free
+                        let slot_free = NitroEnclavesSlotFree::new(crt_slot_uid);
+                        let _ = slot_free.submit(&mut resource_manager.cli_dev);
+
+                        let resource_allocator_driver = ResourceAllocatorDriver::new();
+
+                        if let Ok(resource_allocator_driver) = resource_allocator_driver {
+                            let _ = online_slot_cpus(&resource_allocator_driver, crt_slot_uid);
+
+                            let _ = resource_allocator_driver.free(crt_slot_uid);
+                        }
+                    }
                 }
-
-                // Slot_free
-                let slot_free = NitroEnclavesSlotFree::new(crt_slot_uid);
-                let _ = slot_free.submit(&mut resource_manager.cli_dev);
-
-                let resource_allocator_driver = ResourceAllocatorDriver::new();
-
-                if let Ok(resource_allocator_driver) = resource_allocator_driver {
-                    let _ = online_slot_cpus(&resource_allocator_driver, crt_slot_uid);
-
-                    let _ = resource_allocator_driver.free(crt_slot_uid);
-                }
+            } else {
+                eprintln!("Could not add the requested number of cpus");
             }
+        } else {
+            eprintln!("CpuInfos init failed");
         }
     }
 }
@@ -214,46 +216,55 @@ fn enclave_slot_add_vcpu() {
     if let Ok(eif_file) = eif_file {
         let enclave_cid: Option<u64> = Some(0);
         let memory_mib: u64 = 32;
-        let mut cpu_ids: Vec<u32> = Vec::new();
-        cpu_ids.push(1);
-        cpu_ids.push(3);
-        let resource_manager = EnclaveResourceManager::new(
-            enclave_cid,
-            memory_mib,
-            cpu_ids,
-            eif_file,
-            false,
-        )
-        .map_err(|err| format!("Could not create enclave: {:?}", err));
+        let cpu_infos = CpuInfos::new();
 
-        if let Ok(mut resource_manager) = resource_manager {
-            // Add both memory and vCPUs
-            let regions = resource_manager.resource_allocator.allocate();
+        if let Ok(cpu_infos) = cpu_infos {
+            let cpu_ids = cpu_infos.get_cpu_ids(2);
 
-            if let Ok(regions) = regions {
-                for region in regions {
-                    let add_mem = NitroEnclavesSlotAddMem::new(resource_manager.slot_id, region.mem_gpa, region.mem_size);
-                    let _ = add_mem.submit(&mut resource_manager.cli_dev);
+            if let Ok(cpu_ids) = cpu_ids {
+                let resource_manager = EnclaveResourceManager::new(
+                    enclave_cid,
+                    memory_mib,
+                    cpu_ids,
+                    eif_file,
+                    false,
+                )
+                .map_err(|err| format!("Could not create enclave: {:?}", err));
+
+                if let Ok(mut resource_manager) = resource_manager {
+                    // Add both memory and vCPUs
+                    let regions = resource_manager.resource_allocator.allocate();
+
+                    if let Ok(regions) = regions {
+                        for region in regions {
+                            let add_mem = NitroEnclavesSlotAddMem::new(resource_manager.slot_id, region.mem_gpa, region.mem_size);
+                            let _ = add_mem.submit(&mut resource_manager.cli_dev);
+                        }
+
+                        let crt_slot_uid: u64 = resource_manager.slot_id;
+                        for cpu_id in &resource_manager.cpu_ids {
+                            let add_cpu = NitroEnclavesSlotAddVcpu::new(resource_manager.slot_id, *cpu_id);
+                            let _ = add_cpu.submit(&mut resource_manager.cli_dev);
+                        }
+
+                        // Slot_free
+                        let slot_free = NitroEnclavesSlotFree::new(crt_slot_uid);
+                        let _ = slot_free.submit(&mut resource_manager.cli_dev);
+
+                        let resource_allocator_driver = ResourceAllocatorDriver::new();
+
+                        if let Ok(resource_allocator_driver) = resource_allocator_driver {
+                            let _ = online_slot_cpus(&resource_allocator_driver, crt_slot_uid);
+
+                            let _ = resource_allocator_driver.free(crt_slot_uid);
+                        }
+                    }
                 }
-
-                let crt_slot_uid: u64 = resource_manager.slot_id;
-                for cpu_id in &resource_manager.cpu_ids {
-                    let add_cpu = NitroEnclavesSlotAddVcpu::new(resource_manager.slot_id, *cpu_id);
-                    let _ = add_cpu.submit(&mut resource_manager.cli_dev);
-                }
-
-                // Slot_free
-                let slot_free = NitroEnclavesSlotFree::new(crt_slot_uid);
-                let _ = slot_free.submit(&mut resource_manager.cli_dev);
-
-                let resource_allocator_driver = ResourceAllocatorDriver::new();
-
-                if let Ok(resource_allocator_driver) = resource_allocator_driver {
-                    let _ = online_slot_cpus(&resource_allocator_driver, crt_slot_uid);
-
-                    let _ = resource_allocator_driver.free(crt_slot_uid);
-                }
+            } else {
+                eprintln!("Could not add the requested number of cpus");
             }
+        } else {
+            eprintln!("CpuInfos init failed");
         }
     }
 }
@@ -377,16 +388,25 @@ fuzz_target!(|data: &[u8]| {
                     enclave_start(data[9] as u64);
                 }
                 Some(NitroEnclavesCmdType::NitroEnclavesGetSlot) => {
-                    enclave_get_slot(get_u64(data, 1));
+                    let mut slot: [u8; 8] = Default::default();
+                    slot.copy_from_slice(&data[1..9]);
+
+                    enclave_get_slot(u64::from_le_bytes(slot));
                 }
                 Some(NitroEnclavesCmdType::NitroEnclavesEnclaveStop) => {
-                    enclave_stop(get_u64(data, 1));
+                    let mut slot: [u8; 8] = Default::default();
+                    slot.copy_from_slice(&data[1..9]);
+
+                    enclave_stop(u64::from_le_bytes(slot));
                 }
                 Some(NitroEnclavesCmdType::NitroEnclavesSlotAlloc) => {
                     enclave_slot_alloc();
                 }
                 Some(NitroEnclavesCmdType::NitroEnclavesSlotFree) => {
-                    enclave_slot_free(get_u64(data, 1));
+                    let mut slot: [u8; 8] = Default::default();
+                    slot.copy_from_slice(&data[1..9]);
+
+                    enclave_slot_free(u64::from_le_bytes(slot));
                 }
                 Some(NitroEnclavesCmdType::NitroEnclavesSlotAddMem) => {
                     enclave_slot_add_mem();
@@ -398,7 +418,10 @@ fuzz_target!(|data: &[u8]| {
                     enclave_slot_count();
                 }
                 Some(NitroEnclavesCmdType::NitroEnclavesNextSlot) => {
-                    enclave_next_slot(get_u64(data, 1));
+                    let mut slot: [u8; 8] = Default::default();
+                    slot.copy_from_slice(&data[1..9]);
+
+                    enclave_next_slot(u64::from_le_bytes(slot));
                 }
                 Some(NitroEnclavesCmdType::NitroEnclavesSlotInfo) => {
                     enclave_slot_info();
@@ -415,6 +438,6 @@ fuzz_target!(|data: &[u8]| {
             }
         }
     } else {
-        eprintln!("EIF file not found in current directory. Download it from https://drive.corp.amazon.com/documents/bercarug@/command_executer.eif and place it in <project_dir>/cli_poweruser/");
+        eprintln!("EIF file not found in current directory. Get it by running `aws s3 cp s3://stronghold-device-fuzzing/command_executer.eif .` inside aws-nitro-enclaves-cli/cli_poweruser/");
     }
 });

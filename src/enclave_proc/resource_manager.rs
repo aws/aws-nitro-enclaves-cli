@@ -24,7 +24,7 @@ pub const KVM_SET_USER_MEMORY_REGION: u64 = nix::request_code_write!(
     0x46,
     std::mem::size_of::<kvm_userspace_memory_region>()
 ) as _;
-const KVM_CREATE_VCPU: u64 = nix::request_code_none!(KVMIO, 0x41) as _;
+pub const KVM_CREATE_VCPU: u64 = nix::request_code_none!(KVMIO, 0x41) as _;
 const NE_ENCLAVE_START: u64 =
     nix::request_code_readwrite!(0x42, 0x1, std::mem::size_of::<EnclaveStartMetadata>()) as _;
 

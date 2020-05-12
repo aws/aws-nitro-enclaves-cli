@@ -42,7 +42,7 @@ pub enum EnclaveState {
 }
 
 #[derive(Clone)]
-struct MemoryRegion {
+pub struct MemoryRegion {
     mem_addr: u64,
     mem_size: u64,
 }
@@ -124,7 +124,7 @@ impl Default for EnclaveState {
 }
 
 impl MemoryRegion {
-    fn new(region_size: u64) -> NitroCliResult<Self> {
+    pub fn new(region_size: u64) -> NitroCliResult<Self> {
         let addr = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
@@ -182,6 +182,14 @@ impl MemoryRegion {
             .map_err(|err| format!("Error while reading from enclave image: %{:?}", err))?;
 
         Ok(())
+    }
+
+    pub fn mem_addr(&mut self) -> u64 {
+        return self.mem_addr;
+    }
+
+    pub fn mem_size(&mut self) -> u64 {
+        return self.mem_size;
     }
 }
 

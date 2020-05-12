@@ -8,8 +8,14 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::Command;
 
 use nitro_cli::common::NitroCliResult;
-use nitro_cli::enclave_proc::resource_manager::{KVM_CREATE_VM, KVM_SET_USER_MEMORY_REGION};
+use nitro_cli::enclave_proc::resource_manager::{
+    MemoryRegion, KVM_CREATE_VM, KVM_SET_USER_MEMORY_REGION,
+};
 
+use kvm_bindings::kvm_userspace_memory_region;
+
+#[allow(non_upper_case_globals)]
+pub const MiB: u64 = 1024 * 1024;
 pub const NE_DEVICE_PATH: &str = "/dev/nitro_enclaves";
 
 /// Class that covers communication with the NE driver.
@@ -56,6 +62,24 @@ impl NitroEnclave {
         if rc < 0 {
             panic!(format!("Could not close enclave descriptor: {}.", rc))
         }
+    }
+
+    pub fn add_mem_region(
+        &mut self,
+        kvm_mem_region: kvm_userspace_memory_region,
+    ) -> NitroCliResult<()> {
+        let rc = unsafe {
+            libc::ioctl(
+                self.enc_fd,
+                KVM_SET_USER_MEMORY_REGION as _,
+                &kvm_mem_region,
+            )
+        };
+        if rc < 0 {
+            return Err(format!("Could not add memory region: {}.", rc));
+        }
+
+        Ok(())
     }
 }
 
@@ -151,5 +175,81 @@ mod test_dev_driver {
         }
 
         check_dmesg.expect_no_changes().unwrap();
+    }
+
+    #[test]
+    pub fn test_enclave_memory() {
+        let mut driver = NitroEnclavesDeviceDriver::new().expect("Failed to open NE device");
+        let mut enclave = driver.create_enclave().unwrap();
+
+        // Add invalid memory region.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: 0,
+            guest_phys_addr: 0,
+            memory_size: 2 * MiB as u64,
+        });
+        assert_eq!(result.is_err(), true);
+
+        // Create a memory region using hugetlbfs.
+        let mut region = MemoryRegion::new(2 * MiB).unwrap();
+
+        // Add unaligned memory region.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: region.mem_addr() + 1,
+            guest_phys_addr: 0,
+            memory_size: region.mem_size(),
+        });
+        assert_eq!(result.is_err(), true);
+
+        // Add wrongly sized memory regions of 1 MiB.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: 0,
+            memory_size: region.mem_size() / 2,
+        });
+        assert_eq!(result.is_err(), true);
+
+        // TODO: Enable the following test with Nitro Enclaves Kernel Driver v2.
+        // let result = enclave.add_mem_region(kvm_userspace_memory_region {
+        //     slot: 0,
+        //     flags: 0,
+        //     userspace_addr: region.mem_addr(),
+        //     guest_phys_addr: 0,
+        //     memory_size: region.mem_size() * 2,
+        // });
+        // assert_eq!(result.is_err(), true);
+
+        let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
+        check_dmesg
+            .record_current_line()
+            .expect("Failed to record current line");
+
+        // Correctly add the memory region.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: 0,
+            memory_size: region.mem_size(),
+        });
+        assert_eq!(result.is_err(), false);
+
+        check_dmesg.expect_no_changes().unwrap();
+
+        // Add the same memory region twice.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: 0,
+            memory_size: region.mem_size(),
+        });
+        assert_eq!(result.is_err(), true);
     }
 }

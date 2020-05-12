@@ -349,10 +349,14 @@ void enclave_ready() {
         .svm_port = VSOCK_PORT,
     };
 
+    char buf[1];
+    buf[0]=0xB7;
+
     socket_fd = socket(AF_VSOCK, SOCK_STREAM, 0);
     die_on(socket_fd < 0, "socket");
 
     die_on(connect(socket_fd, (struct sockaddr*) &sa, sizeof(sa)), "connect");
+    die_on(write(socket_fd, buf, 1) != 1, "write");
     die_on(close(socket_fd), "close");
 }
 

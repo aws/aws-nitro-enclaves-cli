@@ -18,8 +18,8 @@ use crate::common::{ExitGracefully, NitroCliResult};
 use crate::enclave_proc::commands::{DEBUG_FLAG, ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 use crate::enclave_proc::json_output::{get_enclave_id, get_run_enclaves_info};
 
-const KVM_CREATE_VM: u64 = nix::request_code_none!(KVMIO, 0x01) as _;
-const KVM_SET_USER_MEMORY_REGION: u64 = nix::request_code_write!(
+pub const KVM_CREATE_VM: u64 = nix::request_code_none!(KVMIO, 0x01) as _;
+pub const KVM_SET_USER_MEMORY_REGION: u64 = nix::request_code_write!(
     KVMIO,
     0x46,
     std::mem::size_of::<kvm_userspace_memory_region>()

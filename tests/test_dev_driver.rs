@@ -251,5 +251,64 @@ mod test_dev_driver {
             memory_size: region.mem_size(),
         });
         assert_eq!(result.is_err(), true);
+
+        let mut region = MemoryRegion::new(2 * MiB).unwrap();
+        // Add a memory region with invalid slot.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 1024,
+            flags: 0,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: 0,
+            memory_size: region.mem_size(),
+        });
+        // Kernel Driver does not use the slot.
+        assert_eq!(result.is_err(), false);
+
+        let mut region = MemoryRegion::new(2 * MiB).unwrap();
+        // Add a memory region with invalid slot.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 1024,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: 0,
+            memory_size: region.mem_size(),
+        });
+        // Kernel Driver does not use the flags.
+        assert_eq!(result.is_err(), false);
+
+        let mut region = MemoryRegion::new(2 * MiB).unwrap();
+        // Add a memory region with guest_phys_addr.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: 1024,
+            memory_size: region.mem_size(),
+        });
+        // Kernel Driver does not use the guest_phys_addr.
+        assert_eq!(result.is_err(), false);
+
+        let mut region = MemoryRegion::new(2 * MiB).unwrap();
+        // Add a memory region with guest_phys_addr that does not overflow.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: u64::max_value() - 2 * MiB,
+            memory_size: region.mem_size(),
+        });
+        // Kernel Driver checks if the guest_phys_addr + memory_size overflows.
+        assert_eq!(result.is_err(), false);
+
+        let mut region = MemoryRegion::new(2 * MiB).unwrap();
+        // Add a memory region with guest_phys_addr that does overflow.
+        let result = enclave.add_mem_region(kvm_userspace_memory_region {
+            slot: 0,
+            flags: 0,
+            userspace_addr: region.mem_addr(),
+            guest_phys_addr: u64::max_value(),
+            memory_size: region.mem_size(),
+        });
+        assert_eq!(result.is_err(), true);
     }
 }

@@ -8,8 +8,9 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::Command;
 
 use nitro_cli::common::NitroCliResult;
+use nitro_cli::enclave_proc::cpu_info::CpuInfos;
 use nitro_cli::enclave_proc::resource_manager::{
-    MemoryRegion, KVM_CREATE_VM, KVM_SET_USER_MEMORY_REGION,
+    MemoryRegion, KVM_CREATE_VCPU, KVM_CREATE_VM, KVM_SET_USER_MEMORY_REGION,
 };
 
 use kvm_bindings::kvm_userspace_memory_region;
@@ -43,6 +44,34 @@ impl NitroEnclavesDeviceDriver {
         }
 
         Ok(NitroEnclave::new(enc_fd).unwrap())
+    }
+}
+
+/// Class for managing a Nitro Enclave Vcpu file descriptor.
+pub struct EnclaveVcpu {
+    vcpu_fd: RawFd,
+}
+
+impl EnclaveVcpu {
+    pub fn new(vcpu_fd: RawFd) -> NitroCliResult<Self> {
+        Ok(EnclaveVcpu { vcpu_fd })
+    }
+
+    fn release(&mut self) {
+        // Close enclave vcpu descriptor.
+        let rc = unsafe { libc::close(self.vcpu_fd) };
+        if rc < 0 {
+            panic!(format!("Could not close vcpu descriptor: {}.", rc))
+        }
+    }
+}
+
+impl Drop for EnclaveVcpu {
+    fn drop(&mut self) {
+        if self.vcpu_fd < 0 {
+            return;
+        }
+        self.release();
     }
 }
 
@@ -80,6 +109,15 @@ impl NitroEnclave {
         }
 
         Ok(())
+    }
+
+    pub fn add_cpu(&mut self, cpu_id: u32) -> NitroCliResult<EnclaveVcpu> {
+        let vcpu_fd = unsafe { libc::ioctl(self.enc_fd, KVM_CREATE_VCPU as _, &cpu_id) };
+        if vcpu_fd < 0 {
+            return Err(format!("Could not add vcpu: {}.", vcpu_fd));
+        }
+
+        Ok(EnclaveVcpu::new(vcpu_fd).unwrap())
     }
 }
 
@@ -310,5 +348,60 @@ mod test_dev_driver {
             memory_size: region.mem_size(),
         });
         assert_eq!(result.is_err(), true);
+    }
+
+    #[test]
+    pub fn test_enclave_vcpu() {
+        let mut driver = NitroEnclavesDeviceDriver::new().expect("Failed to open NE device");
+        let mut enclave = driver.create_enclave().unwrap();
+        let cpu_infos = CpuInfos::new().expect("Failed to obtain CpuInfos");
+
+        // Cpu id 0 is reserved for the EC2 Instance.
+        let result = enclave.add_cpu(0);
+        assert_eq!(result.is_err(), true);
+
+        // For hyper-threading the sibling of cpu id 0 is reserved.
+        if cpu_infos.hyper_threading {
+            let sibling = cpu_infos.core_ids.len() / 2;
+            let result = enclave.add_cpu(sibling as u32);
+            assert_eq!(result.is_err(), true);
+        }
+
+        // Add an invalid cpu id.
+        let result = enclave.add_cpu(u32::max_value());
+        assert_eq!(result.is_err(), true);
+
+        let mut candidates = cpu_infos.get_cpu_candidates();
+        // Instance does not have the appropriate number of cpus.
+        if candidates.len() == 0 {
+            return;
+        }
+        let cpu_id = candidates.pop().unwrap();
+
+        let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
+        check_dmesg
+            .record_current_line()
+            .expect("Failed to record current line");
+
+        // Insert the first valid cpu id.
+        let result = enclave.add_cpu(cpu_id);
+        assert_eq!(result.is_err(), false);
+
+        check_dmesg.expect_no_changes().unwrap();
+
+        // Try inserting the cpu twice.
+        let result = enclave.add_cpu(cpu_id);
+        assert_eq!(result.is_err(), true);
+
+        check_dmesg
+            .record_current_line()
+            .expect("Failed to record current line");
+
+        // Add all remaining cpus.
+        for cpu in &candidates {
+            let result = enclave.add_cpu(*cpu);
+            assert_eq!(result.is_err(), false);
+        }
+        check_dmesg.expect_no_changes().unwrap();
     }
 }

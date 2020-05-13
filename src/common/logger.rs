@@ -144,3 +144,104 @@ pub fn init_logger() -> EnclaveProcLogWriter {
     // The log writer is provided for sharing between CLI-related processes.
     log_writer
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    use tempfile::NamedTempFile;
+
+    /// Tests that `open_log_file()` creates a file
+    /// with the expected permissions.
+    #[test]
+    fn test_open_log_file() {
+        let file0 = NamedTempFile::new();
+
+        if let Ok(file0) = file0 {
+            let test_file_path = file0.path();
+
+            let f = open_log_file(&test_file_path);
+            let metadata = f.metadata();
+            assert!(metadata.is_ok());
+
+            if let Ok(metadata) = metadata {
+                assert!(metadata.is_file());
+                let permissions = metadata.permissions();
+                let mode = permissions.mode();
+
+                assert_eq!(mode & 0o777, 0o600);
+            }
+        }
+    }
+
+    /// Tests that the logger id is initially empty ("").
+    #[test]
+    fn test_init_logger() {
+        let tmp_log_dir: &str = "./.tmp_logs_init_logger";
+
+        // Get old environment variable value
+        let old_log_path = env::var(LOGS_DIR_PATH_ENV_VAR);
+        let path_existed = Path::new(tmp_log_dir).exists();
+
+        // Update environment variable value
+        env::set_var(LOGS_DIR_PATH_ENV_VAR, tmp_log_dir);
+        let _ = fs::create_dir(tmp_log_dir);
+
+        let log_writer = EnclaveProcLogWriter::new().unwrap();
+        let lock_result = log_writer.logger_id.lock();
+
+        assert!(lock_result.unwrap().is_empty());
+
+        if !path_existed {
+            // Remove whole `tmp_log_dir` if necessary
+            let _ = fs::remove_dir_all(tmp_log_dir);
+        } else {
+            // Only remove the log file
+            let _ = fs::remove_file(&format!("{}/{}", tmp_log_dir, &LOG_FILE_NAME));
+        }
+
+        // Reset old environment variable value if necessary
+        if let Ok(old_log_path) = old_log_path {
+            env::set_var(LOGS_DIR_PATH_ENV_VAR, old_log_path);
+        }
+    }
+
+    /// Tests that the logger id is altered after issuing a
+    /// call to `update_logger_id()`.
+    #[test]
+    fn test_update_logger_id() {
+        let tmp_log_dir: &str = "./.tmp_logs_update_logger_id";
+
+        // Get old environment variable value
+        let old_log_path = env::var(LOGS_DIR_PATH_ENV_VAR);
+        let path_existed = Path::new(tmp_log_dir).exists();
+
+        // Update environment variable value
+        env::set_var(LOGS_DIR_PATH_ENV_VAR, tmp_log_dir);
+        let _ = fs::create_dir(tmp_log_dir);
+
+        let log_writer = EnclaveProcLogWriter::new().unwrap();
+        log_writer.update_logger_id("new-logger-id");
+        let lock_result = log_writer.logger_id.lock();
+
+        assert!(lock_result.unwrap().eq("new-logger-id"));
+
+        log_writer.update_logger_id("");
+
+        if !path_existed {
+            // Remove whole `tmp_log_dir` if necessary
+            let _ = fs::remove_dir_all(tmp_log_dir);
+        } else {
+            // Only remove the log file
+            let _ = fs::remove_file(&format!("{}/{}", tmp_log_dir, &LOG_FILE_NAME));
+        }
+
+        // Reset old environment variable value if necessary
+        if let Ok(old_log_path) = old_log_path {
+            env::set_var(LOGS_DIR_PATH_ENV_VAR, old_log_path);
+        }
+    }
+}

@@ -168,9 +168,17 @@ impl MemoryRegion {
     }
 
     /// Write the content from file, into memory, from offset from_offset
-    fn fill_from_file(&self, file: &mut File, region_offset: usize, size: usize) -> NitroCliResult<()> {
-        if region_offset.checked_add(size)
-            .ok_or("Memory overflow".to_string())? > self.mem_size as usize {
+    fn fill_from_file(
+        &self,
+        file: &mut File,
+        region_offset: usize,
+        size: usize,
+    ) -> NitroCliResult<()> {
+        if region_offset
+            .checked_add(size)
+            .ok_or("Memory overflow".to_string())?
+            > self.mem_size as usize
+        {
             return Err("Out of region".to_string());
         }
 
@@ -178,7 +186,7 @@ impl MemoryRegion {
             std::slice::from_raw_parts_mut(self.mem_addr as *mut u8, self.mem_size as usize)
         };
 
-        file.read_exact(&mut bytes[region_offset..region_offset+size])
+        file.read_exact(&mut bytes[region_offset..region_offset + size])
             .map_err(|err| format!("Error while reading from enclave image: %{:?}", err))?;
 
         Ok(())
@@ -599,7 +607,8 @@ impl EnclaveManager {
 }
 
 fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroCliResult<()> {
-    let file_size = eif_file.metadata()
+    let file_size = eif_file
+        .metadata()
         .map_err(|err| format!("Error during fs::metadata: {}", err))?
         .len() as usize;
 
@@ -610,9 +619,10 @@ fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroC
     let mut total_written: usize = 0;
 
     for region in regions {
-        if total_written >=
-            file_size.checked_add(OFFSET_IMGFORMAT)
-            .ok_or("Memory overflow".to_string())?
+        if total_written
+            >= file_size
+                .checked_add(OFFSET_IMGFORMAT)
+                .ok_or("Memory overflow".to_string())?
         {
             // All bytes have been written
             break;
@@ -624,16 +634,13 @@ fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroC
         {
             // All bytes need to be skiped to get to OFFSET_IMGFORMAT
         } else {
-            let offset = OFFSET_IMGFORMAT
-                .checked_sub(total_written)
-                .unwrap_or(0);
+            let offset = OFFSET_IMGFORMAT.checked_sub(total_written).unwrap_or(0);
             let bytes_left_in_file = file_size
                 .checked_add(OFFSET_IMGFORMAT)
                 .ok_or("Memory overflow".to_string())?
                 .checked_sub(total_written)
                 .ok_or("Corruption, written more than file size".to_string())?;
-            let size = std::cmp::min(bytes_left_in_file,
-                region.mem_size as usize - offset);
+            let size = std::cmp::min(bytes_left_in_file, region.mem_size as usize - offset);
             region.fill_from_file(eif_file, offset, size)?;
         }
         total_written += region.mem_size as usize;

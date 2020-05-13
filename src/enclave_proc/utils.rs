@@ -30,3 +30,52 @@ pub fn get_slot_id(enclave_id: String) -> Result<u64, String> {
         None => Err("Invalid enclave_id.".to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_enclave_id() {
+        let slot_id: u64 = 7;
+        let enc_id = generate_enclave_id(slot_id);
+        let file_path = "/sys/devices/virtual/dmi/id/board_asset_tag";
+
+        if !metadata(file_path).is_ok() {
+            assert!(enc_id
+                .unwrap()
+                .eq(&format!("i-0000000000000000-enc{:?}", slot_id)));
+        } else {
+            assert!(!enc_id
+                .unwrap()
+                .split("-")
+                .collect::<Vec<&str>>()
+                .get(1)
+                .unwrap()
+                .eq(&"0000000000000000"));
+        }
+    }
+
+    #[test]
+    fn test_get_slot_id_valid() {
+        let slot_id: u64 = 8;
+        let enc_id = generate_enclave_id(slot_id);
+
+        if let Ok(enc_id) = enc_id {
+            let result = get_slot_id(enc_id);
+            assert!(result.is_ok());
+            assert_eq!(slot_id, result.unwrap());
+        }
+    }
+
+    #[test]
+    fn test_get_slot_id_invalid() {
+        let enclave_id = String::from("i-0000_enc1234");
+        let result = get_slot_id(enclave_id);
+
+        assert!(result.is_err());
+        if let Err(err_str) = result {
+            assert!(err_str.eq("Invalid enclave_id."));
+        }
+    }
+}

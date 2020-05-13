@@ -134,3 +134,74 @@ pub fn get_run_enclaves_info(
 pub fn get_enclave_id(info: &EnclaveRunInfo) -> String {
     info.enclave_id.clone()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tests that `flags_to_string()` returns the correct String representation
+    /// when the DEBUG_FLAG is either set or unset.
+    #[test]
+    fn test_flags_to_string() {
+        let mut flags: u16 = 0;
+
+        flags |= DEBUG_FLAG;
+        let mut result = flags_to_string(flags);
+
+        assert!(result.eq("DEBUG_MODE"));
+
+        flags = 0;
+        result = flags_to_string(flags);
+
+        assert!(result.eq("NONE"));
+    }
+
+    /// Asserts that `get_run_enclaves_info()` returns a result containing
+    /// exactly the same values as the supplied arguments.
+    #[test]
+    fn test_get_run_enclaves_info() {
+        let enclave_cid: u64 = 0;
+        let slot_id: u64 = 7;
+        let cpu_ids: Vec<u32> = vec![1, 3];
+        let memory: u64 = 64;
+
+        let result = get_run_enclaves_info(enclave_cid, slot_id, cpu_ids.clone(), memory);
+
+        assert!(result.is_ok());
+
+        if let Ok(result) = result {
+            assert_eq!(enclave_cid, result.enclave_cid);
+            assert_eq!(cpu_ids.len(), result.cpu_ids.len());
+            for (idx, cpu_id) in result.cpu_ids.iter().enumerate() {
+                assert_eq!(cpu_ids[idx], *cpu_id);
+            }
+            assert_eq!(memory, result.memory_mib);
+        }
+    }
+
+    /// Asserts that `get_enclave_id()` returns the expected enclave
+    /// id, which is obtained through a call to `get_run_enclaves_info()`.
+    #[test]
+    fn test_get_enclave_id() {
+        let enclave_cid: u64 = 0;
+        let slot_id: u64 = 8;
+        let cpu_ids: Vec<u32> = vec![1, 3];
+        let memory: u64 = 64;
+
+        let result = get_run_enclaves_info(enclave_cid, slot_id, cpu_ids.clone(), memory);
+
+        assert!(result.is_ok());
+
+        if let Ok(result) = result {
+            let this_enclave_id = &result.enclave_id;
+            assert!(this_enclave_id.eq(&get_enclave_id(&result)));
+
+            assert_eq!(enclave_cid, result.enclave_cid);
+            assert_eq!(cpu_ids.len(), result.cpu_ids.len());
+            for (idx, cpu_id) in result.cpu_ids.iter().enumerate() {
+                assert_eq!(cpu_ids[idx], *cpu_id);
+            }
+            assert_eq!(memory, result.memory_mib);
+        }
+    }
+}

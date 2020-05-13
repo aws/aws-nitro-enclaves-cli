@@ -126,3 +126,100 @@ pub fn get_socket_path(enclave_id: &str) -> io::Result<PathBuf> {
     let sockets_path = get_sockets_dir_path();
     Ok(sockets_path.join(tokens[0]).with_extension("sock"))
 }
+
+#[cfg(test)]
+mod tests {
+    #[allow(unused_imports)]
+    use super::*;
+
+    use crate::common::commands_parser::EmptyArgs;
+
+    const TMP_DIR_STR: &str = "./tmp_sock_dir";
+
+    /// Tests that a value wrote by `write_u64_le()` is read
+    /// correctly by `read_u64_le()`.
+    #[test]
+    fn test_read_write_u64() {
+        let (mut sock0, mut sock1) = UnixStream::pair().unwrap();
+
+        let _ = write_u64_le(&mut sock0, 127);
+        let result = read_u64_le(&mut sock1);
+
+        if let Ok(result) = result {
+            assert_eq!(result, 127);
+        }
+    }
+
+    /// Tests that a command sent though a socket by `enclave_proc_command_send_single()`
+    /// is received correctly at the other end, by `receive_command_type()`.
+    #[test]
+    fn test_enclave_proc_command_send_single() {
+        let (mut sock0, mut sock1) = UnixStream::pair().unwrap();
+        let cmd = EnclaveProcessCommandType::Describe;
+        let args: std::option::Option<&EmptyArgs> = None;
+
+        let result0 = enclave_proc_command_send_single::<EmptyArgs>(&cmd, args, &mut sock0);
+        assert!(result0.is_ok());
+
+        let result1 = receive_command_type(&mut sock1);
+        assert!(result1.is_ok());
+        assert_eq!(result1.unwrap(), EnclaveProcessCommandType::Describe);
+    }
+
+    /// Tests that the returned sockets_dir_path matches the expected path,
+    /// as retrieved from the corresponding environment variable.
+    #[test]
+    fn test_get_sockets_dir_path_default() {
+        let sockets_dir = env::var(SOCKETS_DIR_PATH_ENV_VAR);
+        let sockets_dir_path_f = get_sockets_dir_path();
+
+        if let Ok(sockets_dir) = sockets_dir {
+            assert_eq!(sockets_dir, sockets_dir_path_f.as_path().to_str().unwrap());
+        } else {
+            assert_eq!(SOCKETS_DIR_PATH, sockets_dir_path_f.as_path().to_str().unwrap());
+        }
+    }
+
+    /// Tests that altering the content of the sockets_dir_path environment variable
+    /// changes the sockets_dir_path string returned by `get_sockets_dir_path()`.
+    #[test]
+    fn test_get_sockets_dir_path_custom_envvar() {
+        let old_sockets_dir = env::var(SOCKETS_DIR_PATH_ENV_VAR);
+        env::set_var(SOCKETS_DIR_PATH_ENV_VAR, TMP_DIR_STR);
+
+        let sockets_dir_path_f = get_sockets_dir_path();
+
+        assert_eq!(TMP_DIR_STR, sockets_dir_path_f.as_path().to_str().unwrap());
+
+        // Restore previous environment variable value
+        if let Ok(old_sockets_dir) = old_sockets_dir {
+            env::set_var(SOCKETS_DIR_PATH_ENV_VAR, old_sockets_dir);
+        }
+    }
+
+    /// Tests that `get_socket_path()` returns the expected socket path,
+    /// given a specific enclave id.
+    #[test]
+    fn test_get_socket_path_valid_id() {
+        let enclave_id = "i-0000000000000000-enc0123456789012345";
+        let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
+        let sockets_path = get_sockets_dir_path();
+        let result = get_socket_path(enclave_id);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().as_path().to_str().unwrap(), format!("{}/{}.sock", sockets_path.as_path().to_str().unwrap(), tokens[0]));
+    }
+
+    /// Tests that `get_socket_path()` returns an invalid socket path,
+    /// given a malformed enclave id.
+    #[test]
+    fn test_get_socket_path_invalid_id() {
+        let enclave_id = "i-0000000000000000_enc0123456789012345";
+        let sockets_path = get_sockets_dir_path();
+        let result = get_socket_path(enclave_id);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().as_path().to_str().unwrap(), format!("{}/{}.sock", sockets_path.as_path().to_str().unwrap(), enclave_id));
+    }
+
+}

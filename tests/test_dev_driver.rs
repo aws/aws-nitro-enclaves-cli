@@ -543,4 +543,55 @@ mod test_dev_driver {
             assert_eq!(result.is_err(), true);
         }
     }
+
+    #[test]
+    pub fn test_enclave_multiple_start() {
+        let mut mem_regions = Vec::new();
+        let mut driver = NitroEnclavesDeviceDriver::new().expect("Failed to open NE device");
+
+        // Allocate memory for the enclave.
+        for _i in 0..ENCLAVE_MEM_CHUNKS {
+            mem_regions.push(MemoryRegion::new(2 * MiB).unwrap());
+        }
+
+        let cpu_infos = CpuInfos::new().expect("Failed to obtain CpuInfos.");
+        let candidates = cpu_infos.get_cpu_candidates();
+        // Instance does not have the appropriate number of cpus.
+        if candidates.len() < 2 {
+            return;
+        }
+
+        let mut start_num: u64 = 1;
+        if let Ok(value) = std::env::var("NE_MULTIPLE_START_NUM") {
+            if let Ok(value) = value.parse::<u64>() {
+                start_num = value;
+            }
+        }
+
+        for _i in 0..start_num {
+            let mut enclave = driver.create_enclave().unwrap();
+
+            // Add memory to the enclave.
+            for region in &mut mem_regions {
+                let result = enclave.add_mem_region(kvm_userspace_memory_region {
+                    slot: 0,
+                    flags: 0,
+                    userspace_addr: region.mem_addr(),
+                    guest_phys_addr: 0,
+                    memory_size: region.mem_size(),
+                });
+                assert_eq!(result.is_err(), false);
+            }
+
+            // Add cpus to the enclave.
+            for cpu in &candidates {
+                let result = enclave.add_cpu(*cpu);
+                assert_eq!(result.is_err(), false);
+            }
+
+            // Start and stop the enclave
+            let result = enclave.start(EnclaveStartMetadata::new_empty());
+            assert_eq!(result.is_err(), false);
+        }
+    }
 }

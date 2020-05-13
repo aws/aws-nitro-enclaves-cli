@@ -143,11 +143,9 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
                 info!("Run args = {:?}", run_args);
 
                 enclave_manager =
-                    safe_route_output(
-                        &mut run_args,
-                        connection.as_raw_fd(),
-                        |mut run_args| run_enclaves(&mut run_args),
-                    )
+                    safe_route_output(&mut run_args, connection.as_raw_fd(), |mut run_args| {
+                        run_enclaves(&mut run_args)
+                    })
                     .ok_or_exit("Failed to run enclave.");
 
                 info!("Enclave ID = {}", enclave_manager.enclave_id);

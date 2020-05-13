@@ -154,6 +154,9 @@ fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
 
     match ret {
         0 => Ok(()),
-        _ => Err(format!("Failed to configure SO_VM_SOCKETS_CONNECT_TIMEOUT: {}", ret)),
+        _ => Err(format!(
+            "Failed to configure SO_VM_SOCKETS_CONNECT_TIMEOUT: {}",
+            ret
+        )),
     }
 }

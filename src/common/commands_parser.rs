@@ -157,3 +157,458 @@ fn debug_mode(args: &ArgMatches) -> Option<bool> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::create_app;
+
+    use clap::{App, AppSettings, Arg, SubCommand};
+
+    #[test]
+    fn test_parse_memory() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "256_mb",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+        ];
+
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_memory(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "memory is not a number");
+    }
+
+    #[test]
+    fn test_parse_docker_tag() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "build-enclave",
+            "--docker-uri",
+            "mytag",
+            "--docker-dir",
+            "/home/user/non_existing_dir",
+            "--output-file",
+            "sample_eif.eif",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_docker_tag(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("build-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), "mytag");
+    }
+
+    #[test]
+    fn test_parse_docker_dir() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "build-enclave",
+            "--docker-uri",
+            "mytag",
+            "--docker-dir",
+            "/home/user/non_existing_dir",
+            "--output-file",
+            "sample_eif.eif",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_docker_dir(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("build-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), "/home/user/non_existing_dir");
+    }
+
+    #[test]
+    fn test_parse_enclave_cid_correct() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "256",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--enclave-cid",
+            "0",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_enclave_cid(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_ok());
+
+        if let Some(parsed_cid) = result.unwrap() {
+            assert_eq!(parsed_cid, 0);
+        }
+    }
+
+    #[test]
+    fn test_parse_enclave_cid_str() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "256",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--enclave-cid",
+            "0x1g",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_enclave_cid(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "enclave-cid is not a number");
+    }
+
+    #[test]
+    fn test_parse_enclave_cid_negative() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "256",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--enclave-cid",
+            "-18",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        // Error (got unexpected value ["-1"])
+        assert!(matches.is_err());
+    }
+
+    #[test]
+    fn test_parse_eif_path() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "256",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_eif_path(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "non_existing_eif.eif");
+    }
+
+    #[test]
+    fn test_parse_enclave_id() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "terminate-enclave",
+            "--enclave-id",
+            "i-0000-enc-1234",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_enclave_id(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("terminate-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "i-0000-enc-1234");
+    }
+
+    #[test]
+    fn test_parse_cpu_ids_correct() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--cpu-ids",
+            "1",
+            "3",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--memory",
+            "64",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_cpu_ids(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_ok());
+
+        if let Some(parsed_cpu_ids) = result.unwrap() {
+            assert_eq!(parsed_cpu_ids.len(), 2);
+            assert_eq!(parsed_cpu_ids[0], 1);
+            assert_eq!(parsed_cpu_ids[1], 3);
+        }
+    }
+
+    #[test]
+    fn test_parse_cpu_ids_negative() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--cpu-ids",
+            "1",
+            "-5",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--memory 64",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        // Error (got unexpected value ["-5"])
+        assert!(matches.is_err());
+    }
+
+    #[test]
+    fn test_parse_cpu_ids_str() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--cpu-ids",
+            "1",
+            "three",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--memory",
+            "64",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_cpu_ids(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "cpu-id is not a number");
+    }
+
+    #[test]
+    fn test_parse_cpu_count_correct() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--memory",
+            "64",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_cpu_count(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_ok());
+
+        if let Some(parsed_cpu_count) = result.unwrap() {
+            assert_eq!(parsed_cpu_count, 2);
+        }
+    }
+
+    #[test]
+    fn test_parse_cpu_count_str() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--cpu-count",
+            "2n",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--memory",
+            "64",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_cpu_count(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "cpu-count is not a number");
+    }
+
+    #[test]
+    fn test_parse_output() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "build-enclave",
+            "--docker-uri",
+            "mytag",
+            "--docker-dir",
+            "/home/user/non_existing_dir",
+            "--output-file",
+            "sample_eif.eif",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_output(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("build-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), "sample_eif.eif");
+    }
+
+    #[test]
+    fn test_parse_output_not_supplied() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "build-enclave",
+            "--docker-uri",
+            "mytag",
+            "--docker-dir",
+            "/home/user/non_existing_dir",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        // Error (the following required argument were not supplied)
+        assert!(matches.is_err());
+    }
+
+    #[test]
+    fn test_debug_mode_supplied() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "64",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+            "--debug-mode",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = debug_mode(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_some());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_debug_mode_not_supplied() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "64",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = debug_mode(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_none());
+    }
+}

@@ -52,6 +52,32 @@ done < <(grep -v '^ *#' < build/test_executables.txt)
 pytest-3 tests/integration/ --ignore tests/integration/test_installation.py \
 	|| test_failed
 
+# Run rust-fmt
+echo "=================== cargo fmt check ========================="
+docker run -v "$(readlink -f .)":/nitro_src \
+	   -v "$(readlink -f ./build)":/nitro_build \
+		"nitro_cli:1.0" \
+		bin/bash -c 'source /root/.cargo/env && \
+		cargo fmt --manifest-path=/nitro_src/Cargo.toml -q --  --check' \
+		|| test_failed
+
+# Run cargo clippy
+echo "=================== cargo clippy ==========================="
+docker run -v "$(readlink -f .)":/nitro_src \
+	   -v "$(readlink -f ./build)":/nitro_build \
+		"nitro_cli:1.0" \
+		bin/bash -c 'source /root/.cargo/env && \
+		cargo clippy --manifest-path=/nitro_src/Cargo.toml' \
+		|| test_failed
+# Run cargo audit
+echo "=================== cargo audit ==========================="
+docker run -v "$(readlink -f .)":/nitro_src \
+	   -v "$(readlink -f./build)":/nitro_build \
+		"nitro_cli:1.0" \
+		bin/bash -c 'source /root/.cargo/env && \
+		cargo audit -f /nitro_src/Cargo.lock' \
+		|| test_failed
+
 rmmod nitro_enclaves
 make clean
 rm -rf test_images

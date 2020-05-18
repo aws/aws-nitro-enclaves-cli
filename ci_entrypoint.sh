@@ -27,7 +27,7 @@ source build_env.txt
 
 PR_NUMBER=$(echo "$CODEBUILD_SOURCE_VERSION" | cut -d"/" -f2)
 LOGS_PATH="tests_results/${PR_NUMBER}/ci_logs_${CODEBUILD_RESOLVED_SOURCE_VERSION}.txt"
-LOGS_URL="https://aws-nitro-enclaves-cli.s3.amazonaws.com/${LOGS_PATH}"
+LOGS_URL="https://console.aws.amazon.com/s3/object/aws-nitro-enclaves-cli/${LOGS_PATH}"
 ACCESS_TOKEN=$(aws ssm get-parameter --name GITHUB_TOKEN --region us-east-1 | jq -r .Parameter.Value)
 if [[ $ACCESS_TOKEN == "" ]];
 then

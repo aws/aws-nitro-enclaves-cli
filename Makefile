@@ -6,6 +6,7 @@
 #                            #
 ##############################
 
+.DEFAULT_GOAL := nitro-cli
 
 CARGO   = cargo
 CC      = gcc

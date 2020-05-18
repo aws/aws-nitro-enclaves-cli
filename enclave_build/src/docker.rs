@@ -51,7 +51,7 @@ impl DockerUtil {
 
         let mut docker_image = docker_image;
 
-        if !docker_image.contains(":") {
+        if !docker_image.contains(':') {
             docker_image.push_str(":latest");
         }
 
@@ -90,7 +90,7 @@ impl DockerUtil {
                     CredentialsError(format!("JSON was not well-formatted: {}", err.to_string()))
                 })?;
 
-            let auths = config_json.get("auths").ok_or(CredentialsError(
+            let auths = config_json.get("auths").ok_or_else(|| CredentialsError(
                 "Could not find auths key in config JSON".to_string(),
             ))?;
 
@@ -102,7 +102,7 @@ impl DockerUtil {
 
                     let auth = registry_auths
                         .get("auth")
-                        .ok_or(CredentialsError(
+                        .ok_or_else(|| CredentialsError(
                             "Could not find auth key in config JSON".to_string(),
                         ))?
                         .to_string();
@@ -115,7 +115,7 @@ impl DockerUtil {
                         CredentialsError(format!("Invalid utf8 encoding for auth: {}", err))
                     })?;
 
-                    if let Some(index) = decoded.rfind(":") {
+                    if let Some(index) = decoded.rfind(':') {
                         let (user, after_user) = decoded.split_at(index);
                         let (_, password) = after_user.split_at(1);
                         return Ok(RegistryAuth::builder()

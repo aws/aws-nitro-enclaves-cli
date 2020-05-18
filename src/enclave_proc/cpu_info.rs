@@ -195,7 +195,7 @@ impl CpuInfos {
             ));
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn get_siblings(&self) -> Vec<(u32, u32)> {

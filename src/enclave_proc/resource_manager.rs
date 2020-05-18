@@ -193,11 +193,11 @@ impl MemoryRegion {
     }
 
     pub fn mem_addr(&mut self) -> u64 {
-        return self.mem_addr;
+        self.mem_addr
     }
 
     pub fn mem_size(&mut self) -> u64 {
-        return self.mem_size;
+        self.mem_size
     }
 }
 
@@ -694,5 +694,5 @@ pub fn between_packets_delay() -> Option<Duration> {
         }
     }
 
-    return None;
+    None
 }

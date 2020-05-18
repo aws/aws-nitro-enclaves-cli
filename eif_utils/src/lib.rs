@@ -242,7 +242,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 std::mem::size_of::<EifHeader>(),
             )
         };
-        self.image_hasher.write(eif_buffer).unwrap();
+        self.image_hasher.write_all(eif_buffer).unwrap();
         file.write_all(eif_buffer)
             .expect("Failed to write eif header");
     }
@@ -263,8 +263,8 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 std::mem::size_of::<EifSectionHeader>(),
             )
         };
-        self.image_hasher.write(eif_buffer).unwrap();
-        self.bootstrap_hasher.write(eif_buffer).unwrap();
+        self.image_hasher.write_all(eif_buffer).unwrap();
+        self.bootstrap_hasher.write_all(eif_buffer).unwrap();
         eif_file
             .write_all(eif_buffer)
             .expect("Failed to write kernel header");
@@ -278,8 +278,8 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             .read_to_end(&mut buffer)
             .expect("Failed to read kernel content");
 
-        self.image_hasher.write(&buffer[..]).unwrap();
-        self.bootstrap_hasher.write(&buffer[..]).unwrap();
+        self.image_hasher.write_all(&buffer[..]).unwrap();
+        self.bootstrap_hasher.write_all(&buffer[..]).unwrap();
         eif_file
             .write_all(&buffer[..])
             .expect("Failed to write kernel data");
@@ -304,14 +304,14 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 std::mem::size_of::<EifSectionHeader>(),
             )
         };
-        self.image_hasher.write(eif_buffer).unwrap();
-        self.bootstrap_hasher.write(eif_buffer).unwrap();
+        self.image_hasher.write_all(eif_buffer).unwrap();
+        self.bootstrap_hasher.write_all(eif_buffer).unwrap();
         eif_file
             .write_all(eif_buffer)
             .expect("Failed to write cmdline header");
 
-        self.image_hasher.write(&self.cmdline[..]).unwrap();
-        self.bootstrap_hasher.write(&self.cmdline[..]).unwrap();
+        self.image_hasher.write_all(&self.cmdline[..]).unwrap();
+        self.bootstrap_hasher.write_all(&self.cmdline[..]).unwrap();
         eif_file
             .write_all(&self.cmdline[..])
             .expect("Failed write cmdline header");
@@ -341,13 +341,13 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             eif_file
                 .write_all(eif_buffer)
                 .expect("Failed to write section header");
-            self.image_hasher.write(&eif_buffer[..]).unwrap();
+            self.image_hasher.write_all(&eif_buffer[..]).unwrap();
             // The first ramdisk is provided by amazon and it contains the
             // code to bootstrap the docker container
             if index == 0 {
-                self.bootstrap_hasher.write(&eif_buffer[..]).unwrap();
+                self.bootstrap_hasher.write_all(&eif_buffer[..]).unwrap();
             } else {
-                self.customer_app_hasher.write(&eif_buffer[..]).unwrap();
+                self.customer_app_hasher.write_all(&eif_buffer[..]).unwrap();
             }
 
             ramdisk
@@ -357,11 +357,11 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             ramdisk
                 .read_to_end(&mut buffer)
                 .expect("Failed to read kernel content");
-            self.image_hasher.write(&buffer[..]).unwrap();
+            self.image_hasher.write_all(&buffer[..]).unwrap();
             if index == 0 {
-                self.bootstrap_hasher.write(&buffer[..]).unwrap();
+                self.bootstrap_hasher.write_all(&buffer[..]).unwrap();
             } else {
-                self.customer_app_hasher.write(&buffer[..]).unwrap();
+                self.customer_app_hasher.write_all(&buffer[..]).unwrap();
             }
             eif_file
                 .write_all(&buffer[..])

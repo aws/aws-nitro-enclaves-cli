@@ -25,8 +25,8 @@ enclave_build = { path = "./enclave_build"}
 
 [dev-dependencies]
 log = "0.4"
-num-derive = "0.2"
-num-traits = "0.2"
+num-derive = { version = ">=0.3.0" }
+num-traits = { version = ">=0.2.0" }
 tempfile = "3.1"
 
 [workspace]

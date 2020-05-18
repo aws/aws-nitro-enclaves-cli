@@ -63,7 +63,7 @@ pub struct EnclaveStartMetadata {
 
 /// Helper class to allocate the resources needed by an enclave.
 #[derive(Clone, Default)]
-struct ResourceAllocator {
+pub struct ResourceAllocator {
     /// Requested memory size in bytes.
     requested_mem: u64,
     /// Size of single region.
@@ -76,7 +76,7 @@ struct ResourceAllocator {
 
 /// Helper class for managing the flow of creating an enclave.
 #[derive(Default)]
-struct EnclaveHandle {
+pub struct EnclaveHandle {
     /// List of CPU IDs provided to the enclave.
     cpu_ids: Vec<u32>,
     /// List of corresponding CPU descriptors provided by the driver.
@@ -191,12 +191,12 @@ impl MemoryRegion {
         Ok(())
     }
 
-    pub fn mem_addr(&mut self) -> u64 {
-        self.mem_addr
+    pub fn mem_addr(&self) -> &u64 {
+        &self.mem_addr
     }
 
-    pub fn mem_size(&mut self) -> u64 {
-        self.mem_size
+    pub fn mem_size(&self) -> &u64 {
+        &self.mem_size
     }
 }
 
@@ -244,7 +244,7 @@ impl ResourceAllocator {
     /// This function creates a list of memory regions which contain at least
     /// `self.requested_mem` bytes. Each region is equivalent to a huge-page
     /// and is allocated using memory mapping.
-    fn allocate(&mut self) -> NitroCliResult<&Vec<MemoryRegion>> {
+    pub fn allocate(&mut self) -> NitroCliResult<&Vec<MemoryRegion>> {
         let requested_regions = 1 + (self.requested_mem - 1) / self.region_size;
         let mut allocated_mem: u64 = 0;
 
@@ -294,9 +294,10 @@ impl Drop for ResourceAllocator {
     }
 }
 
+#[allow(dead_code)]
 impl EnclaveHandle {
     /// Create a new enclave resource manager instance.
-    fn new(
+    pub fn new(
         enclave_cid: Option<u64>,
         memory_mib: u64,
         cpu_ids: Vec<u32>,
@@ -491,7 +492,7 @@ impl EnclaveHandle {
     }
 
     /// Clear handle parameters after terminating an enclave.
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.cpu_fds.clear();
         self.cpu_ids.clear();
         self.allocated_memory_mib = 0;
@@ -507,6 +508,68 @@ impl EnclaveHandle {
         // Notify the user and the logger of the error, then terminate the enclave.
         notify_error(&err_msg);
         self.terminate_enclave_and_notify();
+    }
+
+    // Getters
+    pub fn get_cpu_ids(&self) -> &Vec<u32> {
+        &self.cpu_ids
+    }
+
+    pub fn get_cpu_fds(&self) -> &Vec<i32> {
+        &self.cpu_fds
+    }
+
+    pub fn get_slot_uid(&self) -> u64 {
+        self.slot_uid
+    }
+
+    pub fn get_enclave_cid(&self) -> &Option<u64> {
+        &self.enclave_cid
+    }
+
+    pub fn get_resource_allocator(&mut self) -> &mut ResourceAllocator {
+        &mut self.resource_allocator
+    }
+
+    // Setters
+    pub fn set_cpu_ids(&mut self, cpu_ids: Vec<u32>) {
+        self.cpu_ids = cpu_ids;
+    }
+
+    pub fn set_cpu_fds(&mut self, cpu_fds: Vec<i32>) {
+        self.cpu_fds = cpu_fds;
+    }
+
+    pub fn set_allocated_memory_mib(&mut self, allocated_memory_mib: u64) {
+        self.allocated_memory_mib = allocated_memory_mib;
+    }
+
+    pub fn set_slot_uid(&mut self, slot_uid: u64) {
+        self.slot_uid = slot_uid;
+    }
+
+    pub fn set_enclave_cid(&mut self, enclave_cid: Option<u64>) {
+        self.enclave_cid = enclave_cid;
+    }
+
+    pub fn set_flags(&mut self, flags: u64) {
+        self.flags = flags;
+    }
+
+    pub fn set_enc_fd(&mut self, enc_fd: RawFd) {
+        self.enc_fd = enc_fd;
+    }
+
+    pub fn set_resource_allocator(&mut self, resource_allocator: ResourceAllocator) {
+        self.resource_allocator = resource_allocator
+    }
+
+    pub fn set_eif_file(&mut self, eif_file: Option<File>) {
+        self.eif_file = eif_file;
+    }
+
+    pub fn set_state(&mut self, state: EnclaveState) {
+        self.state = state;
     }
 }
 

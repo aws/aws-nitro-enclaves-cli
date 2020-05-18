@@ -17,6 +17,7 @@ use std::io::{self, Read, Write};
 use common::commands_parser::BuildEnclavesArgs;
 use common::NitroCliResult;
 use enclave_build;
+
 use utils::Console;
 
 // Hypervisor cid as defined by:
@@ -128,24 +129,22 @@ fn artifacts_path() -> NitroCliResult<String> {
             )
         })?;
         Ok(artifacts)
-    } else {
-        if let Ok(home) = std::env::var("HOME") {
-            let artifacts = format!("{}/.nitro_cli/", home);
-            std::fs::create_dir_all(artifacts.clone()).map_err(|err| {
-                format!(
-                    "Could not create artifacts path {}: {}",
-                    artifacts,
-                    err.to_string()
-                )
-            })?;
-            Ok(artifacts)
-        } else {
-            Err(
-                "Could not find a folder for the cli artifacts, set either the \
-                 HOME or NITRO_CLI_ARTIFACTS"
-                    .to_string(),
+    } else if let Ok(home) = std::env::var("HOME") {
+        let artifacts = format!("{}/.nitro_cli/", home);
+        std::fs::create_dir_all(artifacts.clone()).map_err(|err| {
+            format!(
+                "Could not create artifacts path {}: {}",
+                artifacts,
+                err.to_string()
             )
-        }
+        })?;
+        Ok(artifacts)
+    } else {
+        Err(
+            "Could not find a folder for the cli artifacts, set either the \
+                 HOME or NITRO_CLI_ARTIFACTS"
+                .to_string(),
+        )
     }
 }
 

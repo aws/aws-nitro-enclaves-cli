@@ -22,8 +22,8 @@ use utils::Console;
 
 // Hypervisor cid as defined by:
 // http://man7.org/linux/man-pages/man7/vsock.7.html
-const VMADDR_CID_HYPERVISOR: u32 = 0;
-const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
+pub const VMADDR_CID_HYPERVISOR: u32 = 0;
+pub const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
 
 #[derive(Serialize)]
 pub struct EnclaveBuildInfo {

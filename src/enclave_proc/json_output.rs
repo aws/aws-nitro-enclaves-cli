@@ -13,17 +13,17 @@ use crate::enclave_proc::utils::generate_enclave_id;
 #[derive(Serialize)]
 pub struct EnclaveDescribeInfo {
     #[serde(rename(serialize = "EnclaveID"))]
-    enclave_id: String,
+    pub enclave_id: String,
     #[serde(rename(serialize = "EnclaveCID"))]
-    enclave_cid: u64,
+    pub enclave_cid: u64,
     #[serde(rename(serialize = "NumberOfCPUs"))]
-    cpu_count: u64,
+    pub cpu_count: u64,
     #[serde(rename(serialize = "MemoryMiB"))]
-    memory_mib: u64,
+    pub memory_mib: u64,
     #[serde(rename(serialize = "State"))]
-    state: String,
+    pub state: String,
     #[serde(rename(serialize = "Flags"))]
-    flags: String,
+    pub flags: String,
 }
 
 impl EnclaveDescribeInfo {

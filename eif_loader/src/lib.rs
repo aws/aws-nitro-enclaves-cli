@@ -134,7 +134,7 @@ fn send_image_to_dst(
         return Err(EifLoaderError::InvalidHeader);
     }
     send_packet(&eif_header_buf, &token, dst, between_packets_delay)?;
-    for _section in { 0..eif_header.num_sections } {
+    for _section in 0..eif_header.num_sections {
         send_section(image_file, dst, between_packets_delay)?;
     }
     Ok(())

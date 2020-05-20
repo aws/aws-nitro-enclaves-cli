@@ -135,7 +135,7 @@ pub fn describe_enclaves(
     let mut replies: Vec<NitroEnclavesCmdReply> = Vec::new();
     let mut infos: Vec<EnclaveDescribeInfo> = Vec::new();
 
-    for _i in { 0..num_slots } {
+    for _i in 0..num_slots {
         let next_slot = NitroEnclavesNextSlot::new(current_slot);
         let reply = next_slot.submit(&mut cli_dev)?;
 

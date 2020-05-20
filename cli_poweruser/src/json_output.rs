@@ -79,8 +79,8 @@ pub fn get_enclave_describe_info(
 ) -> NitroCliResult<EnclaveDescribeInfo> {
     let info = EnclaveDescribeInfo::new(
         generate_enclave_id(reply.slot_uid)?,
-        { reply.enclave_cid },
-        { reply.nr_cpus },
+        reply.enclave_cid,
+        reply.nr_cpus,
         reply.mem_size / 1024 / 1024,
         reply.state_to_string(),
         reply.flags_to_string(),

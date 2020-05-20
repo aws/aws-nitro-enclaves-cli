@@ -449,7 +449,7 @@ impl CliDev {
     fn read_reply(&mut self) -> NitroCliResult<NitroEnclavesCmdReply> {
         let mut reply_bytes = [0u8; size_of::<NitroEnclavesCmdReply>()];
 
-        for index in { 0..reply_bytes.len() } {
+        for index in 0..reply_bytes.len() {
             reply_bytes[index] = self.read_u8(NITRO_ENCLAVES_RECV_DATA + index)?;
         }
 

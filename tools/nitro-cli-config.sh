@@ -115,11 +115,12 @@ function fail {
 
 # Print the script's usage instructions.
 function print_usage {
-    echo "Usage: $0 [-d <driver-directory>] [-i] [-r] [-c] [-h] [-m <memory_mb_needed>]"
+    echo "Usage: $0 [-d <driver-directory>] [-b] [-c] [-i] [-r] [-h] [-m <memory_mb_needed>]"
     echo -e "\t-d: The path to the directory containing the driver source code, including headers."
-    echo -e "\t-i: Build the driver, insert it, configure its ownership and permissions."
-    echo -e "\t-r: Remove the driver."
+    echo -e "\t-b: Build the driver."
     echo -e "\t-c: Clean up the driver build."
+    echo -e "\t-i: Insert the driver and configure its ownership and permissions."
+    echo -e "\t-r: Remove the driver."
     echo -e "\t-h: Print these help messages."
     echo -e "\t-m: The amount of memory that will be needed for running enclaves, in megabytes."
 }
@@ -154,12 +155,16 @@ function driver_remove {
     echo "Done."
 }
 
-# Build and insert the driver. Also configure udev after it is inserted.
-function driver_build_and_insert {
-    # Build the driver.
+# Build the driver.
+function driver_build {
     echo "Building the driver..."
     make &> /dev/null || fail "Failed to build driver."
     echo "Done."
+}
+
+# Insert the driver and configure udev after it is inserted.
+function driver_insert {
+    local loop_idx=0
 
     # Remove an older driver if it is inserted.
     if [ "$(lsmod | grep -cw $DRIVER_NAME)" -gt 0 ]; then
@@ -192,6 +197,12 @@ function driver_build_and_insert {
     # Trigger the udev rule.
     sudo_run "udevadm control --reload"
     sudo_run "udevadm trigger /dev/$DRIVER_NAME" || fail "Could not apply the NE udev rule."
+
+    # The previous operation may need some time to complete.
+    while [ "$NE_GROUP_NAME" != "$(stat -c '%G' /dev/$DRIVER_NAME)" ] && [ "$loop_idx" -lt 3 ]; do
+        sleep 1
+        loop_idx=$((loop_idx+1))
+    done
 
     # Verify that the driver now has correct ownership and permissions
     [ "root" == "$(stat -c '%U' /dev/$DRIVER_NAME)" ] || fail "Device file has incorrect owner."
@@ -228,30 +239,34 @@ function run_in_driver_dir {
 # Script entry point.
 [ "$#" -gt 0 ] || fail "No arguments given."
 
-while getopts ":hd:cirm:" opt; do
+while getopts ":hd:cbrim:" opt; do
     case ${opt} in
-        h ) # Help was requested.
+        h)  # Help was requested.
             print_usage
             exit 0
             ;;
 
-        d)  # The driver directory was provided.
+        d)  # Set the driver directory.
             DRIVER_DIR="$OPTARG"
             ;;
 
-        i)  # Insert (after building) the driver.
-            run_in_driver_dir driver_build_and_insert
+        i)  # Insert the driver.
+            run_in_driver_dir driver_insert
             ;;
 
         r)  # Remove the driver.
             driver_remove
             ;;
 
-        c)  # Clean-up was requested.
+        b)  # Build the driver.
+            run_in_driver_dir driver_build
+            ;;
+
+        c)  # Clean the driver up.
             run_in_driver_dir driver_clean
             ;;
 
-        m)  # The needed memory was provided.
+        m)  # Configure the huge page memory.
             configure_huge_pages "$OPTARG"
             ;;
 

@@ -6,12 +6,10 @@ use clap::{App, AppSettings, Arg, SubCommand};
 use log::info;
 use std::os::unix::net::UnixStream;
 
-use nitro_cli::common::commands_parser::EmptyArgs;
 use nitro_cli::common::commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, RunEnclavesArgs, TerminateEnclavesArgs,
+    BuildEnclavesArgs, ConsoleArgs, EmptyArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
-use nitro_cli::common::logger;
-use nitro_cli::common::{create_resources_dir, enclave_proc_command_send_single};
+use nitro_cli::common::{enclave_proc_command_send_single, logger};
 use nitro_cli::common::{EnclaveProcessCommandType, ExitGracefully};
 use nitro_cli::enclave_proc_comm::{
     enclave_proc_command_send_all, enclave_proc_connect_to_single, enclave_proc_connection_close,
@@ -21,17 +19,13 @@ use nitro_cli::{build_enclaves, console_enclaves, create_app};
 
 fn main() {
     // Command line specification for NitroEnclaves CLI.
+    let app = create_app!();
+    let args = app.get_matches();
     let logger = logger::init_logger();
     let mut replies: Vec<UnixStream> = vec![];
 
-    // Initialize the resources directory.
-    create_resources_dir().ok_or_exit("Failed to create resources directory.");
-
     logger.update_logger_id(format!("nitro-cli:{}", std::process::id()).as_str());
     info!("Start Nitro CLI");
-
-    let app = create_app!();
-    let args = app.get_matches();
 
     match args.subcommand() {
         ("run-enclave", Some(args)) => {

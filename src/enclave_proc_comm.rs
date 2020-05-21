@@ -15,7 +15,7 @@ use std::os::unix::net::UnixStream;
 use crate::common::commands_parser::EmptyArgs;
 use crate::common::logger::EnclaveProcLogWriter;
 use crate::common::{
-    enclave_proc_command_send_single, get_resources_dir, get_socket_path, read_u64_le,
+    enclave_proc_command_send_single, get_socket_path, get_sockets_dir_path, read_u64_le,
 };
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 use crate::common::{ENCLAVE_PROC_WAIT_TIMEOUT_MSEC, MSG_ENCLAVE_CONFIRM};
@@ -53,8 +53,7 @@ pub fn enclave_proc_spawn(logger: &EnclaveProcLogWriter) -> io::Result<UnixStrea
 
 /// Connect to all existing enclave processes, returning a connection to each.
 pub fn enclave_proc_connect_to_all() -> io::Result<Vec<UnixStream>> {
-    let resources_dir = get_resources_dir()?;
-    let paths = fs::read_dir(resources_dir)?;
+    let paths = fs::read_dir(get_sockets_dir_path())?;
     Ok(paths
         .filter_map(|path| path.ok())
         .map(|path| path.path())

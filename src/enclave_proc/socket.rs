@@ -5,17 +5,17 @@
 use inotify::{EventMask, Inotify, WatchMask};
 use log::{debug, warn};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
+use crate::common::get_socket_path;
 use crate::common::ExitGracefully;
-use crate::common::{create_resources_dir, get_socket_path};
 
 #[derive(Default)]
 pub struct EnclaveProcSock {
-    socket_path: String,
+    socket_path: PathBuf,
     remove_listener_thread: Option<JoinHandle<()>>,
     requested_remove: Arc<AtomicBool>,
 }
@@ -40,7 +40,6 @@ impl Drop for EnclaveProcSock {
 
 impl EnclaveProcSock {
     pub fn new(enclave_id: &String) -> io::Result<Self> {
-        create_resources_dir()?;
         let socket_path = get_socket_path(enclave_id)?;
 
         Ok(EnclaveProcSock {
@@ -50,8 +49,8 @@ impl EnclaveProcSock {
         })
     }
 
-    pub fn get_path(&self) -> &String {
-        &self.socket_path
+    pub fn get_path(&self) -> &Path {
+        &self.socket_path.as_path()
     }
 
     pub fn start_monitoring(&mut self) -> io::Result<()> {
@@ -63,7 +62,7 @@ impl EnclaveProcSock {
         // - IN_DELETE_SELF: triggered when the socket file inode gets removed.
         // - IN_ATTRIB: triggered when the reference count of the file inode changes.
         socket_inotify.add_watch(
-            self.socket_path.as_str(),
+            self.socket_path.as_path(),
             WatchMask::ATTRIB | WatchMask::DELETE_SELF,
         )?;
         self.remove_listener_thread = Some(thread::spawn(move || {
@@ -76,9 +75,9 @@ impl EnclaveProcSock {
         // Delete the socket from the disk. Also mark that this operation is intended, so that the
         // socket file monitoring thread doesn't exit forcefully when notifying the deletion.
         self.requested_remove.store(true, Ordering::SeqCst);
-        if Path::new(self.socket_path.as_str()).exists() {
+        if self.socket_path.exists() {
             std::fs::remove_file(&self.socket_path)
-                .ok_or_exit(&format!("Failed to remove socket '{}'.", self.socket_path));
+                .ok_or_exit(&format!("Failed to remove socket {:?}.", self.socket_path));
         }
 
         // Since the socket file has been deleted, we also wait for the event listener thread to finish.
@@ -98,14 +97,14 @@ impl EnclaveProcSock {
 
 /// Listen for an inotify event when the socket gets deleted from the disk.
 fn socket_removal_listener(
-    socket_path: String,
+    socket_path: PathBuf,
     requested_remove: Arc<AtomicBool>,
     mut socket_inotify: Inotify,
 ) {
     let mut buffer = [0u8; 4096];
     let mut done = false;
 
-    debug!("Socket file event listener started for '{}'.", socket_path);
+    debug!("Socket file event listener started for {:?}.", socket_path);
 
     while !done {
         // Read events.
@@ -119,7 +118,7 @@ fn socket_removal_listener(
             // make sure this is a deletion, we also verify if the socket file is still present in the file-system.
             if (event.mask.contains(EventMask::ATTRIB)
                 || event.mask.contains(EventMask::DELETE_SELF))
-                && !Path::new(socket_path.as_str()).exists()
+                && !socket_path.exists()
             {
                 if requested_remove.load(Ordering::SeqCst) {
                     // At this point, the socket is shutting itself down and has notified the

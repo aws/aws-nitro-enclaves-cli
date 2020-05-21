@@ -101,7 +101,7 @@ impl ConnectionListener {
             .start_monitoring()
             .ok_or_exit("Error monitoring socket.");
         debug!(
-            "Connection listener started on socket: {}",
+            "Connection listener started on socket {:?}.",
             self.socket.get_path()
         );
 

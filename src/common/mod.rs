@@ -8,14 +8,18 @@ pub mod signal_handler;
 
 use log::error;
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub type NitroCliResult<T> = Result<T, String>;
 
 pub const ENCLAVE_PROC_WAIT_TIMEOUT_MSEC: isize = 3000;
 pub const MSG_ENCLAVE_CONFIRM: u64 = 0xEEC0;
+
+const SOCKETS_DIR_PATH_ENV_VAR: &str = "NITRO_CLI_SOCKETS_PATH";
+const SOCKETS_DIR_PATH: &str = "/var/run/nitro_enclaves";
 
 /// The type of commands that can be sent to an enclave process.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -63,16 +67,6 @@ pub fn write_u64_le(socket: &mut dyn Write, value: u64) -> io::Result<()> {
     socket.write_all(&bytes)
 }
 
-/// Create the NPE resources directory if it not already present.
-pub fn create_resources_dir() -> io::Result<()> {
-    let resources_dir = get_resources_dir()?;
-    let proc_dir_path = Path::new(resources_dir.as_str());
-    if !proc_dir_path.exists() {
-        std::fs::create_dir_all(resources_dir.as_str())?;
-    }
-    Ok(())
-}
-
 /// Send a command to a single socket.
 pub fn enclave_proc_command_send_single<T>(
     cmd: &EnclaveProcessCommandType,
@@ -116,23 +110,19 @@ pub fn receive_command_type(input_stream: &mut dyn Read) -> io::Result<EnclavePr
     Ok(cmd_type)
 }
 
-/// Get the path to our Unix socket.
-pub fn get_socket_path(enclave_id: &String) -> io::Result<String> {
-    // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
-    let resources_dir = get_resources_dir()?;
-    let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
-    Ok(format!("{}/{}.sock", resources_dir, tokens[0]))
+/// Get the path to the sockets directory.
+pub fn get_sockets_dir_path() -> PathBuf {
+    let log_path = match env::var(SOCKETS_DIR_PATH_ENV_VAR) {
+        Ok(env_path) => env_path,
+        Err(_) => SOCKETS_DIR_PATH.to_string(),
+    };
+    Path::new(&log_path).to_path_buf()
 }
 
-/// Get the path to the enclave resources directory
-pub fn get_resources_dir() -> io::Result<String> {
-    let home_dir = dirs::home_dir().ok_or(io::Error::new(
-        io::ErrorKind::NotFound,
-        "Failed to read home directory.",
-    ))?;
-    let home_dir_str = home_dir.to_str().ok_or(io::Error::new(
-        io::ErrorKind::InvalidData,
-        "Invalid home directory.",
-    ))?;
-    Ok(format!("{}/.npe", home_dir_str))
+/// Get the path to our Unix socket.
+pub fn get_socket_path(enclave_id: &str) -> io::Result<PathBuf> {
+    // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
+    let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
+    let sockets_path = get_sockets_dir_path();
+    Ok(sockets_path.join(tokens[0]).with_extension("sock"))
 }

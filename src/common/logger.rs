@@ -6,17 +6,19 @@ use chrono::offset::{Local, Utc};
 use chrono::DateTime;
 use flexi_logger::writers::LogWriter;
 use flexi_logger::{DeferredNow, LogTarget, Record};
+use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Result, Write};
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::common::ExitGracefully;
-use crate::common::{create_resources_dir, get_resources_dir};
 
 const DEFAULT_LOG_LEVEL: &str = "info";
-const LOG_FILE_NAME: &str = "nitro-cli.log";
+const LOGS_DIR_PATH_ENV_VAR: &str = "NITRO_CLI_LOGS_PATH";
+const LOGS_DIR_PATH: &str = "/var/log/nitro_enclaves";
+const LOG_FILE_NAME: &str = "nitro_enclaves.log";
 
 /// A log writer class which outputs its messages to a custom file.
 /// It also allows the updating of its ID, in order to indicate which process
@@ -25,29 +27,24 @@ const LOG_FILE_NAME: &str = "nitro-cli.log";
 #[derive(Clone)]
 pub struct EnclaveProcLogWriter {
     out_file: Arc<Mutex<File>>,
-    out_file_path: String,
     logger_id: Arc<Mutex<String>>,
 }
 
 impl EnclaveProcLogWriter {
     /// Create a new log writer.
-    pub fn new(log_file_name: &str) -> Result<Self> {
-        create_resources_dir()?;
-        let path = format!("{}/{}", get_resources_dir()?, log_file_name);
-
+    pub fn new() -> Result<Self> {
         // All logging shall be directed to a centralized file.
         Ok(EnclaveProcLogWriter {
-            out_file: Arc::new(Mutex::new(open_log_file(&path))),
-            out_file_path: path,
+            out_file: Arc::new(Mutex::new(open_log_file(&get_log_file_path()))),
             logger_id: Arc::new(Mutex::new(String::new())),
         })
     }
 
     /// Check if the log file is present and if it is not, (re)open it.
     fn safe_open_log_file(&self) {
-        if !Path::new(&self.out_file_path).exists() {
-            create_resources_dir().ok_or_exit("Failed to create NPE resource directory.");
-            let new_file = open_log_file(&self.out_file_path);
+        let log_path = &get_log_file_path();
+        if !log_path.exists() {
+            let new_file = open_log_file(log_path);
             let mut file_ref = self.out_file.lock().ok_or_exit("Failed to lock log file.");
             *file_ref.deref_mut() = new_file;
         }
@@ -113,8 +110,17 @@ impl LogWriter for EnclaveProcLogWriter {
     }
 }
 
+/// Get the path to the log file.
+fn get_log_file_path() -> PathBuf {
+    let logs_dir_path = match env::var(LOGS_DIR_PATH_ENV_VAR) {
+        Ok(env_path) => env_path,
+        Err(_) => LOGS_DIR_PATH.to_string(),
+    };
+    Path::new(&logs_dir_path).join(LOG_FILE_NAME)
+}
+
 /// Open a file at a given location for writing and appending.
-fn open_log_file(file_path: &String) -> File {
+fn open_log_file(file_path: &Path) -> File {
     OpenOptions::new()
         .create(true)
         .append(true)
@@ -126,8 +132,8 @@ fn open_log_file(file_path: &String) -> File {
 /// Initialize logging.
 pub fn init_logger() -> EnclaveProcLogWriter {
     // The log file is "nitro-cli.log" and is stored in the NPE resources directory.
-    let log_writer = EnclaveProcLogWriter::new(LOG_FILE_NAME)
-        .ok_or_exit("Failed to initialize enclave process log writer.");
+    let log_writer =
+        EnclaveProcLogWriter::new().ok_or_exit("Failed to initialize enclave process log writer.");
 
     // Initialize logging with the new log writer.
     flexi_logger::Logger::with_env_or_str(DEFAULT_LOG_LEVEL)

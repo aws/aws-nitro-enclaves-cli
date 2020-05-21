@@ -20,6 +20,9 @@ DRIVER_DIR="."
 # The name of the Nitro Enclaves driver.
 DRIVER_NAME="nitro_enclaves"
 
+# The name of the Nitro Enclaves resource directories.
+RES_DIR_NAME="nitro_enclaves"
+
 # The maximum percentage of free memory available.
 FREE_MEM_MAX_PERCENTAGE=50
 
@@ -44,6 +47,12 @@ error_handler() {
         # error handling goes here
         echo "Error on line $2 with status: $1"
     fi
+}
+
+# Print an error message and fail.
+function fail {
+    echo "Error: $1"
+    exit 1
 }
 
 # Check if a provided string is a positive integer.
@@ -107,12 +116,6 @@ function configure_huge_pages {
     echo "Done."
 }
 
-# Print an error message and fail.
-function fail {
-    echo "Error: $1"
-    exit 1
-}
-
 # Print the script's usage instructions.
 function print_usage {
     echo "Usage: $0 [-d <driver-directory>] [-b] [-c] [-i] [-r] [-h] [-m <memory_mb_needed>]"
@@ -162,6 +165,22 @@ function driver_build {
     echo "Done."
 }
 
+# Configure a given directory for root:$NE_GROUP_NAME ownership and 775 permissions.
+function configure_resource_directory {
+    sudo_run "mkdir -p $1" || fail "Could not create directory \"$1\"."
+    sudo_run "chown root:$NE_GROUP_NAME $1" || fail "Could not set ownership for directory \"$1\"."
+    sudo_run "chmod 774 $1" || fail "Could not set permissions for directory \"$1\"."
+}
+
+# Configure the resource directories for Nitro CLI logging and sockets.
+function configure_resource_directories {
+    # Configure the directory that will hold enclave process sockets.
+    configure_resource_directory "/var/run/$RES_DIR_NAME"
+
+    # Configure the directory that will hold logs.
+    configure_resource_directory "/var/log/$RES_DIR_NAME"
+}
+
 # Insert the driver and configure udev after it is inserted.
 function driver_insert {
     local loop_idx=0
@@ -209,9 +228,14 @@ function driver_insert {
     [ "$NE_GROUP_NAME" == "$(stat -c '%G' /dev/$DRIVER_NAME)" ] || fail "Device file has incorrect group."
     [ "660" == "$(stat -c '%a' /dev/$DRIVER_NAME)" ] || fail "Device file has incorrect permissions."
 
-    # Lastly, we need to add the non-root user to the NE group.
+    # We also need to add the non-root user to the NE group.
     echo "Adding user '$THIS_USER' to the group '$NE_GROUP_NAME'..."
     sudo_run "usermod -a -G $NE_GROUP_NAME $THIS_USER" || fail "Could not add user to the NE group."
+    echo "Done."
+
+    # Lastly, we configure the relevant resource directories.
+    echo "Configuring the resource directories..."
+    configure_resource_directories
     echo "Done."
 
     # If we have configured the group membership but the user still doesn't see it, we would normally need to

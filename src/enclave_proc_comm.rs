@@ -93,7 +93,7 @@ pub fn enclave_proc_connect_to_single(enclave_id: &String) -> io::Result<UnixStr
 pub fn enclave_proc_command_send_all<T>(
     cmd: &EnclaveProcessCommandType,
     args: Option<&T>,
-) -> io::Result<Vec<UnixStream>>
+) -> io::Result<(Vec<UnixStream>, usize)>
 where
     T: Serialize,
 {
@@ -122,7 +122,7 @@ where
 
     // Don't proceed unless at least one connection has been established.
     if comms.len() == 0 {
-        return Ok(vec![]);
+        return Ok((vec![], 0));
     }
 
     // Get the number of transmission errors.
@@ -167,33 +167,50 @@ where
     // Update the number of connections that have yielded errors.
     num_errors = comms.len() - replies.len();
 
-    match num_errors {
-        0 => Ok(replies),
-        _ => Err(Error::new(
-            ErrorKind::Other,
-            format!("Failed to communicate with {} process(es).", num_errors),
-        )),
-    }
+    Ok((replies, num_errors))
 }
 
-/// Print a stream's output.
-pub fn enclave_proc_fetch_output(conns: &Vec<UnixStream>) {
+/// Print a stream's output. Returns the number of streams with no output.
+pub fn enclave_proc_fetch_output(conns: &[UnixStream]) -> usize {
+    let mut empty_conns = 0;
+
     for conn in conns.iter() {
+        let mut bytes_read = 0u32;
+
+        // Fetch all stream contents.
         for byte in conn.bytes() {
             match byte {
                 Ok(data) => print!("{}", data as char),
                 Err(_) => break,
             }
-        }
-    }
-}
 
-/// Close all active connections.
-pub fn enclave_proc_connection_close(conns: &Vec<UnixStream>) {
-    for conn in conns.iter() {
+            bytes_read = bytes_read + 1;
+        }
+
+        // Shut the stream down.
         conn.shutdown(std::net::Shutdown::Both)
             .ok_or_exit("Failed to shut down connection.");
+
+        if bytes_read == 0 {
+            empty_conns = empty_conns + 1;
+        }
     }
+
+    empty_conns
+}
+
+/// Output a message for the connections that have failed.
+pub fn enclave_proc_output_failed_conns(failed_conns: usize) {
+    // Don't print anything if there were no failed connections.
+    if failed_conns == 0 {
+        return;
+    }
+
+    // Print a JSON object with the number of failed connections.
+    eprintln!(
+        "{}",
+        serde_json::json!({ "FailedConnections": failed_conns })
+    );
 }
 
 /// Obtain an enclave's CID given its full ID.

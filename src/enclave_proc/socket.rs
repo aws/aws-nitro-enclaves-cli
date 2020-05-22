@@ -54,6 +54,10 @@ impl EnclaveProcSock {
         &self.socket_path
     }
 
+    pub fn set_path(&mut self, socket_path: String) {
+        self.socket_path = socket_path;
+    }
+
     pub fn start_monitoring(&mut self) -> io::Result<()> {
         let path_clone = self.socket_path.clone();
         let requested_remove_clone = self.requested_remove.clone();

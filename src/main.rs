@@ -61,7 +61,6 @@ fn main() {
             enclave_proc_connection_close(&replies);
         }
         ("describe-enclaves", _) => {
-            // TODO: Replicate output of old CLI when no enclaves are available.
             replies.extend(
                 enclave_proc_command_send_all::<EmptyArgs>(
                     &EnclaveProcessCommandType::Describe,
@@ -70,7 +69,12 @@ fn main() {
                 .ok_or_exit("Failed to broadcast describe command."),
             );
             info!("Sent command: Describe");
-            enclave_proc_fetch_output(&replies);
+
+            if replies.len() == 0 {
+                println!("[]");
+            } else {
+                enclave_proc_fetch_output(&replies);
+            }
             enclave_proc_connection_close(&replies);
         }
         ("build-enclave", Some(args)) => {

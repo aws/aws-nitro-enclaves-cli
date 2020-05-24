@@ -5,15 +5,22 @@
 use super::cli_dev::*;
 
 use crate::resource_manager::ResourceAllocator;
+use crate::resource_allocator_driver::nitro_cli_slot_mem_region;
 use crate::ExitGracefully;
 use crate::NitroCliResult;
 use crate::ResourceAllocatorDriver;
-use crate::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
+
 use clap::{App, Arg, ArgMatches, SubCommand};
 use eif_loader;
 use log::debug;
 use num_traits::FromPrimitive;
-use std::fs::File;
+
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::io::SeekFrom;
+
+use std::io::Read;
+use std::io::Seek;
 
 pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
     app.subcommand(
@@ -45,8 +52,8 @@ pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
             ),
     )
     .subcommand(
-        SubCommand::with_name("send-image")
-            .about("[Power user] Sends boot image to an enclave")
+        SubCommand::with_name("wait-ready")
+            .about("[Power user] Wait in order to receive the 'ready' signal after booting an enclave")
             .arg(
                 Arg::with_name("enclave-cid")
                     .long("enclave-cid")
@@ -54,20 +61,8 @@ pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
                     .required(true),
             )
             .arg(
-                Arg::with_name("eif-path")
-                    .long("eif-path")
-                    .takes_value(true)
-                    .required(true),
-            )
-            .arg(
-                Arg::with_name("loader-port")
-                    .long("loader-port")
-                    .takes_value(true)
-                    .required(true),
-            )
-            .arg(
-                Arg::with_name("token")
-                    .long("token")
+                Arg::with_name("vsock-ready-port")
+                    .long("vsock-ready-port")
                     .takes_value(true)
                     .required(true),
             ),
@@ -94,6 +89,36 @@ pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
                     .required(true),
             ),
     )
+    .subcommand(
+        SubCommand::with_name("alloc-mem-with-file")
+            .about(
+                "[Power user] Allocates a single memory region using the resource allocator driver and populates it with the corresponding chunk of the supplied EIF",
+            )
+            .arg(
+                Arg::with_name("mem-size")
+                    .long("mem-size")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::with_name("eif-path")
+                    .long("eif-path")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::with_name("eif-offset")
+                    .long("eif-offset")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::with_name("write")
+                    .long("write")
+                    .takes_value(false)
+                    .required(false),
+            ),
+    )
 }
 
 pub fn match_cmd(args: &ArgMatches) {
@@ -101,14 +126,17 @@ pub fn match_cmd(args: &ArgMatches) {
         ("execute-dev-cmd", Some(args)) => {
             execute_command(args).ok_or_exit(args.usage());
         }
-        ("send-image", Some(args)) => {
-            send_eif(args).ok_or_exit(args.usage());
+        ("wait-ready", Some(args)) => {
+            wait_ready_signal(args).ok_or_exit(args.usage());
         }
         ("free-slot", Some(args)) => {
             free_slot(args).ok_or_exit(args.usage());
         }
         ("alloc-mem", Some(args)) => {
             alloc_mem(args).ok_or_exit(args.usage());
+        }
+        ("alloc-mem-with-file", Some(args)) => {
+            alloc_mem_with_file(args).ok_or_exit(args.usage());
         }
         (&_, _) => {}
     }
@@ -196,41 +224,23 @@ pub fn execute_command(args: &ArgMatches) -> NitroCliResult<()> {
     Ok(())
 }
 
-pub fn send_eif(args: &ArgMatches) -> NitroCliResult<()> {
+pub fn wait_ready_signal(args: &ArgMatches) -> NitroCliResult<()> {
     let enclave_cid = args
         .value_of("enclave-cid")
         .ok_or("enclave-cid not specified")?;
-    let enclave_port = args
-        .value_of("loader-port")
-        .ok_or("loader-port not specified")?;
-    let enclave_token = args.value_of("token").ok_or("token not specified")?;
-    let eif_path = args.value_of("eif-path").ok_or("eif-path  not specified")?;
-    let mut eif_image =
-        File::open(eif_path).map_err(|err| format!("Could not open eif image: {:?}", err))?;
-
+    let vsock_ready_port = args
+        .value_of("vsock-ready-port")
+        .ok_or("vsock-ready-port not specified")?;
     let enclave_cid: u32 = enclave_cid
         .parse()
         .map_err(|_| format!("Invalid enclave-cid format"))?;
-
-    let enclave_port: u32 = enclave_port
+    let vsock_ready_port: u32 = vsock_ready_port
         .parse()
-        .map_err(|_| format!("Invalid enclave-port format"))?;
+        .map_err(|_| format!("Invalid vsock-ready-port specified"))?;
 
-    let enclave_token: u64 = enclave_token
-        .parse()
-        .map_err(|_| format!("Invalid token format"))?;
+    let _ = eif_loader::enclave_ready(enclave_cid, vsock_ready_port)
+        .map_err(|_| format!("Failed to receive 'ready' signal from the enclave"));
 
-    eif_loader::send_image(
-        &mut eif_image,
-        enclave_cid,
-        enclave_port,
-        enclave_token.to_be_bytes(),
-        crate::resource_manager::between_packets_delay(),
-    )
-    .map_err(|err| format!("Failed to send eif Image: {:?}", err))?;
-
-    eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT)
-        .map_err(|err| format!("Waiting on enclave to boot failed with error {:?}", err))?;
     Ok(())
 }
 
@@ -265,5 +275,78 @@ pub fn alloc_mem(args: &ArgMatches) -> NitroCliResult<()> {
     for region in regions {
         println!("mem_gpa={}\nmem_size={}", region.mem_gpa, region.mem_size)
     }
+    Ok(())
+}
+
+/// Writes a specific chunk of the eif file into the supplied memory region
+fn fill_region_from_file(region: &nitro_cli_slot_mem_region, eif_path: String, eif_offset: u64, _region_offset: u64) -> u64 {
+    let mut eif_file = OpenOptions::new()
+            .read(true)
+            .open(eif_path)
+            .unwrap();
+
+    let mut dev_mem = OpenOptions::new()
+            .write(true)
+            .open("/dev/mem")
+            .unwrap();
+
+    let _ = eif_file
+        .seek(SeekFrom::Start(eif_offset));
+
+    let mut buf = [0u8; 4096];
+    let mut written: u64 = 0;
+
+    let _ = dev_mem.seek(SeekFrom::Start(region.mem_gpa));
+
+    while written < region.mem_size {
+        let write_size =
+            std::cmp::min(buf.len(), (region.mem_size - written) as usize);
+
+        let write_size = eif_file.read(&mut buf[..write_size])
+            .unwrap();
+
+        if write_size == 0 {
+            return eif_file.seek(SeekFrom::Current(0)).unwrap();
+        }
+
+        let _ = dev_mem.write_all(&mut buf[..write_size]);
+        let _ = dev_mem.flush();
+
+        written += write_size as u64;
+    }
+
+    return eif_file.seek(SeekFrom::Current(0)).unwrap();
+}
+
+pub fn alloc_mem_with_file(args: &ArgMatches) -> NitroCliResult<()> {
+    let mem_size = args
+        .value_of("mem-size")
+        .ok_or("memory size not specified")?;
+    let eif_path = args
+        .value_of("eif-path")
+        .ok_or("EIF file path not specified")?;
+    let eif_offset = args
+        .value_of("eif-offset")
+        .ok_or("offset in the EIF file not specified")?;
+    let should_write = args.is_present("write");
+
+    let mem_size: u64 = mem_size
+        .parse()
+        .map_err(|_| format!("Invalid mem-size format"))?;
+    let eif_offset: u64 = eif_offset
+        .parse()
+        .map_err(|_| format!("Invalid eif-offset format"))?;
+
+    let mut new_offset = eif_offset;
+
+    let mut resource_allocator = ResourceAllocator::new(0, mem_size, 1)?;
+    let regions = resource_allocator.allocate()?;
+    for region in regions {
+        if should_write {
+            new_offset = fill_region_from_file(&region, eif_path.to_string(), eif_offset, 0);
+        }
+        println!("mem_gpa={}\nmem_size={}\nnew_eif_offset={}", region.mem_gpa, region.mem_size, new_offset)
+    }
+
     Ok(())
 }

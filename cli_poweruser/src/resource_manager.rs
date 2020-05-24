@@ -12,7 +12,6 @@ use crate::cli_dev::{
 use crate::terminate_enclaves;
 use crate::NitroCliResult;
 use crate::ENCLAVE_READY_VSOCK_PORT;
-use crate::ENCLAVE_VSOCK_LOADER_PORT;
 use crate::VMADDR_CID_PARENT;
 
 use crate::commands_parser::TerminateEnclavesArgs;
@@ -22,6 +21,8 @@ use crate::utils::ExitGracefully;
 use nix::fcntl::{flock, FlockArg};
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::io::prelude::*;
+use std::io::SeekFrom;
 use std::io::Write;
 use std::mem::size_of_val;
 use std::os::unix::io::AsRawFd;
@@ -33,6 +34,9 @@ const MIN_MEM_REGION_SIZE_MIB: u64 = 2;
 
 #[allow(non_upper_case_globals)]
 const MiB: u64 = 1024 * 1024;
+
+const OFFSET_IMGFORMAT: u64 = 8 * MiB;
+
 /// Helper class to allocate the resources needed by an enclave.
 pub struct ResourceAllocator {
     memory: u64,
@@ -192,19 +196,37 @@ impl EnclaveResourceManager {
             self.terminate_enclave_error(&err_msg);
             err_msg
         })?;
+
         Ok((enclave_cid, self.slot_id))
     }
 
     fn init_memory(&mut self) -> NitroCliResult<()> {
+        let err_prefix = sanitize_command(NitroEnclavesCmdType::NitroEnclavesSlotAddMem);
+        let mut dev_mem = OpenOptions::new()
+            .write(true)
+            .open("/dev/mem")
+            .map_err(|err| format!("{:?} failed with error: {}", err_prefix, err))?;
+        self.eif_file
+            .seek(SeekFrom::Start(0))
+            .map_err(|err| format!("{:?} failed with error: {}", err_prefix, err))?;
+        let mut total_written: u64 = 0;
+
         let regions = self.resource_allocator.allocate()?;
         self.allocated_memory_mib = regions.iter().fold(0, |mut acc, val| {
             acc += val.mem_size / MiB;
             acc
         });
-        let err_prefix = sanitize_command(NitroEnclavesCmdType::NitroEnclavesSlotAddMem);
         for region in regions {
             let add_mem =
                 NitroEnclavesSlotAddMem::new(self.slot_id, region.mem_gpa, region.mem_size);
+
+            // Write mem
+            write_eif_region(
+                &mut self.eif_file,
+                &region,
+                &mut dev_mem,
+                &mut total_written,
+            )?;
 
             add_mem
                 .submit(&mut self.cli_dev)
@@ -254,28 +276,6 @@ impl EnclaveResourceManager {
         // Starting from here the enclave resources are owned by the
         // running enclave
         self.owns_resources = false;
-        eprintln!(
-            "Sending image to cid: {} port: {}",
-            *self.enclave_cid.as_ref().unwrap(),
-            ENCLAVE_VSOCK_LOADER_PORT
-        );
-
-        eif_loader::send_image(
-            &mut self.eif_file,
-            // It is safe to unwrap here, by now we should know what cid we are going to use.
-            *self.enclave_cid.as_ref().unwrap_or(&0) as u32,
-            ENCLAVE_VSOCK_LOADER_PORT,
-            reply.vsock_loader_token.to_be_bytes(),
-            between_packets_delay(),
-        )
-        .map_err(|err| {
-            let err_msg = format!(
-                "Sending the image to the enclave failed with error {:?}",
-                err
-            );
-            self.terminate_enclave_error(&err_msg);
-            err_msg
-        })?;
         let enclave_cid = self.enclave_cid.ok_or("Invalid CID")?;
 
         Ok(enclave_cid)
@@ -313,6 +313,51 @@ impl Drop for EnclaveResourceManager {
             self.resource_allocator.free();
         }
     }
+}
+
+fn write_eif_region(
+    eif_file: &mut File,
+    mem_reg: &nitro_cli_slot_mem_region,
+    dev_mem: &mut File,
+    total_written: &mut u64,
+) -> NitroCliResult<()> {
+    let mut buf = [0u8; 4096];
+    let mut written: u64 = 0;
+
+    dev_mem
+        .seek(SeekFrom::Start(mem_reg.mem_gpa))
+        .map_err(|err| format!("Failed to seek with error: {}", err))?;
+
+    if *total_written + mem_reg.mem_size < OFFSET_IMGFORMAT {
+        *total_written += mem_reg.mem_size;
+        return Ok(());
+    }
+
+    if *total_written < OFFSET_IMGFORMAT {
+        written += OFFSET_IMGFORMAT - *total_written;
+        *total_written = OFFSET_IMGFORMAT;
+    }
+
+    while written < mem_reg.mem_size {
+        let write_size = std::cmp::min(buf.len(), (mem_reg.mem_size - written) as usize);
+
+        let write_size = eif_file
+            .read(&mut buf[..write_size])
+            .map_err(|err| format!("Failed to read from EIF: {}", err))?;
+
+        if write_size == 0 {
+            return Ok(());
+        }
+
+        dev_mem
+            .write_all(&mut buf[..write_size])
+            .map_err(|err| format!("Failed to write to mem: {}", err))?;
+        dev_mem
+            .flush()
+            .map_err(|err| format!("Failed to flush file: {}", err))?;
+        written += write_size as u64;
+    }
+    Ok(())
 }
 
 pub fn online_slot_cpus(

@@ -194,14 +194,16 @@ impl ConnectionListener {
 mod tests {
     use super::*;
 
-    use crate::common::{create_resources_dir, get_resources_dir};
+    use crate::common::{get_sockets_dir_path, SOCKETS_DIR_PATH_ENV_VAR};
 
+    use std::env;
     use std::fs;
-    use std::path::Path;
+    use std::path::PathBuf;
     use std::process::Command;
     use std::sync::{Arc, Mutex, Condvar};
 
     const THREADS_STR: &str = "Threads:";
+    const TMP_DIR: &str = "./npe";
 
     /// Inspects the content of /proc/<PID>/status in order to
     /// retrieve the number of threads running in the context of
@@ -276,19 +278,22 @@ mod tests {
     /// processing a ConnectionListenerStop command.
     #[test]
     fn test_connection_listener_run_connection_stop() {
-        let resources_dir = get_resources_dir();
+        let old_log_path = env::var(SOCKETS_DIR_PATH_ENV_VAR);
 
-        if let Ok(resources_dir) = resources_dir {
-            let path_existed = Path::new(&resources_dir).exists();
-            let _ = create_resources_dir();
+        env::set_var(SOCKETS_DIR_PATH_ENV_VAR, TMP_DIR);
+
+        let resources_dir = get_sockets_dir_path();
+
+            let path_existed = resources_dir.as_path().exists();
+            let _ = fs::create_dir(resources_dir.as_path());
             let dummy_sock_name = "run_connection_stop.sock";
-            let dummy_sock_path = format!("{}/{}", resources_dir, dummy_sock_name);
+            let dummy_sock_path = format!("{}/{}", resources_dir.as_path().to_str().unwrap(), dummy_sock_name);
 
             // Remove pre-existing socket file
             let _ = std::fs::remove_file(&dummy_sock_path);
 
             let mut connection_listener = ConnectionListener::new();
-            connection_listener.socket.set_path(dummy_sock_path.clone());
+            connection_listener.socket.set_path(PathBuf::from(&dummy_sock_path));
 
             // Get number of running threads before spawning the listener thread
             let out_cmd0 = Command::new("cat")
@@ -327,7 +332,6 @@ mod tests {
             let crt_num_threads1 = get_num_threads_from_status_output(out1.to_string());
             assert!(crt_num_threads0 < crt_num_threads1);
 
-            //let my_stream = UnixStream::connect(&format!("{}/{}", resources_dir, sock_name));
             let my_stream = UnixStream::connect(&dummy_sock_path);
 
             if let Ok(mut my_stream) = my_stream {
@@ -349,11 +353,18 @@ mod tests {
             assert_eq!(crt_num_threads0, crt_num_threads2);
             assert!(crt_num_threads2 < crt_num_threads1);
 
-            // Remove socket file
-            let _ = std::fs::remove_file(&dummy_sock_path);
-            if !path_existed {
-                let _ = fs::remove_dir_all(resources_dir);
-            }
+
+        if !path_existed {
+            // Remove whole resources_dir
+            let _ = fs::remove_dir_all(resources_dir.as_path().to_str().unwrap());
+        } else {
+            // Only remove the socket file
+            let _ = fs::remove_file(&dummy_sock_path);
+        }
+
+        // Restore previous environment variable value
+        if let Ok(old_log_path) = old_log_path {
+            env::set_var(SOCKETS_DIR_PATH_ENV_VAR, old_log_path);
         }
     }
 
@@ -361,19 +372,24 @@ mod tests {
     /// processing a ConnectionListenerStop command.
     #[test]
     fn test_connection_listener_run_describe() {
-        let resources_dir = get_resources_dir();
+        let old_log_path = env::var(SOCKETS_DIR_PATH_ENV_VAR);
 
-        if let Ok(resources_dir) = resources_dir {
-            let path_existed = Path::new(&resources_dir).exists();
-            let _ = create_resources_dir();
+        env::set_var(SOCKETS_DIR_PATH_ENV_VAR, TMP_DIR);
+
+        let resources_dir = get_sockets_dir_path();
+        let path_existed = resources_dir.as_path().exists();
+
+        let _ = fs::create_dir(resources_dir.as_path());
+
+
             let dummy_sock_name = "run_describe.sock";
-            let dummy_sock_path = format!("{}/{}", resources_dir, dummy_sock_name);
+            let dummy_sock_path = format!("{}/{}", resources_dir.as_path().to_str().unwrap(), dummy_sock_name);
 
             // Remove pre-existing socket file
             let _ = std::fs::remove_file(&dummy_sock_path);
 
             let mut connection_listener = ConnectionListener::new();
-            connection_listener.socket.set_path(dummy_sock_path.clone());
+            connection_listener.socket.set_path(PathBuf::from(&dummy_sock_path));
 
             // Get number of running threads before spawning the listener thread
             let out_cmd0 = Command::new("cat")
@@ -430,7 +446,7 @@ mod tests {
             let crt_num_threads2 = get_num_threads_from_status_output(out2.to_string());
             assert!(crt_num_threads0 < crt_num_threads2);
 
-            let my_stream = UnixStream::connect(&format!("{}/run_describe.sock", resources_dir));
+            let my_stream = UnixStream::connect(&dummy_sock_path);
 
             if let Ok(mut my_stream) = my_stream {
                 // Close the listener thread
@@ -451,11 +467,18 @@ mod tests {
             assert_eq!(crt_num_threads0, crt_num_threads3);
             assert!(crt_num_threads3 < crt_num_threads1);
 
-            // Remove socket file and old resources_dir (if necessary)
-            let _ = std::fs::remove_file(&dummy_sock_path);
-            if !path_existed {
-                let _ = fs::remove_dir_all(resources_dir);
-            }
+        if !path_existed {
+            // Remove whole resources_dir
+            let _ = fs::remove_dir_all(resources_dir.as_path().to_str().unwrap());
+        } else {
+            // Only remove the socket file
+            let _ = fs::remove_file(&dummy_sock_path);
         }
+
+        // Restore previous enviornment variable value
+        if let Ok(old_log_path) = old_log_path {
+            env::set_var(SOCKETS_DIR_PATH_ENV_VAR, old_log_path);
+        }
+
     }
 }

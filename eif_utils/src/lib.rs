@@ -58,7 +58,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 .expect("Could not create bootstrap_hasher"),
             customer_app_hasher: EifHasher::new_without_cache(hasher.clone())
                 .expect("Could not create customer app hasher"),
-            hasher_template: hasher.clone(),
+            hasher_template: hasher,
             eif_crc: crc32::Digest::new_with_initial(crc32::IEEE, 0),
         }
     }

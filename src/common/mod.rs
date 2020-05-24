@@ -59,7 +59,7 @@ impl<T, E: std::fmt::Debug> ExitGracefully<T, E> for Result<T, E> {
 }
 
 /// Notify both the user and the logger of an error.
-pub fn notify_error(err_msg: &String) {
+pub fn notify_error(err_msg: &str) {
     eprintln!("{}", err_msg);
     error!("{}", err_msg);
 }
@@ -79,7 +79,7 @@ pub fn write_u64_le(socket: &mut dyn Write, value: u64) -> io::Result<()> {
 
 /// Send a command to a single socket.
 pub fn enclave_proc_command_send_single<T>(
-    cmd: &EnclaveProcessCommandType,
+    cmd: EnclaveProcessCommandType,
     args: Option<&T>,
     mut socket: &mut UnixStream,
 ) -> io::Result<()>
@@ -88,7 +88,7 @@ where
 {
     // Serialize the command type.
     let cmd_bytes =
-        serde_cbor::to_vec(cmd).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        serde_cbor::to_vec(&cmd).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     // The command is written twice. The first read is done by the connection listener to check if this is
     // a shut-down command. The second read is done by the enclave process for all non-shut-down commands.
@@ -189,7 +189,10 @@ mod tests {
         if let Ok(sockets_dir) = sockets_dir {
             assert_eq!(sockets_dir, sockets_dir_path_f.as_path().to_str().unwrap());
         } else {
-            assert_eq!(SOCKETS_DIR_PATH, sockets_dir_path_f.as_path().to_str().unwrap());
+            assert_eq!(
+                SOCKETS_DIR_PATH,
+                sockets_dir_path_f.as_path().to_str().unwrap()
+            );
         }
     }
 
@@ -220,7 +223,14 @@ mod tests {
         let result = get_socket_path(enclave_id);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().as_path().to_str().unwrap(), format!("{}/{}.sock", sockets_path.as_path().to_str().unwrap(), tokens[0]));
+        assert_eq!(
+            result.unwrap().as_path().to_str().unwrap(),
+            format!(
+                "{}/{}.sock",
+                sockets_path.as_path().to_str().unwrap(),
+                tokens[0]
+            )
+        );
     }
 
     /// Tests that `get_socket_path()` returns an invalid socket path,
@@ -232,7 +242,13 @@ mod tests {
         let result = get_socket_path(enclave_id);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().as_path().to_str().unwrap(), format!("{}/{}.sock", sockets_path.as_path().to_str().unwrap(), enclave_id));
+        assert_eq!(
+            result.unwrap().as_path().to_str().unwrap(),
+            format!(
+                "{}/{}.sock",
+                sockets_path.as_path().to_str().unwrap(),
+                enclave_id
+            )
+        );
     }
-
 }

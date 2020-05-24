@@ -86,14 +86,14 @@ pub fn enclave_proc_connect_to_all() -> io::Result<Vec<UnixStream>> {
 }
 
 /// Open a connection to an enclave-specific socket.
-pub fn enclave_proc_connect_to_single(enclave_id: &String) -> io::Result<UnixStream> {
+pub fn enclave_proc_connect_to_single(enclave_id: &str) -> io::Result<UnixStream> {
     let socket_path = get_socket_path(enclave_id)?;
     UnixStream::connect(socket_path)
 }
 
 /// Broadcast a command to all available enclave processes.
 pub fn enclave_proc_command_send_all<T>(
-    cmd: &EnclaveProcessCommandType,
+    cmd: EnclaveProcessCommandType,
     args: Option<&T>,
 ) -> io::Result<(Vec<UnixStream>, usize)>
 where
@@ -123,16 +123,12 @@ where
         .collect();
 
     // Don't proceed unless at least one connection has been established.
-    if comms.len() == 0 {
+    if comms.is_empty() {
         return Ok((vec![], 0));
     }
 
     // Get the number of transmission errors.
-    let mut num_errors = comms
-        .iter()
-        .filter(|result| result.is_err())
-        .collect::<Vec<_>>()
-        .len();
+    let mut num_errors = comms.iter().filter(|result| result.is_err()).count();
 
     // Get the number of expected replies.
     let mut num_replies_expected = comms.len() - num_errors;
@@ -213,8 +209,10 @@ where
     for conn in conns.iter_mut() {
         // We only count connections that have yielded a valid JSON object and a status
         let (object, status) = enclave_proc_handle_output::<T>(conn);
-        if object.is_some() && status.is_some() {
-            objects.push((object.unwrap(), status.unwrap()));
+        if let Some(object) = object {
+            if let Some(status) = status {
+                objects.push((object, status));
+            }
         }
     }
 
@@ -260,11 +258,11 @@ where
 }
 
 /// Obtain an enclave's CID given its full ID.
-pub fn enclave_proc_get_cid(enclave_id: &String) -> io::Result<u64> {
+pub fn enclave_proc_get_cid(enclave_id: &str) -> io::Result<u64> {
     let mut comm = enclave_proc_connect_to_single(enclave_id)?;
     // TODO: Replicate output of old CLI on invalid enclave IDs.
     enclave_proc_command_send_single::<EmptyArgs>(
-        &EnclaveProcessCommandType::GetEnclaveCID,
+        EnclaveProcessCommandType::GetEnclaveCID,
         None,
         &mut comm,
     )?;

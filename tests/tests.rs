@@ -8,20 +8,12 @@ mod tests {
     use nitro_cli::common::commands_parser::{
         BuildEnclavesArgs, RunEnclavesArgs, TerminateEnclavesArgs,
     };
-    use nitro_cli::enclave_proc::commands::{
-        describe_enclaves, run_enclaves, terminate_enclaves,
-    };
-    use nitro_cli::enclave_proc::json_output::{
-        EnclaveDescribeInfo,
-    };
-    use nitro_cli::enclave_proc::json_output::{
-        get_enclave_describe_info, flags_to_string,
-    };
+    use nitro_cli::enclave_proc::commands::{describe_enclaves, run_enclaves, terminate_enclaves};
+    use nitro_cli::enclave_proc::json_output::EnclaveDescribeInfo;
+    use nitro_cli::enclave_proc::json_output::{flags_to_string, get_enclave_describe_info};
     use nitro_cli::enclave_proc::utils::generate_enclave_id;
     use nitro_cli::utils::Console;
-    use nitro_cli::{
-        build_enclaves, build_from_docker, enclave_console,
-    };
+    use nitro_cli::{build_enclaves, build_from_docker, enclave_console};
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
     use std::convert::TryInto;
     use tempfile::tempdir;

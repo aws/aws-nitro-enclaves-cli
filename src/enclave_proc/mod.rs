@@ -48,7 +48,7 @@ fn get_logger_id(enclave_id: &str) -> String {
     format!("enc-{}", tokens[0])
 }
 
-fn send_command_and_close(cmd: &EnclaveProcessCommandType, stream: &mut UnixStream) {
+fn send_command_and_close(cmd: EnclaveProcessCommandType, stream: &mut UnixStream) {
     enclave_proc_command_send_single::<EmptyArgs>(cmd, None, stream)
         .ok_or_exit("Failed to send command.");
     stream
@@ -57,9 +57,9 @@ fn send_command_and_close(cmd: &EnclaveProcessCommandType, stream: &mut UnixStre
 }
 
 /// Notify that an error has occurred, also forwarding the error message to a connection.
-fn notify_error_with_conn(err_msg: &String, conn: &Connection) {
+fn notify_error_with_conn(err_msg: &str, conn: &Connection) {
     notify_error(err_msg);
-    conn.eprintln(err_msg.as_str())
+    conn.eprintln(err_msg)
         .ok_or_exit("Failed to forward error message to connection.");
 }
 
@@ -75,7 +75,7 @@ fn run_terminate(
 
     // Notify the main thread that enclave termination has completed.
     send_command_and_close(
-        &EnclaveProcessCommandType::TerminateComplete,
+        EnclaveProcessCommandType::TerminateComplete,
         &mut thread_stream,
     );
 }
@@ -112,7 +112,7 @@ fn enclave_proc_handle_signals(comm_fd: RawFd, signal: Signal) -> bool {
         signal
     );
     send_command_and_close(
-        &EnclaveProcessCommandType::ConnectionListenerStop,
+        EnclaveProcessCommandType::ConnectionListenerStop,
         &mut stream,
     );
 
@@ -150,17 +150,17 @@ fn handle_command(
     logger: &EnclaveProcLogWriter,
     connection: &Connection,
     conn_listener: &mut ConnectionListener,
-    mut enclave_manager: &mut EnclaveManager,
+    enclave_manager: &mut EnclaveManager,
     terminate_thread: &mut Option<std::thread::JoinHandle<()>>,
 ) -> NitroCliResult<bool> {
     match cmd {
         EnclaveProcessCommandType::Run => {
-            let mut run_args = connection
+            let run_args = connection
                 .read::<RunEnclavesArgs>()
                 .map_err(|e| format!("Failed to get run arguments: {}", e))?;
             info!("Run args = {:?}", run_args);
 
-            *enclave_manager = run_enclaves(&mut run_args, connection)
+            *enclave_manager = run_enclaves(&run_args, connection)
                 .map_err(|e| format!("Failed to run enclave: {}", e))?;
 
             info!("Enclave ID = {}", enclave_manager.enclave_id);
@@ -203,7 +203,7 @@ fn handle_command(
                 .write_u64(MSG_ENCLAVE_CONFIRM)
                 .map_err(|e| format!("Failed to write confirmation: {}", e))?;
 
-            describe_enclaves(&mut enclave_manager, connection)
+            describe_enclaves(&enclave_manager, connection)
                 .map_err(|e| format!("Failed to describe enclave: {}", e))?;
         }
 

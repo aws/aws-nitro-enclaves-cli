@@ -100,7 +100,9 @@ impl Console {
 
             if size == 0 {
                 break;
-            } else if size > 0 {
+            }
+
+            if size > 0 {
                 output
                     .write(&buffer[..size])
                     .map_err(|err| format!("{}", err))?;
@@ -117,15 +119,12 @@ impl Console {
             let mut buffer = [0u8; BUFFER_SIZE];
             let result = read(self.fd, &mut buffer);
 
-            match result {
-                Ok(size) => {
-                    if size > 0 {
-                        let mut buf_vec = buffer.to_vec();
-                        buf_vec.truncate(size);
-                        (*buf).append(&mut buf_vec);
-                    }
+            if let Ok(size) = result {
+                if size > 0 {
+                    let mut buf_vec = buffer.to_vec();
+                    buf_vec.truncate(size);
+                    (*buf).append(&mut buf_vec);
                 }
-                _ => (),
             }
 
             sleep(Duration::from_millis(TIMEOUT));

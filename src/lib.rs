@@ -16,7 +16,6 @@ use std::io::{self, Read, Write};
 
 use common::commands_parser::BuildEnclavesArgs;
 use common::NitroCliResult;
-use enclave_build;
 
 use utils::Console;
 
@@ -45,9 +44,9 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
 }
 
 pub fn build_from_docker(
-    docker_uri: &String,
+    docker_uri: &str,
     docker_dir: &Option<String>,
-    output_path: &String,
+    output_path: &str,
 ) -> NitroCliResult<(File, BTreeMap<String, String>)> {
     let blobs_path = blobs_path()?;
     let mut cmdline_file = File::open(format!("{}/cmdline", blobs_path))
@@ -67,7 +66,7 @@ pub fn build_from_docker(
         .map_err(|err| format!("Could not create output file: {}", err))?;
 
     let mut docker2eif = enclave_build::Docker2Eif::new(
-        docker_uri.clone(),
+        docker_uri.to_string(),
         format!("{}/init", blobs_path),
         format!("{}/bzImage", blobs_path),
         cmdline.trim().to_string(),
@@ -142,7 +141,7 @@ fn artifacts_path() -> NitroCliResult<String> {
     } else {
         Err(
             "Could not find a folder for the cli artifacts, set either the \
-                 HOME or NITRO_CLI_ARTIFACTS"
+             HOME or NITRO_CLI_ARTIFACTS"
                 .to_string(),
         )
     }

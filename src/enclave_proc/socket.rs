@@ -53,7 +53,7 @@ impl EnclaveProcSock {
         &self.socket_path.as_path()
     }
 
-    pub fn set_path(&mut self, socket_path: String) {
+    pub fn set_path(&mut self, socket_path: PathBuf) {
         self.socket_path = socket_path;
     }
 

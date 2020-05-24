@@ -16,6 +16,7 @@ use crate::common::{enclave_proc_command_send_single, receive_from_stream};
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 
 /// A listener which waits for external connections.
+#[derive(Default)]
 pub struct ConnectionListener {
     /// The epoll descriptor used to register new connections.
     epoll_fd: RawFd,
@@ -53,7 +54,7 @@ impl ConnectionListener {
     }
 
     /// Initialize the connection listener.
-    pub fn start(&mut self, enclave_id: &String) -> io::Result<()> {
+    pub fn start(&mut self, enclave_id: &str) -> io::Result<()> {
         // Obtain the socket to listen on.
         self.socket = EnclaveProcSock::new(enclave_id)?;
 
@@ -141,7 +142,7 @@ impl ConnectionListener {
         let mut self_conn = UnixStream::connect(self.socket.get_path())
             .ok_or_exit("Failed to connect to our own socket.");
         enclave_proc_command_send_single::<EmptyArgs>(
-            &EnclaveProcessCommandType::ConnectionListenerStop,
+            EnclaveProcessCommandType::ConnectionListenerStop,
             None,
             &mut self_conn,
         )

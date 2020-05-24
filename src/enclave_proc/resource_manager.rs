@@ -177,7 +177,7 @@ impl MemoryRegion {
     ) -> NitroCliResult<()> {
         if region_offset
             .checked_add(size)
-            .ok_or("Memory overflow".to_string())?
+            .ok_or_else(|| "Memory overflow".to_string())?
             > self.mem_size as usize
         {
             return Err("Out of region".to_string());
@@ -321,7 +321,7 @@ impl EnclaveHandle {
             .map_err(|e| format!("Failed to open device file: {:?}", e))?;
         let enc_type: c_ulong = 0;
         let enc_fd = unsafe { libc::ioctl(dev_file.as_raw_fd(), KVM_CREATE_VM as _, &enc_type) };
-        let flags: u64 = if debug_mode { DEBUG_FLAG as u64 } else { 0 };
+        let flags: u64 = if debug_mode { u64::from(DEBUG_FLAG) } else { 0 };
 
         if enc_fd < 0 {
             return Err("Failed to get enclave device descriptor.".to_string());
@@ -385,7 +385,7 @@ impl EnclaveHandle {
         let eif_file = self
             .eif_file
             .as_mut()
-            .ok_or("Cannot get eif_file".to_string())?;
+            .ok_or_else(|| "Cannot get eif_file".to_string())?;
 
         write_eif_to_regions(eif_file, regions)?;
 
@@ -441,7 +441,7 @@ impl EnclaveHandle {
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_ENCLAVE_START as _, &mut start) };
 
         if rc < 0 {
-            return Err(format!("Failed to start enclave: {}", rc).to_string());
+            return Err(format!("Failed to start enclave: {}", rc));
         }
 
         connection.eprintln(
@@ -658,24 +658,24 @@ fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroC
         if total_written
             >= file_size
                 .checked_add(OFFSET_IMGFORMAT)
-                .ok_or("Memory overflow".to_string())?
+                .ok_or_else(|| "Memory overflow".to_string())?
         {
             // All bytes have been written
             break;
         }
         if total_written
             .checked_add(region.mem_size as usize)
-            .ok_or("Memory overflow".to_string())?
+            .ok_or_else(|| "Memory overflow".to_string())?
             < OFFSET_IMGFORMAT
         {
             // All bytes need to be skiped to get to OFFSET_IMGFORMAT
         } else {
-            let offset = OFFSET_IMGFORMAT.checked_sub(total_written).unwrap_or(0);
+            let offset = OFFSET_IMGFORMAT.saturating_sub(total_written);
             let bytes_left_in_file = file_size
                 .checked_add(OFFSET_IMGFORMAT)
-                .ok_or("Memory overflow".to_string())?
+                .ok_or_else(|| "Memory overflow".to_string())?
                 .checked_sub(total_written)
-                .ok_or("Corruption, written more than file size".to_string())?;
+                .ok_or_else(|| "Corruption, written more than file size".to_string())?;
             let size = std::cmp::min(bytes_left_in_file, region.mem_size as usize - offset);
             region.fill_from_file(eif_file, offset, size)?;
         }
@@ -686,7 +686,7 @@ fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroC
 }
 
 /// Release the enclave and vCPU descriptors.
-fn release_enclave_descriptors(enc_fd: RawFd, cpu_fds: &Vec<RawFd>) -> NitroCliResult<()> {
+fn release_enclave_descriptors(enc_fd: RawFd, cpu_fds: &[RawFd]) -> NitroCliResult<()> {
     // Close vCPU descriptors.
     for cpu_fd in cpu_fds.iter() {
         let rc = unsafe { libc::close(*cpu_fd) };

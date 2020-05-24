@@ -190,6 +190,30 @@ command-executer: build-setup build-container .build-command-executer
 
 nitro-tests: build-setup build-container .build-nitro-tests
 
+nitro-format: build-setup build-container
+	$(DOCKER) run \
+		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
+		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
+		$(CONTAINER_TAG) bin/bash -c \
+			'source /root/.cargo/env && \
+			cargo fmt --manifest-path=/nitro_src/Cargo.toml -q -- --check'
+
+nitro-clippy: build-setup build-container
+	$(DOCKER) run \
+		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
+		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
+		$(CONTAINER_TAG) bin/bash -c \
+			'source /root/.cargo/env && \
+			cargo clippy --manifest-path=/nitro_src/Cargo.toml'
+
+nitro-audit: build-setup build-container
+	$(DOCKER) run \
+		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
+		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
+		$(CONTAINER_TAG) bin/bash -c \
+			'source /root/.cargo/env && \
+			cargo audit -f /nitro_src/Cargo.lock'
+
 # See .build-container rule for explanation.
 .build-nitro-cli-poweruser: $(shell find $(BASE_PATH)/cli_poweruser/src -name "*.rs")
 	$(DOCKER) run \

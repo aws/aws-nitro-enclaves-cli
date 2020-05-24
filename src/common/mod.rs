@@ -18,7 +18,7 @@ pub type NitroCliResult<T> = Result<T, String>;
 pub const ENCLAVE_PROC_WAIT_TIMEOUT_MSEC: isize = 3000;
 pub const MSG_ENCLAVE_CONFIRM: u64 = 0xEEC0;
 
-const SOCKETS_DIR_PATH_ENV_VAR: &str = "NITRO_CLI_SOCKETS_PATH";
+pub const SOCKETS_DIR_PATH_ENV_VAR: &str = "NITRO_CLI_SOCKETS_PATH";
 const SOCKETS_DIR_PATH: &str = "/var/run/nitro_enclaves";
 
 /// The type of commands that can be sent to an enclave process.

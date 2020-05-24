@@ -200,7 +200,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::process::Command;
-    use std::sync::{Arc, Mutex, Condvar};
+    use std::sync::{Arc, Condvar, Mutex};
 
     const THREADS_STR: &str = "Threads:";
     const TMP_DIR: &str = "./npe";
@@ -220,7 +220,6 @@ mod tests {
 
         substr.parse().unwrap()
     }
-
 
     /// Tests that get_epoll_fd() returns the expected epoll_fd.
     #[test]
@@ -259,16 +258,20 @@ mod tests {
 
         if let Ok(copy_sock1) = copy_sock1 {
             let mut cli_evt = EpollEvent::new(EpollFlags::EPOLLIN, copy_sock1.into_raw_fd() as u64);
-            let _ = epoll::epoll_ctl(connection_listener.epoll_fd,
-                                           EpollOp::EpollCtlAdd,
-                                           sock1.as_raw_fd(),
-                                           &mut cli_evt);
+            let _ = epoll::epoll_ctl(
+                connection_listener.epoll_fd,
+                EpollOp::EpollCtlAdd,
+                sock1.as_raw_fd(),
+                &mut cli_evt,
+            );
             // Second add should return Err(Sys(EEXIST)), as sock1 is already registed
             // with connection_listener.epoll_fd
-            let result = epoll::epoll_ctl(connection_listener.epoll_fd,
-                                           EpollOp::EpollCtlAdd,
-                                           sock1.as_raw_fd(),
-                                           &mut cli_evt);
+            let result = epoll::epoll_ctl(
+                connection_listener.epoll_fd,
+                EpollOp::EpollCtlAdd,
+                sock1.as_raw_fd(),
+                &mut cli_evt,
+            );
 
             assert_eq!(result.is_err(), true);
         }
@@ -284,75 +287,82 @@ mod tests {
 
         let resources_dir = get_sockets_dir_path();
 
-            let path_existed = resources_dir.as_path().exists();
-            let _ = fs::create_dir(resources_dir.as_path());
-            let dummy_sock_name = "run_connection_stop.sock";
-            let dummy_sock_path = format!("{}/{}", resources_dir.as_path().to_str().unwrap(), dummy_sock_name);
+        let path_existed = resources_dir.as_path().exists();
+        let _ = fs::create_dir(resources_dir.as_path());
+        let dummy_sock_name = "run_connection_stop.sock";
+        let dummy_sock_path = format!(
+            "{}/{}",
+            resources_dir.as_path().to_str().unwrap(),
+            dummy_sock_name
+        );
 
-            // Remove pre-existing socket file
-            let _ = std::fs::remove_file(&dummy_sock_path);
+        // Remove pre-existing socket file
+        let _ = std::fs::remove_file(&dummy_sock_path);
 
-            let mut connection_listener = ConnectionListener::new();
-            connection_listener.socket.set_path(PathBuf::from(&dummy_sock_path));
+        let mut connection_listener = ConnectionListener::new();
+        connection_listener
+            .socket
+            .set_path(PathBuf::from(&dummy_sock_path));
 
-            // Get number of running threads before spawning the listener thread
-            let out_cmd0 = Command::new("cat")
-                                  .arg(format!("/proc/{}/status", std::process::id()))
-                                  .output()
-                                  .expect("Failed to run cat");
-            let out0 = std::str::from_utf8(&out_cmd0.stdout).unwrap();
-            let crt_num_threads0 = get_num_threads_from_status_output(out0.to_string());
+        // Get number of running threads before spawning the listener thread
+        let out_cmd0 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out0 = std::str::from_utf8(&out_cmd0.stdout).unwrap();
+        let crt_num_threads0 = get_num_threads_from_status_output(out0.to_string());
 
-            let pair = Arc::new((Mutex::new(false), Condvar::new()));
-            let pair2 = pair.clone();
+        let pair = Arc::new((Mutex::new(false), Condvar::new()));
+        let pair2 = pair.clone();
 
-            let listener_thread = thread::spawn(move || {
-                                                    {
-                                                        let (lock, cvar) = &*pair2;
-                                                        let mut started = lock.lock().unwrap();
-                                                        *started = true;
-                                                        cvar.notify_one();
-                                                    }
-                                                    connection_listener.connection_listener_run();
-                                                });
-
-            // Allow thread to finish spawning
-            let (lock, cvar) = &*pair;
-            let mut started = lock.lock().unwrap();
-            while !*started {
-                started = cvar.wait(started).unwrap();
+        let listener_thread = thread::spawn(move || {
+            {
+                let (lock, cvar) = &*pair2;
+                let mut started = lock.lock().unwrap();
+                *started = true;
+                cvar.notify_one();
             }
+            connection_listener.connection_listener_run();
+        });
 
-            // Check that the listener thread is running
-            let out_cmd1 = Command::new("cat")
-                                   .arg(format!("/proc/{}/status", std::process::id()))
-                                   .output()
-                                   .expect("Failed to run cat");
-            let out1 = std::str::from_utf8(&out_cmd1.stdout).unwrap();
-            let crt_num_threads1 = get_num_threads_from_status_output(out1.to_string());
-            assert!(crt_num_threads0 < crt_num_threads1);
+        // Allow thread to finish spawning
+        let (lock, cvar) = &*pair;
+        let mut started = lock.lock().unwrap();
+        while !*started {
+            started = cvar.wait(started).unwrap();
+        }
 
-            let my_stream = UnixStream::connect(&dummy_sock_path);
+        // Check that the listener thread is running
+        let out_cmd1 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out1 = std::str::from_utf8(&out_cmd1.stdout).unwrap();
+        let crt_num_threads1 = get_num_threads_from_status_output(out1.to_string());
+        assert!(crt_num_threads0 < crt_num_threads1);
 
-            if let Ok(mut my_stream) = my_stream {
-                // Close the listener thread
-                let cmd = EnclaveProcessCommandType::ConnectionListenerStop;
-                let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
-            }
+        let my_stream = UnixStream::connect(&dummy_sock_path);
 
-            // Wait for thread to join after exiting
-            listener_thread.join().expect("Failed to join on the associated thread");
+        if let Ok(mut my_stream) = my_stream {
+            // Close the listener thread
+            let cmd = EnclaveProcessCommandType::ConnectionListenerStop;
+            let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
+        }
 
-            // Check number of threads after closing the listener thread
-            let out_cmd2 = Command::new("cat")
-                                   .arg(format!("/proc/{}/status", std::process::id()))
-                                   .output()
-                                   .expect("Failed to run cat");
-            let out2 = std::str::from_utf8(&out_cmd2.stdout).unwrap();
-            let crt_num_threads2 = get_num_threads_from_status_output(out2.to_string());
-            assert_eq!(crt_num_threads0, crt_num_threads2);
-            assert!(crt_num_threads2 < crt_num_threads1);
+        // Wait for thread to join after exiting
+        listener_thread
+            .join()
+            .expect("Failed to join on the associated thread");
 
+        // Check number of threads after closing the listener thread
+        let out_cmd2 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out2 = std::str::from_utf8(&out_cmd2.stdout).unwrap();
+        let crt_num_threads2 = get_num_threads_from_status_output(out2.to_string());
+        assert_eq!(crt_num_threads0, crt_num_threads2);
+        assert!(crt_num_threads2 < crt_num_threads1);
 
         if !path_existed {
             // Remove whole resources_dir
@@ -381,91 +391,98 @@ mod tests {
 
         let _ = fs::create_dir(resources_dir.as_path());
 
+        let dummy_sock_name = "run_describe.sock";
+        let dummy_sock_path = format!(
+            "{}/{}",
+            resources_dir.as_path().to_str().unwrap(),
+            dummy_sock_name
+        );
 
-            let dummy_sock_name = "run_describe.sock";
-            let dummy_sock_path = format!("{}/{}", resources_dir.as_path().to_str().unwrap(), dummy_sock_name);
+        // Remove pre-existing socket file
+        let _ = std::fs::remove_file(&dummy_sock_path);
 
-            // Remove pre-existing socket file
-            let _ = std::fs::remove_file(&dummy_sock_path);
+        let mut connection_listener = ConnectionListener::new();
+        connection_listener
+            .socket
+            .set_path(PathBuf::from(&dummy_sock_path));
 
-            let mut connection_listener = ConnectionListener::new();
-            connection_listener.socket.set_path(PathBuf::from(&dummy_sock_path));
+        // Get number of running threads before spawning the listener thread
+        let out_cmd0 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out0 = std::str::from_utf8(&out_cmd0.stdout).unwrap();
+        let crt_num_threads0 = get_num_threads_from_status_output(out0.to_string());
 
-            // Get number of running threads before spawning the listener thread
-            let out_cmd0 = Command::new("cat")
-                                  .arg(format!("/proc/{}/status", std::process::id()))
-                                  .output()
-                                  .expect("Failed to run cat");
-            let out0 = std::str::from_utf8(&out_cmd0.stdout).unwrap();
-            let crt_num_threads0 = get_num_threads_from_status_output(out0.to_string());
+        let pair = Arc::new((Mutex::new(false), Condvar::new()));
+        let pair2 = pair.clone();
 
-            let pair = Arc::new((Mutex::new(false), Condvar::new()));
-            let pair2 = pair.clone();
-
-            let conn_clone = connection_listener.clone();
-            let listener_thread = thread::spawn(move || {
-                                                    {
-                                                        let (lock, cvar) = &*pair2;
-                                                        let mut started = lock.lock().unwrap();
-                                                        *started = true;
-                                                        cvar.notify_one();
-                                                    }
-                                                    &conn_clone.connection_listener_run();
-                                                });
-
-            // Allow thread to finish spawning
-            let (lock, cvar) = &*pair;
-            let mut started = lock.lock().unwrap();
-            while !*started {
-                started = cvar.wait(started).unwrap();
+        let conn_clone = connection_listener.clone();
+        let listener_thread = thread::spawn(move || {
+            {
+                let (lock, cvar) = &*pair2;
+                let mut started = lock.lock().unwrap();
+                *started = true;
+                cvar.notify_one();
             }
+            &conn_clone.connection_listener_run();
+        });
 
-            // Check that the listener thread is running
-            let out_cmd1 = Command::new("cat")
-                                   .arg(format!("/proc/{}/status", std::process::id()))
-                                   .output()
-                                   .expect("Failed to run cat");
-            let out1 = std::str::from_utf8(&out_cmd1.stdout).unwrap();
-            let crt_num_threads1 = get_num_threads_from_status_output(out1.to_string());
-            assert!(crt_num_threads0 < crt_num_threads1);
+        // Allow thread to finish spawning
+        let (lock, cvar) = &*pair;
+        let mut started = lock.lock().unwrap();
+        while !*started {
+            started = cvar.wait(started).unwrap();
+        }
 
-            let my_stream = UnixStream::connect(&dummy_sock_path);
+        // Check that the listener thread is running
+        let out_cmd1 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out1 = std::str::from_utf8(&out_cmd1.stdout).unwrap();
+        let crt_num_threads1 = get_num_threads_from_status_output(out1.to_string());
+        assert!(crt_num_threads0 < crt_num_threads1);
 
-            if let Ok(mut my_stream) = my_stream {
-                // Run a command other than ConnectionListenerStop
-                let cmd = EnclaveProcessCommandType::Describe;
-                let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
-            }
+        let my_stream = UnixStream::connect(&dummy_sock_path);
 
-            // Check that the listener thread is still running
-            let out_cmd2 = Command::new("cat")
-                                   .arg(format!("/proc/{}/status", std::process::id()))
-                                   .output()
-                                   .expect("Failed to run cat");
-            let out2 = std::str::from_utf8(&out_cmd2.stdout).unwrap();
-            let crt_num_threads2 = get_num_threads_from_status_output(out2.to_string());
-            assert!(crt_num_threads0 < crt_num_threads2);
+        if let Ok(mut my_stream) = my_stream {
+            // Run a command other than ConnectionListenerStop
+            let cmd = EnclaveProcessCommandType::Describe;
+            let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
+        }
 
-            let my_stream = UnixStream::connect(&dummy_sock_path);
+        // Check that the listener thread is still running
+        let out_cmd2 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out2 = std::str::from_utf8(&out_cmd2.stdout).unwrap();
+        let crt_num_threads2 = get_num_threads_from_status_output(out2.to_string());
+        assert!(crt_num_threads0 < crt_num_threads2);
 
-            if let Ok(mut my_stream) = my_stream {
-                // Close the listener thread
-                let cmd = EnclaveProcessCommandType::ConnectionListenerStop;
-                let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
+        let my_stream = UnixStream::connect(&dummy_sock_path);
 
-                // Wait for the thread to join after exiting
-                listener_thread.join().expect("Failed to join on the associated thread");
-            }
+        if let Ok(mut my_stream) = my_stream {
+            // Close the listener thread
+            let cmd = EnclaveProcessCommandType::ConnectionListenerStop;
+            let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
 
-            // Check number of threads after closing the listener thread
-            let out_cmd3 = Command::new("cat")
-                                   .arg(format!("/proc/{}/status", std::process::id()))
-                                   .output()
-                                   .expect("Failed to run cat");
-            let out3 = std::str::from_utf8(&out_cmd3.stdout).unwrap();
-            let crt_num_threads3 = get_num_threads_from_status_output(out3.to_string());
-            assert_eq!(crt_num_threads0, crt_num_threads3);
-            assert!(crt_num_threads3 < crt_num_threads1);
+            // Wait for the thread to join after exiting
+            listener_thread
+                .join()
+                .expect("Failed to join on the associated thread");
+        }
+
+        // Check number of threads after closing the listener thread
+        let out_cmd3 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out3 = std::str::from_utf8(&out_cmd3.stdout).unwrap();
+        let crt_num_threads3 = get_num_threads_from_status_output(out3.to_string());
+        assert_eq!(crt_num_threads0, crt_num_threads3);
+        assert!(crt_num_threads3 < crt_num_threads1);
 
         if !path_existed {
             // Remove whole resources_dir
@@ -479,6 +496,5 @@ mod tests {
         if let Ok(old_log_path) = old_log_path {
             env::set_var(SOCKETS_DIR_PATH_ENV_VAR, old_log_path);
         }
-
     }
 }

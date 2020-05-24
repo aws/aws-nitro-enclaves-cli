@@ -35,14 +35,14 @@ fn main() {
                 enclave_proc_spawn(&logger).ok_or_exit("Enclave process spawning failed.");
 
             enclave_proc_command_send_single(
-                &EnclaveProcessCommandType::Run,
+                EnclaveProcessCommandType::Run,
                 Some(&run_args),
                 &mut comm,
             )
             .ok_or_exit("Failed to send single command.");
+
             info!("Sent command: Run");
             replies.push(comm);
-
             enclave_process_handle_all_replies::<EnclaveRunInfo>(&mut replies, 0, false)
                 .ok_or_exit(args.usage());
         }
@@ -52,7 +52,7 @@ fn main() {
                 .ok_or_exit("Failed to open socket.");
             // TODO: Replicate output of old CLI on invalid enclave IDs.
             enclave_proc_command_send_single::<EmptyArgs>(
-                &EnclaveProcessCommandType::Terminate,
+                EnclaveProcessCommandType::Terminate,
                 None,
                 &mut comm,
             )
@@ -65,7 +65,7 @@ fn main() {
         }
         ("describe-enclaves", _) => {
             let (comms, comm_errors) = enclave_proc_command_send_all::<EmptyArgs>(
-                &EnclaveProcessCommandType::Describe,
+                EnclaveProcessCommandType::Describe,
                 None,
             )
             .ok_or_exit("Failed to broadcast describe command.");

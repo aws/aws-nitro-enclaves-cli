@@ -90,9 +90,9 @@ impl DockerUtil {
                     CredentialsError(format!("JSON was not well-formatted: {}", err.to_string()))
                 })?;
 
-            let auths = config_json.get("auths").ok_or_else(|| CredentialsError(
-                "Could not find auths key in config JSON".to_string(),
-            ))?;
+            let auths = config_json.get("auths").ok_or_else(|| {
+                CredentialsError("Could not find auths key in config JSON".to_string())
+            })?;
 
             if let Value::Object(auths) = auths {
                 for (registry_name, registry_auths) in auths.iter() {
@@ -102,9 +102,9 @@ impl DockerUtil {
 
                     let auth = registry_auths
                         .get("auth")
-                        .ok_or_else(|| CredentialsError(
-                            "Could not find auth key in config JSON".to_string(),
-                        ))?
+                        .ok_or_else(|| {
+                            CredentialsError("Could not find auth key in config JSON".to_string())
+                        })?
                         .to_string();
 
                     let auth = auth.replace(r#"""#, "");

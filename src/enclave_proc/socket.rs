@@ -39,11 +39,11 @@ impl Drop for EnclaveProcSock {
 }
 
 impl EnclaveProcSock {
-    pub fn new(enclave_id: &String) -> io::Result<Self> {
+    pub fn new(enclave_id: &str) -> io::Result<Self> {
         let socket_path = get_socket_path(enclave_id)?;
 
         Ok(EnclaveProcSock {
-            socket_path: socket_path.clone(),
+            socket_path,
             remove_listener_thread: None,
             requested_remove: Arc::new(AtomicBool::new(false)),
         })

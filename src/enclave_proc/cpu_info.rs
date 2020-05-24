@@ -37,7 +37,7 @@ impl CpuInfos {
 
     pub fn get_value(mut line: String) -> Result<u32, String> {
         line.retain(|c| !c.is_whitespace());
-        let tokens: Vec<&str> = line.split(":").collect();
+        let tokens: Vec<&str> = line.split(':').collect();
         let token = *tokens.get(1).unwrap();
 
         u32::from_str(token).map_err(|err| format!("{}", err))
@@ -46,8 +46,8 @@ impl CpuInfos {
     pub fn get_cpu_info() -> Result<Vec<CpuInfo>, String> {
         let mut result: Vec<CpuInfo> = Vec::new();
         let mut ids: Vec<u32> = Vec::new();
-        let file =
-            File::open("/proc/cpuinfo").map_err(|_err| format!("Could not open /proc/cpuinfo"))?;
+        let file = File::open("/proc/cpuinfo")
+            .map_err(|err| format!("Could not open /proc/cpuinfo: {}", err))?;
         let mut reader = BufReader::new(file);
 
         loop {
@@ -94,7 +94,7 @@ impl CpuInfos {
         None
     }
 
-    pub fn is_hyper_threading_on(cpu_info: &Vec<CpuInfo>) -> bool {
+    pub fn is_hyper_threading_on(cpu_info: &[CpuInfo]) -> bool {
         for i in 0..cpu_info.len() - 1 {
             if cpu_info.get(i).unwrap().core_id == cpu_info.get(i + 1).unwrap().core_id {
                 return true;
@@ -108,7 +108,7 @@ impl CpuInfos {
             return Err("cpu_count should be an even number.".to_string());
         }
 
-        let mut count: u32 = cpu_count.clone();
+        let mut count: u32 = cpu_count;
         let mut result: Vec<u32> = Vec::new();
 
         for info in self.core_ids.iter() {
@@ -122,9 +122,10 @@ impl CpuInfos {
             }
         }
 
-        let valid_cpus = match self.hyper_threading {
-            true => self.core_ids.len() - 2,
-            _ => self.core_ids.len() - 1,
+        let valid_cpus = if self.hyper_threading {
+            self.core_ids.len() - 2
+        } else {
+            self.core_ids.len() - 1
         };
 
         Err(format!(
@@ -133,7 +134,7 @@ impl CpuInfos {
         ))
     }
 
-    pub fn contains_sibling_pairs(&self, cpu_ids: &Vec<u32>) -> bool {
+    pub fn contains_sibling_pairs(&self, cpu_ids: &[u32]) -> bool {
         let mut core_ids: HashSet<u32> = HashSet::new();
 
         for id in cpu_ids.iter() {
@@ -149,7 +150,7 @@ impl CpuInfos {
             }
         }
 
-        core_ids.len() == 0
+        core_ids.is_empty()
     }
 
     pub fn get_cpu_candidates(&self) -> Vec<u32> {
@@ -163,7 +164,7 @@ impl CpuInfos {
         result
     }
 
-    pub fn check_cpu_ids(&self, cpu_ids: &Vec<u32>) -> Result<(), String> {
+    pub fn check_cpu_ids(&self, cpu_ids: &[u32]) -> Result<(), String> {
         if self.hyper_threading && cpu_ids.len() % 2 != 0 {
             return Err(
                 "Hyper-threading is enabled, so sibling pairs need to be provided".to_string(),
@@ -266,11 +267,13 @@ mod tests {
         let cpu_infos = CpuInfos::new();
 
         if let Ok(cpu_infos) = cpu_infos {
-
             for i in 0..cpu_infos.core_ids.len() {
                 let cpu_id = i as u32;
                 let index = cpu_infos.core_ids.iter().position(|r| r.cpu_id == cpu_id);
-                assert_eq!(cpu_infos.get_core_id(cpu_id).unwrap(), cpu_infos.core_ids[index.unwrap()].core_id);
+                assert_eq!(
+                    cpu_infos.get_core_id(cpu_id).unwrap(),
+                    cpu_infos.core_ids[index.unwrap()].core_id
+                );
             }
         }
     }
@@ -364,7 +367,12 @@ mod tests {
         let cpu_infos = CpuInfos::new();
 
         if let Ok(cpu_infos) = cpu_infos {
-            let cpu_ids = cpu_infos.core_ids.iter().filter(|r| r.core_id == 0).map(|r| r.cpu_id).collect::<Vec<_>>();
+            let cpu_ids = cpu_infos
+                .core_ids
+                .iter()
+                .filter(|r| r.core_id == 0)
+                .map(|r| r.cpu_id)
+                .collect::<Vec<_>>();
 
             let result = cpu_infos.contains_sibling_pairs(&cpu_ids);
             if CpuInfos::is_hyper_threading_on(&cpu_infos.core_ids) {
@@ -377,13 +385,13 @@ mod tests {
 
     #[test]
     fn test_get_cpu_candidates() {
-       let cpu_infos = CpuInfos::new();
+        let cpu_infos = CpuInfos::new();
 
-       if let Ok(cpu_infos) = cpu_infos {
-           let candidate_cpus = cpu_infos.get_cpu_candidates();
+        if let Ok(cpu_infos) = cpu_infos {
+            let candidate_cpus = cpu_infos.get_cpu_candidates();
 
-           assert!(candidate_cpus.len() > 0);
-       }
+            assert!(candidate_cpus.len() > 0);
+        }
     }
 
     #[test]
@@ -400,7 +408,8 @@ mod tests {
 
                 assert!(result.is_err());
                 if let Err(err_str) = result {
-                    assert!(err_str.eq("Hyper-threading is enabled, so sibling pairs need to be provided"));
+                    assert!(err_str
+                        .eq("Hyper-threading is enabled, so sibling pairs need to be provided"));
                 }
             } else {
                 let mut cpu_ids = Vec::<u32>::new();

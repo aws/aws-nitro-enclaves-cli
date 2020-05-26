@@ -69,7 +69,7 @@ fn run_terminate(
     mut thread_stream: UnixStream,
     mut enclave_manager: EnclaveManager,
 ) {
-    terminate_enclaves(&mut enclave_manager, &connection).unwrap_or_else(|e| {
+    terminate_enclaves(&mut enclave_manager, Some(&connection)).unwrap_or_else(|e| {
         notify_error_with_conn(&format!("Failed to terminate enclave: {}", e), &connection);
     });
 
@@ -160,7 +160,7 @@ fn handle_command(
                 .map_err(|e| format!("Failed to get run arguments: {}", e))?;
             info!("Run args = {:?}", run_args);
 
-            *enclave_manager = run_enclaves(&run_args, connection)
+            *enclave_manager = run_enclaves(&run_args, Some(connection))
                 .map_err(|e| format!("Failed to run enclave: {}", e))?;
 
             info!("Enclave ID = {}", enclave_manager.enclave_id);

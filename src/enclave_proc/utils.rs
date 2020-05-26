@@ -178,7 +178,7 @@ mod tests {
 
         if let Ok(result) = result {
             let this_enclave_id = &result.enclave_id;
-            assert!(this_enclave_id.eq(&get_enclave_id(&result)));
+            assert!(this_enclave_id.eq(&result.enclave_id));
 
             assert_eq!(enclave_cid, result.enclave_cid);
             assert_eq!(cpu_ids.len(), result.cpu_ids.len());

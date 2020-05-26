@@ -171,10 +171,10 @@ mod tests {
         let cmd = EnclaveProcessCommandType::Describe;
         let args: std::option::Option<&EmptyArgs> = None;
 
-        let result0 = enclave_proc_command_send_single::<EmptyArgs>(&cmd, args, &mut sock0);
+        let result0 = enclave_proc_command_send_single::<EmptyArgs>(cmd, args, &mut sock0);
         assert!(result0.is_ok());
 
-        let result1 = receive_command_type(&mut sock1);
+        let result1 = receive_from_stream::<EnclaveProcessCommandType>(&mut sock1);
         assert!(result1.is_ok());
         assert_eq!(result1.unwrap(), EnclaveProcessCommandType::Describe);
     }

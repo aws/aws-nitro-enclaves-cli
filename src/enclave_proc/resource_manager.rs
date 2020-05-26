@@ -17,6 +17,7 @@ use crate::common::notify_error;
 use crate::common::{ExitGracefully, NitroCliResult};
 use crate::enclave_proc::commands::{DEBUG_FLAG, ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 use crate::enclave_proc::connection::Connection;
+use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::utils::get_run_enclaves_info;
 
 pub const KVM_CREATE_VM: u64 = nix::request_code_none!(KVMIO, 0x01) as _;
@@ -342,7 +343,7 @@ impl EnclaveHandle {
     }
 
     /// Initialize the enclave environment and start the enclave.
-    fn create_enclave(&mut self, connection: &Connection) -> NitroCliResult<String> {
+    fn create_enclave(&mut self, connection: Option<&Connection>) -> NitroCliResult<String> {
         self.init_memory(connection)?;
         self.init_cpus()?;
         let enclave_start = self.start(connection)?;
@@ -362,7 +363,8 @@ impl EnclaveHandle {
             self.allocated_memory_mib,
         )?;
 
-        connection.println(
+        safe_conn_println(
+            connection,
             serde_json::to_string_pretty(&info)
                 .map_err(|err| format!("{:?}", err))?
                 .as_str(),
@@ -372,9 +374,9 @@ impl EnclaveHandle {
     }
 
     /// Allocate memory and provide it to the enclave.
-    fn init_memory(&mut self, connection: &Connection) -> NitroCliResult<()> {
+    fn init_memory(&mut self, connection: Option<&Connection>) -> NitroCliResult<()> {
         // Allocate the memory regions needed by the enclave.
-        connection.eprintln("Start allocating memory...")?;
+        safe_conn_eprintln(connection, "Start allocating memory...")?;
 
         let regions = self.resource_allocator.allocate()?;
         self.allocated_memory_mib = regions.iter().fold(0, |mut acc, val| {
@@ -436,7 +438,7 @@ impl EnclaveHandle {
     }
 
     /// Start an enclave after providing it with its necessary resources.
-    fn start(&mut self, connection: &Connection) -> NitroCliResult<EnclaveStartMetadata> {
+    fn start(&mut self, connection: Option<&Connection>) -> NitroCliResult<EnclaveStartMetadata> {
         let mut start = EnclaveStartMetadata::new(&self);
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_ENCLAVE_START as _, &mut start) };
 
@@ -444,7 +446,8 @@ impl EnclaveHandle {
             return Err(format!("Failed to start enclave: {}", rc));
         }
 
-        connection.eprintln(
+        safe_conn_eprintln(
+            connection,
             format!(
                 "Started enclave with enclave-cid: {}, memory: {} MiB, cpu-ids: {:?}",
                 { start.enclave_cid },
@@ -494,6 +497,7 @@ impl EnclaveHandle {
     fn clear(&mut self) {
         self.cpu_fds.clear();
         self.cpu_ids.clear();
+        self.allocated_memory_mib = 0;
         self.enclave_cid = Some(0);
         self.enc_fd = -1;
         self.slot_uid = 0;
@@ -563,7 +567,7 @@ impl EnclaveManager {
     ///
     /// The enclave handle is locked throughout enclave creation. This is fine, since we
     /// only expose the socket for CLI queries only after creation has completed.
-    pub fn run_enclave(&mut self, connection: &Connection) -> NitroCliResult<()> {
+    pub fn run_enclave(&mut self, connection: Option<&Connection>) -> NitroCliResult<()> {
         self.enclave_id = self
             .enclave_handle
             .lock()

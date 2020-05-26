@@ -124,3 +124,21 @@ impl Connection {
         stream.write_all(&reply_bytes).map_err(|e| e.to_string())
     }
 }
+
+/// Print a STDOUT message to a connection. Do nothing if the connection is missing.
+pub fn safe_conn_println(conn: Option<&Connection>, msg: &str) -> NitroCliResult<()> {
+    if conn.is_none() {
+        return Ok(());
+    }
+
+    conn.unwrap().println(msg)
+}
+
+/// Print a STDERR message to a connection. Do nothing if the connection is missing.
+pub fn safe_conn_eprintln(conn: Option<&Connection>, msg: &str) -> NitroCliResult<()> {
+    if conn.is_none() {
+        return Ok(());
+    }
+
+    conn.unwrap().eprintln(msg)
+}

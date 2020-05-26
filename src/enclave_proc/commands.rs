@@ -9,6 +9,7 @@ use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::json_output::EnclaveTerminateInfo;
 use crate::common::NitroCliResult;
 use crate::enclave_proc::connection::Connection;
+use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::CpuInfos;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
 use crate::enclave_proc::utils::get_enclave_describe_info;
@@ -23,7 +24,7 @@ pub const DEBUG_FLAG: u16 = 0x1;
 
 pub fn run_enclaves(
     args: &RunEnclavesArgs,
-    connection: &Connection,
+    connection: Option<&Connection>,
 ) -> NitroCliResult<EnclaveManager> {
     debug!("run_enclaves");
 
@@ -61,14 +62,15 @@ pub fn run_enclaves(
 
 pub fn terminate_enclaves(
     enclave_manager: &mut EnclaveManager,
-    connection: &Connection,
+    connection: Option<&Connection>,
 ) -> NitroCliResult<()> {
     let enclave_id = enclave_manager.enclave_id.clone();
 
     debug!("terminate_enclaves");
     enclave_manager.update_state(EnclaveState::Terminating)?;
     if let Err(err) = enclave_manager.terminate_enclave() {
-        connection.eprintln(
+        safe_conn_eprintln(
+            connection,
             format!(
                 "Warning: Failed to stop enclave {}\nError message: {:?}",
                 enclave_manager.enclave_id, err
@@ -79,7 +81,8 @@ pub fn terminate_enclaves(
     }
 
     enclave_manager.update_state(EnclaveState::Empty)?;
-    connection.eprintln(
+    safe_conn_eprintln(
+        connection,
         format!(
             "Successfully terminated enclave {}.",
             enclave_manager.enclave_id
@@ -88,7 +91,8 @@ pub fn terminate_enclaves(
     )?;
 
     // We notify the CLI of the termination's status.
-    connection.println(
+    safe_conn_println(
+        connection,
         serde_json::to_string_pretty(&EnclaveTerminateInfo::new(enclave_id, true))
             .map_err(|err| format!("{:?}", err))?
             .as_str(),

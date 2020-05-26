@@ -266,18 +266,11 @@ mod tests {
         let cpu_infos = CpuInfos::new();
 
         if let Ok(cpu_infos) = cpu_infos {
-            let cpu_id0 = 2;
-            let result0 = cpu_infos.get_core_id(cpu_id0);
 
-            if let Some(result0) = result0 {
-                assert_eq!(result0, 0);
-            }
-
-            let cpu_id1 = 0;
-            let result1 = cpu_infos.get_core_id(cpu_id1);
-
-            if let Some(result1) = result1 {
-                assert_eq!(result1, 0);
+            for i in 0..cpu_infos.core_ids.len() {
+                let cpu_id = i as u32;
+                let index = cpu_infos.core_ids.iter().position(|r| r.cpu_id == cpu_id);
+                assert_eq!(cpu_infos.get_core_id(cpu_id).unwrap(), cpu_infos.core_ids[index.unwrap()].core_id);
             }
         }
     }
@@ -371,14 +364,14 @@ mod tests {
         let cpu_infos = CpuInfos::new();
 
         if let Ok(cpu_infos) = cpu_infos {
-            let mut cpu_ids = Vec::<u32>::new();
-
-            cpu_ids.push(1);
-            cpu_ids.push(3);
+            let cpu_ids = cpu_infos.core_ids.iter().filter(|r| r.core_id == 0).map(|r| r.cpu_id).collect::<Vec<_>>();
 
             let result = cpu_infos.contains_sibling_pairs(&cpu_ids);
-
-            assert!(result);
+            if CpuInfos::is_hyper_threading_on(&cpu_infos.core_ids) {
+                assert!(result);
+            } else {
+                assert!(!result);
+            }
         }
     }
 

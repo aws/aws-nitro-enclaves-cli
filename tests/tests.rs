@@ -8,10 +8,11 @@ mod tests {
     use nitro_cli::common::commands_parser::{
         BuildEnclavesArgs, RunEnclavesArgs, TerminateEnclavesArgs,
     };
+    use nitro_cli::common::json_output::EnclaveDescribeInfo;
     use nitro_cli::enclave_proc::commands::{describe_enclaves, run_enclaves, terminate_enclaves};
-    use nitro_cli::enclave_proc::json_output::EnclaveDescribeInfo;
-    use nitro_cli::enclave_proc::json_output::{flags_to_string, get_enclave_describe_info};
-    use nitro_cli::enclave_proc::utils::generate_enclave_id;
+    use nitro_cli::enclave_proc::utils::{
+        flags_to_string, generate_enclave_id, get_enclave_describe_info,
+    };
     use nitro_cli::utils::Console;
     use nitro_cli::{build_enclaves, build_from_docker, enclave_console};
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
@@ -65,11 +66,11 @@ mod tests {
             .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "c9b8700292f8a1190270359c2f010f96f49216c38089bcc49f4b96841d7cc360430ad7c0eb7a840ffdc70b8465b8284c"
+            "ef88ef509be5b62eb5bcc74267bbd0904f47c0fd664e5e419d0055a0f321e7c4bdae25fd5ecae2554b882b4088c77e9e"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "cc0749fddbb889480234b93192ae55609c91dd415028ce3474d26d363c61722b87e0ce86086782c649e14d9629467c2b"
+            "f26275a4f280e8d35cbc7f628a20d65f00e282659a9e826be141fd0adc06e839175c94cff8ae97ea3d2d76261e16b6c0"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
@@ -108,11 +109,11 @@ mod tests {
             .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "7f43e4bf78806fb629b6c5297986fd8a33da83d4c4c22bdd18338f890a09a8fb00e33df94e6253862ce9af87af234c41"
+            "39b4df57e27ce11466b7bff76a15fefbcbea24341f970c3124b8e852808d86301555a9d9b2a8486dfcd1fbbb9dcc70ce"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "cc0749fddbb889480234b93192ae55609c91dd415028ce3474d26d363c61722b87e0ce86086782c649e14d9629467c2b"
+            "f26275a4f280e8d35cbc7f628a20d65f00e282659a9e826be141fd0adc06e839175c94cff8ae97ea3d2d76261e16b6c0"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
@@ -184,7 +185,7 @@ mod tests {
         let req_mem_size = args.memory_mib.clone();
         let req_nr_cpus: u64 = args.cpu_count.unwrap().try_into().unwrap();
         let debug_mode = args.debug_mode.clone();
-        let mut enclave_manager = run_enclaves(&args).expect("Run enclaves failed");
+        let mut enclave_manager = run_enclaves(&args, None).expect("Run enclaves failed");
         let enclave_cid = enclave_manager.get_console_resources().unwrap();
         if let Some(req_enclave_cid) = req_enclave_cid {
             assert_eq!(req_enclave_cid, enclave_cid);
@@ -223,11 +224,13 @@ mod tests {
         };
         let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");
 
-        terminate_enclaves(&mut enclave_manager).expect("Terminate enclaves failed");
+        terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
 
         let info = get_enclave_describe_info(&enclave_manager).unwrap();
-        let replies: Vec<EnclaveDescribeInfo> = vec![info];
-        assert_eq!(replies.len(), 0);
+
+        assert_eq!(info.enclave_cid, 0);
+        assert_eq!(info.cpu_count, 0);
+        assert_eq!(info.memory_mib, 0);
     }
 
     #[test]
@@ -287,7 +290,7 @@ mod tests {
             debug_mode: Some(false),
         };
 
-        let mut enclave_manager = run_enclaves(&run_args).expect("Run enclaves failed");
+        let mut enclave_manager = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let enclave_cid = enclave_manager.get_console_resources().unwrap();
 
         let info = get_enclave_describe_info(&enclave_manager).unwrap();
@@ -296,7 +299,7 @@ mod tests {
 
         assert_eq!(enclave_console(enclave_cid).is_err(), true);
 
-        terminate_enclaves(&mut enclave_manager).expect("Terminate enclaves failed");
+        terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
     }
 
     #[test]
@@ -326,7 +329,7 @@ mod tests {
             debug_mode: Some(true),
         };
 
-        let mut enclave_manager = run_enclaves(&run_args).expect("Run enclaves failed");
+        let mut enclave_manager = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let enclave_cid = enclave_manager.get_console_resources().unwrap();
 
         let info = get_enclave_describe_info(&enclave_manager).unwrap();
@@ -345,7 +348,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
 
-        terminate_enclaves(&mut enclave_manager).expect("Terminate enclaves failed");
+        terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
     }
 
     #[test]

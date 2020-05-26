@@ -241,7 +241,7 @@ mod tests {
         let connection_listener = ConnectionListener::new();
 
         let cmd = EnclaveProcessCommandType::Describe;
-        let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut sock0);
+        let _ = enclave_proc_command_send_single::<EmptyArgs>(cmd, None, &mut sock0);
 
         let result = connection_listener.handle_new_connection(sock1);
 
@@ -348,7 +348,7 @@ mod tests {
         if let Ok(mut my_stream) = my_stream {
             // Close the listener thread
             let cmd = EnclaveProcessCommandType::ConnectionListenerStop;
-            let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
+            let _ = enclave_proc_command_send_single::<EmptyArgs>(cmd, None, &mut my_stream);
         }
 
         // Wait for thread to join after exiting
@@ -451,7 +451,7 @@ mod tests {
         if let Ok(mut my_stream) = my_stream {
             // Run a command other than ConnectionListenerStop
             let cmd = EnclaveProcessCommandType::Describe;
-            let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
+            let _ = enclave_proc_command_send_single::<EmptyArgs>(cmd, None, &mut my_stream);
         }
 
         // Check that the listener thread is still running
@@ -468,7 +468,7 @@ mod tests {
         if let Ok(mut my_stream) = my_stream {
             // Close the listener thread
             let cmd = EnclaveProcessCommandType::ConnectionListenerStop;
-            let _ = enclave_proc_command_send_single::<EmptyArgs>(&cmd, None, &mut my_stream);
+            let _ = enclave_proc_command_send_single::<EmptyArgs>(cmd, None, &mut my_stream);
 
             // Wait for the thread to join after exiting
             listener_thread

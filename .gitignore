@@ -1,6 +1,7 @@
 *.o
 enclave
 build/
+.build*
 **/target
 **/*.rs.bk
 **/*o.cmd

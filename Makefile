@@ -81,13 +81,23 @@ driver-deps:
 	echo "Warning: kernel-header were not installed") \
 	&& echo "Successfully installed the nitro_cli_resource_allocator deps"
 
-build-container: tools/Dockerfile1804
+# In order to avoid executing the same rule everytime,
+# the build rules are prefixed by dot and are generating
+# a file with the same name via the touch command. This
+# change is required in order to capture the timestamp
+# of the rule.
+.build-container: tools/Dockerfile1804
 	docker image build -t $(CONTAINER_TAG) -f tools/Dockerfile1804 tools/ \
 		> $(OBJ_PATH)/build_container_output.log
+	touch $@
 
-.PHONY: build-setup
-build-setup:
+build-container: .build-container
+
+$(OBJ_PATH):
 	$(MKDIR) -p $(OBJ_PATH)
+
+# Build the $(OBJ_PATH) directory only if it does not exist.
+build-setup: | $(OBJ_PATH);
 
 nitro_cli_resource_allocator: drivers/nitro_cli_resource_allocator/nitro_cli_resource_allocator.c driver-deps
 	PREV_DIR=$$PWD && cd drivers/nitro_cli_resource_allocator/ && make && cd $$PREV_DIR
@@ -114,8 +124,8 @@ nc-vsock: nc-vsock.c build-setup
 init: init.c build-setup
 	$(CC) -o $(OBJ_PATH)/init $< -static -static-libgcc -flto
 
-.PHONY: nitro-cli
-nitro-cli: $(BASE_PATH)/src/main.rs build-setup build-container
+# See .build-container rule for explanation.
+.build-nitro-cli: $(BASE_PATH)/src
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -129,6 +139,9 @@ nitro-cli: $(BASE_PATH)/src/main.rs build-setup build-container
 			chmod -R 777 nitro_build '
 	ln -sf ../x86_64-unknown-linux-musl/release/nitro-cli \
 		${OBJ_PATH}/nitro_cli/release/nitro-cli
+	touch $@
+
+nitro-cli: build-setup build-container .build-nitro-cli
 
 .PHONY: nitro-cli-native
 nitro-cli-native:
@@ -137,8 +150,8 @@ nitro-cli-native:
 		--manifest-path=${BASE_PATH}/Cargo.toml \
 		--target-dir=${OBJ_PATH}/nitro_cli
 
-.PHONY: command-executer
-command-executer: $(BASE_PATH)/samples/command_executer/src/main.rs build-setup build-container
+# See .build-container rule for explanation.
+.build-command-executer: $(BASE_PATH)/samples/command_executer/src
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -150,9 +163,12 @@ command-executer: $(BASE_PATH)/samples/command_executer/src/main.rs build-setup 
 				--target=x86_64-unknown-linux-musl \
 				--target-dir=/nitro_build/command-executer  && \
 			chmod -R 777 nitro_build '
+	touch $@
 
-.PHONY: nitro-tests
-nitro-tests: $(BASE_PATH)/src/main.rs build-setup  build-container
+command-executer: build-setup build-container .build-command-executer
+
+# See .build-container rule for explanation.
+.build-nitro-tests: $(BASE_PATH)/tests
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -170,9 +186,12 @@ nitro-tests: $(BASE_PATH)/src/main.rs build-setup  build-container
 				jq -r "select(.profile.test == true) | .filenames[]" \
 					 > /nitro_build/test_executables.txt && \
 			chmod -R 777 nitro_build '
+	touch $@
 
-.PHONY: nitro-cli-poweruser
-nitro-cli-poweruser: $(BASE_PATH)/cli_poweruser/src/main.rs build-setup build-container
+nitro-tests: build-setup build-container .build-nitro-tests
+
+# See .build-container rule for explanation.
+.build-nitro-cli-poweruser: $(BASE_PATH)/cli_poweruser/src
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -184,9 +203,12 @@ nitro-cli-poweruser: $(BASE_PATH)/cli_poweruser/src/main.rs build-setup build-co
 				--target=x86_64-unknown-linux-musl \
 				--target-dir=/nitro_build/cli_poweruser  && \
 			chmod -R 777 nitro_build '
+	touch $@
 
-.PHONY: vsock-proxy
-vsock-proxy: $(BASE_PATH)/vsock_proxy/src/main.rs build-setup build-container
+nitro-cli-poweruser: build-setup build-container .build-nitro-cli-poweruser
+
+# See .build-container rule for explanation.
+.build-vsock-proxy: $(BASE_PATH)/vsock_proxy/src
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -200,6 +222,9 @@ vsock-proxy: $(BASE_PATH)/vsock_proxy/src/main.rs build-setup build-container
 			chmod -R 777 nitro_build '
 	ln -sf ../x86_64-unknown-linux-musl/release/vsock-proxy \
 		${OBJ_PATH}/vsock_proxy/release/vsock-proxy
+	touch $@
+
+vsock-proxy: build-setup build-container .build-vsock-proxy
 
 .PHONY: vsock-proxy-native
 vsock-proxy-native:

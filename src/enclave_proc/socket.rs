@@ -142,3 +142,111 @@ fn socket_removal_listener(
 
     debug!("Enclave process socket monitoring is done.");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::os::unix::net::UnixListener;
+    use std::process::Command;
+
+    const DUMMY_ENCLAVE_ID: &str = "i-0000000000000000-enc0123456789012345";
+    const THREADS_STR: &str = "Threads:";
+
+    /// Inspects the content of /proc/<PID>/status in order to
+    /// retrieve the number of threads running in the context of
+    /// process <PID>.
+    fn get_num_threads_from_status_output(status_str: String) -> u32 {
+        let start_idx = status_str.find(THREADS_STR);
+        let mut iter = status_str.chars();
+        iter.by_ref().nth(start_idx.unwrap() + THREADS_STR.len()); // skip "Threads:\t"
+        let slice = iter.as_str();
+
+        let new_str = slice.to_string();
+        let end_idx = new_str.find("\n"); // skip after the first '\n'
+        let substr = &slice[..end_idx.unwrap()];
+
+        substr.parse().unwrap()
+    }
+
+    /// Tests that the initial values of the EnclaveProcSock attributes match the
+    /// expected ones.
+    #[test]
+    fn test_enclaveprocsock_init() {
+        let socket = EnclaveProcSock::new(&DUMMY_ENCLAVE_ID.to_string());
+
+        assert!(socket.is_ok());
+
+        if let Ok(socket) = socket {
+            assert!(socket
+                .socket_path
+                .as_path()
+                .to_str()
+                .unwrap()
+                .contains("0123456789012345"));
+            assert!(socket.remove_listener_thread.is_none());
+            assert!(!socket.requested_remove.load(Ordering::SeqCst));
+        }
+    }
+
+    /// Tests that after removing the socket file by means other than `close()` do not
+    /// trigger a `socket.requested_remove` change.
+    #[test]
+    fn test_start_monitoring() {
+        let socket = EnclaveProcSock::new(&DUMMY_ENCLAVE_ID.to_string());
+
+        assert!(socket.is_ok());
+
+        if let Ok(mut socket) = socket {
+            let _ = UnixListener::bind(socket.get_path()).ok_or_exit("Error binding.");
+            let result = socket.start_monitoring();
+
+            assert!(result.is_ok());
+
+            // Remove socket file and expect `socket.requested_remove` to remain False
+            let _ = std::fs::remove_file(&socket.socket_path.as_path().to_str().unwrap());
+
+            assert!(!socket.requested_remove.load(Ordering::SeqCst));
+        }
+    }
+
+    /// Test that calling `close()` changes `socket.requested_remove` to True and
+    /// that the listener thread joins.
+    #[test]
+    fn test_close() {
+        let socket = EnclaveProcSock::new(&DUMMY_ENCLAVE_ID.to_string());
+
+        assert!(socket.is_ok());
+
+        // Get number of running threads before spawning the socket removal listener thread
+        let out_cmd0 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out0 = std::str::from_utf8(&out_cmd0.stdout).unwrap();
+        let crt_num_threads0 = get_num_threads_from_status_output(out0.to_string());
+
+        if let Ok(mut socket) = socket {
+            let _ = UnixListener::bind(socket.get_path()).ok_or_exit("Error binding.");
+            let result = socket.start_monitoring();
+
+            assert!(result.is_ok());
+
+            // Call `close_mut()` and expect `socket.requested_remove` to change to True
+            socket.close_mut();
+
+            assert!(socket.requested_remove.load(Ordering::SeqCst));
+        }
+
+        // Get number of running threads after closing the socket removal listener thread
+        let out_cmd1 = Command::new("cat")
+            .arg(format!("/proc/{}/status", std::process::id()))
+            .output()
+            .expect("Failed to run cat");
+        let out1 = std::str::from_utf8(&out_cmd1.stdout).unwrap();
+        let crt_num_threads1 = get_num_threads_from_status_output(out1.to_string());
+
+        // Check that the number of threads remains the same before and after running the test
+        assert_eq!(crt_num_threads0, crt_num_threads1);
+    }
+}

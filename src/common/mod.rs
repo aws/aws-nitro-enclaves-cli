@@ -149,6 +149,12 @@ mod tests {
 
     const TMP_DIR_STR: &str = "./tmp_sock_dir";
 
+    fn unset_envvar(varname: &String) {
+        let _ = unsafe {
+            libc::unsetenv(varname.as_ptr() as *const i8);
+        };
+    }
+
     /// Tests that a value wrote by `write_u64_le()` is read
     /// correctly by `read_u64_le()`.
     #[test]
@@ -210,6 +216,9 @@ mod tests {
         // Restore previous environment variable value
         if let Ok(old_sockets_dir) = old_sockets_dir {
             env::set_var(SOCKETS_DIR_PATH_ENV_VAR, old_sockets_dir);
+        } else {
+            env::set_var(SOCKETS_DIR_PATH_ENV_VAR, "");
+            unset_envvar(&String::from(SOCKETS_DIR_PATH_ENV_VAR));
         }
     }
 

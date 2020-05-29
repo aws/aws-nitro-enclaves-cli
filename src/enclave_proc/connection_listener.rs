@@ -208,6 +208,10 @@ mod tests {
     const THREADS_STR: &str = "Threads:";
     const TMP_DIR: &str = "./npe";
 
+    fn unset_envvar(varname: &String) {
+        unsafe { libc::unsetenv(varname.as_ptr() as *const i8) };
+    }
+
     /// Inspects the content of /proc/<PID>/status in order to
     /// retrieve the number of threads running in the context of
     /// process <PID>.
@@ -378,6 +382,9 @@ mod tests {
         // Restore previous environment variable value
         if let Ok(old_log_path) = old_log_path {
             env::set_var(SOCKETS_DIR_PATH_ENV_VAR, old_log_path);
+        } else {
+            env::set_var(SOCKETS_DIR_PATH_ENV_VAR, "");
+            unset_envvar(&String::from(SOCKETS_DIR_PATH_ENV_VAR));
         }
     }
 
@@ -498,6 +505,9 @@ mod tests {
         // Restore previous enviornment variable value
         if let Ok(old_log_path) = old_log_path {
             env::set_var(SOCKETS_DIR_PATH_ENV_VAR, old_log_path);
+        } else {
+            env::set_var(SOCKETS_DIR_PATH_ENV_VAR, "");
+            unset_envvar(&String::from(SOCKETS_DIR_PATH_ENV_VAR));
         }
     }
 }

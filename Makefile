@@ -125,7 +125,7 @@ init: init.c build-setup
 	$(CC) -o $(OBJ_PATH)/init $< -static -static-libgcc -flto
 
 # See .build-container rule for explanation.
-.build-nitro-cli: $(BASE_PATH)/src
+.build-nitro-cli: $(shell find $(BASE_PATH)/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -151,7 +151,7 @@ nitro-cli-native:
 		--target-dir=${OBJ_PATH}/nitro_cli
 
 # See .build-container rule for explanation.
-.build-command-executer: $(BASE_PATH)/samples/command_executer/src
+.build-command-executer: $(shell find $(BASE_PATH)/samples/command_executer/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -191,7 +191,7 @@ command-executer: build-setup build-container .build-command-executer
 nitro-tests: build-setup build-container .build-nitro-tests
 
 # See .build-container rule for explanation.
-.build-nitro-cli-poweruser: $(BASE_PATH)/cli_poweruser/src
+.build-nitro-cli-poweruser: $(shell find $(BASE_PATH)/cli_poweruser/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -208,7 +208,7 @@ nitro-tests: build-setup build-container .build-nitro-tests
 nitro-cli-poweruser: build-setup build-container .build-nitro-cli-poweruser
 
 # See .build-container rule for explanation.
-.build-vsock-proxy: $(BASE_PATH)/vsock_proxy/src
+.build-vsock-proxy: $(shell find $(BASE_PATH)/vsock_proxy/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \

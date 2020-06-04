@@ -118,7 +118,7 @@ init: init.c build-setup
 	$(CC) -o $(OBJ_PATH)/init $< -static -static-libgcc -flto
 
 # See .build-container rule for explanation.
-.build-nitro-cli: $(BASE_PATH)/src
+.build-nitro-cli: $(shell find $(BASE_PATH)/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -144,7 +144,7 @@ nitro-cli-native:
 		--target-dir=${OBJ_PATH}/nitro_cli
 
 # See .build-container rule for explanation.
-.build-command-executer: $(BASE_PATH)/samples/command_executer/src
+.build-command-executer: $(shell find $(BASE_PATH)/samples/command_executer/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -181,9 +181,8 @@ command-executer: build-setup build-container .build-command-executer
 			chmod -R 777 nitro_build '
 	touch $@
 
-
 # See .build-container rule for explanation.
-.build-vsock-proxy: $(BASE_PATH)/vsock_proxy/src
+.build-vsock-proxy: $(shell find $(BASE_PATH)/vsock_proxy/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \

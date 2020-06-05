@@ -45,7 +45,7 @@ enum HandledEnclaveEvent {
 fn get_logger_id(enclave_id: &str) -> String {
     // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
     let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
-    format!("enc-{}", tokens[0])
+    format!("enc-{}:{}", tokens[0], std::process::id())
 }
 
 fn send_command_and_close(cmd: EnclaveProcessCommandType, stream: &mut UnixStream) {
@@ -305,7 +305,7 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
 }
 
 /// Create the enclave process.
-fn create_enclave_process() {
+fn create_enclave_process(logger: &EnclaveProcLogWriter) {
     // To get a detached process, we first:
     // (1) Temporarily ignore specific signals (SIGHUP).
     // (2) Daemonize the current process.
@@ -319,6 +319,7 @@ fn create_enclave_process() {
     daemon(true, false).ok_or_exit("Failed to create enclave process");
 
     // This is our detached process.
+    logger.update_logger_id(format!("enc-xxxxxxx:{}", std::process::id()).as_str());
     info!("Enclave process PID: {}", process::id());
 
     // We must wait until we're 100% orphaned. That is, our parent must
@@ -336,8 +337,7 @@ fn create_enclave_process() {
 /// * `comm_fd` - A descriptor used for initial communication with the parent Nitro CLI instance.
 /// * `logger` - The current log writer, whose ID gets updated when an enclave is launched.
 pub fn enclave_process_run(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
-    logger.update_logger_id("enc-xxxxxxxxxxxx");
-    create_enclave_process();
+    create_enclave_process(logger);
     process_event_loop(comm_stream, logger);
     process::exit(0);
 }

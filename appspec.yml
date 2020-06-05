@@ -1,10 +1,6 @@
 version: 0.0
 os: linux
-files:
-  - source: /
-    destination: /
 hooks:
   AfterInstall:
     - location: ci_entrypoint.sh
       timeout: 3600
-

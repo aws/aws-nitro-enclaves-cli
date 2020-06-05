@@ -202,6 +202,7 @@ static int ne_create_vcpu_ioctl(struct ne_enclave *ne_enclave, u32 vcpu_id)
 	return fd;
 
 err_slot_add_vcpu:
+	fput(file);
 err_anon_inode_getfile:
 	put_unused_fd(fd);
 err_get_unused_fd:
@@ -771,6 +772,7 @@ static int ne_create_vm_ioctl(struct pci_dev *pdev,
 	return fd;
 
 err_slot_alloc:
+	fput(file);
 err_anon_inode_getfile:
 	put_unused_fd(fd);
 err_get_unused_fd:

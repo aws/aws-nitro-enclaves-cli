@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 pub struct EnclaveDescribeInfo {
     #[serde(rename = "EnclaveID")]
     pub enclave_id: String,
+    #[serde(rename = "ProcessID")]
+    pub process_id: u32,
     #[serde(rename = "EnclaveCID")]
     pub enclave_cid: u64,
     #[serde(rename = "NumberOfCPUs")]
@@ -32,6 +34,7 @@ impl EnclaveDescribeInfo {
     ) -> Self {
         EnclaveDescribeInfo {
             enclave_id,
+            process_id: std::process::id(),
             enclave_cid,
             cpu_count,
             memory_mib,
@@ -45,6 +48,8 @@ impl EnclaveDescribeInfo {
 pub struct EnclaveRunInfo {
     #[serde(rename = "EnclaveID")]
     pub enclave_id: String,
+    #[serde(rename = "ProcessID")]
+    pub process_id: u32,
     #[serde(rename = "EnclaveCID")]
     pub enclave_cid: u64,
     #[serde(rename = "NumberOfCPUs")]
@@ -65,6 +70,7 @@ impl EnclaveRunInfo {
     ) -> Self {
         EnclaveRunInfo {
             enclave_id,
+            process_id: std::process::id(),
             enclave_cid,
             cpu_count,
             cpu_ids,

@@ -66,7 +66,7 @@ def kill_all_nitro_processes():
         pids = get_pids("nitro-cli")
         for pid in pids.split():
                 if pid:
-                        os.kill(int(pid), signal.SIGKILL)
+                        os.kill(int(pid), signal.SIGTERM)
 
 # Runs a process and checks it returned success
 # Returns an instance of a CompletedProcess

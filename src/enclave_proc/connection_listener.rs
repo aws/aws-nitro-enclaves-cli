@@ -132,7 +132,7 @@ impl ConnectionListener {
     }
 
     /// Terminate the connection listener.
-    pub fn stop(self) {
+    pub fn stop(&mut self) {
         // Nothing to do if the connection listener thread has not been started.
         if self.listener_thread.is_none() {
             return;
@@ -155,6 +155,7 @@ impl ConnectionListener {
 
         // Ensure that the listener thread has terminated.
         self.listener_thread
+            .take()
             .unwrap()
             .join()
             .ok_or_exit("Failed to join listener thread.");

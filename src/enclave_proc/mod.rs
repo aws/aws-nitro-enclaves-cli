@@ -273,6 +273,23 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
 
         done = do_break;
 
+        // Perform clean-up and stop the connection listener before returning the status to the CLI.
+        // This is done to avoid race conditions where the enclave process has not yet removed the
+        // socket and another CLI issues a command on that very-soon-to-be-removed socket.
+        if done {
+            // Stop the connection listener.
+            conn_listener.stop();
+
+            // Wait for the termination thread, if any.
+            if terminate_thread.is_some() {
+                terminate_thread
+                    .take()
+                    .unwrap()
+                    .join()
+                    .ok_or_exit("Failed to retrieve termination thread.");
+            };
+        }
+
         // Only the commands comming from the CLI must be replied to with the status code.
         match cmd {
             EnclaveProcessCommandType::Run
@@ -284,15 +301,7 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
         }
     }
 
-    // Wait for the termination thread, if any.
-    if let Some(handle) = terminate_thread {
-        handle
-            .join()
-            .ok_or_exit("Failed to retrieve termination thread.");
-    };
-
     info!("Enclave process {} exited event loop.", process::id());
-    conn_listener.stop();
 }
 
 /// Create the enclave process.

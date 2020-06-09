@@ -60,14 +60,14 @@ pub const NITRO_ENCLAVES_SEND_DATA: usize = 0x010;
 // 240 Bytes) Buffer for reading a reply.
 pub const NITRO_ENCLAVES_RECV_DATA: usize = 0x100;
 const DEV_ENABLE_MASK: u8 = 0x1;
-const DEBUG_FLAG: u16 = 0x1;
+const DEBUG_FLAG: u64 = 0x1;
 
 #[derive(Default, Debug, Copy, Clone, Deserialize)]
 #[repr(packed)]
 pub struct NitroEnclavesEnclaveStart {
     slot_uid: u64,
     enclave_cid: u64,
-    flags: u16,
+    flags: u64,
 }
 
 #[derive(Default, Debug, Copy, Clone, Deserialize)]
@@ -149,7 +149,7 @@ pub struct NitroEnclavesCmdReply {
     pub mem_regions: u64,
     pub mem_size: u64,
     pub nr_cpus: u64,
-    pub flags: u16,
+    pub flags: u64,
     pub state: u16,
 }
 

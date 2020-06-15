@@ -1,5 +1,6 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use log::{debug, warn};
@@ -19,25 +20,35 @@ use crate::common::{
     EnclaveProcessCommandType, EnclaveProcessReply, ExitGracefully, NitroCliResult,
 };
 
+/// The types of requesters which may send commands to the enclave process.
 #[derive(PartialEq, Eq, Hash)]
 enum CommandRequesterType {
+    /// The requester is the user with the given UID.
     User(libc::uid_t),
+    /// The requester is the group with the given GID.
     Group(libc::gid_t),
+    /// The requester is any other user.
     Others,
 }
 
+/// The policy used to filter received commands based on the requester's type.
 struct CommandRequesterPolicy {
+    /// A mapping between a requester's type and all of its allowed commands.
     policy: HashMap<CommandRequesterType, Vec<EnclaveProcessCommandType>>,
 }
 
+/// Data held by a connection.
 struct ConnectionData {
+    /// Flags received from `epoll` if this was an event-triggered connection.
     epoll_flags: EpollFlags,
+    /// A communication stream with the peer, if this was a socket-triggered connection.
     input_stream: Option<UnixStream>,
 }
 
 /// An enclave process connection to a CLI instance, an enclave or itself.
 #[derive(Clone)]
 pub struct Connection {
+    /// The thread-safe data used internally by the connection.
     data: Arc<Mutex<ConnectionData>>,
 }
 
@@ -53,6 +64,10 @@ impl Drop for ConnectionData {
 }
 
 impl CommandRequesterPolicy {
+    /// Create a new `CommandRequesterPolicy` with the default rules. These rules allow
+    /// the user which spawned the enclave, together with `root`, to make any request,
+    /// whereas all other users are only allowed to make read-only requests (namely,
+    /// to describe an enclave or to read its CID).
     fn new_with_defaults() -> Self {
         let cmds_read_write = vec![
             EnclaveProcessCommandType::Run,
@@ -86,6 +101,7 @@ impl CommandRequesterPolicy {
         CommandRequesterPolicy { policy }
     }
 
+    /// Find the policy rule which applies to the given requester and command.
     fn find_policy_rule(
         &self,
         cmd: EnclaveProcessCommandType,
@@ -97,6 +113,7 @@ impl CommandRequesterPolicy {
         }
     }
 
+    /// Check if the user with the specified credentials has permission to run the specified command.
     fn can_execute_command(&self, cmd: EnclaveProcessCommandType, creds: &UnixCredentials) -> bool {
         // Search for a policy rule on the provided user ID.
         if self.find_policy_rule(cmd, &CommandRequesterType::User(creds.uid())) {
@@ -178,7 +195,7 @@ impl Connection {
         Ok(cmd)
     }
 
-    /// Read an object from this connection.
+    /// Read an object of the specified type from this connection.
     pub fn read<T>(&self) -> NitroCliResult<T>
     where
         T: DeserializeOwned,
@@ -191,7 +208,7 @@ impl Connection {
         receive_from_stream::<T>(lock.input_stream.as_mut().unwrap()).map_err(|e| e.to_string())
     }
 
-    /// Write a u64 value on this connection.
+    /// Write a 64-bit unsigned value on this connection.
     pub fn write_u64(&self, value: u64) -> NitroCliResult<()> {
         let mut lock = self.data.lock().map_err(|e| e.to_string())?;
         if lock.input_stream.is_none() {
@@ -229,7 +246,7 @@ impl Connection {
         self.write_reply(&reply)
     }
 
-    // Get the enclave event flags.
+    /// Get the enclave event flags.
     pub fn get_enclave_event_flags(&self) -> Option<EpollFlags> {
         let lock = self
             .data
@@ -256,7 +273,7 @@ impl Connection {
     }
 }
 
-/// Print a STDOUT message to a connection. Do nothing if the connection is missing.
+/// Print a message to a connection's standard output, if the connection is available.
 pub fn safe_conn_println(conn: Option<&Connection>, msg: &str) -> NitroCliResult<()> {
     if conn.is_none() {
         return Ok(());
@@ -265,7 +282,7 @@ pub fn safe_conn_println(conn: Option<&Connection>, msg: &str) -> NitroCliResult
     conn.unwrap().println(msg)
 }
 
-/// Print a STDERR message to a connection. Do nothing if the connection is missing.
+/// Print a message to a connection's standard error, if the connection is available.
 pub fn safe_conn_eprintln(conn: Option<&Connection>, msg: &str) -> NitroCliResult<()> {
     if conn.is_none() {
         return Ok(());

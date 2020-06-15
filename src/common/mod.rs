@@ -1,10 +1,15 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
+/// The module which parses command parameters from command-line arguments.
 pub mod commands_parser;
+/// The module which provides JSON-ready information structures.
 pub mod json_output;
+/// The module which provides the per-process logger.
 pub mod logger;
+/// The module which provides signal handling.
 pub mod signal_handler;
 
 use log::error;
@@ -15,39 +20,60 @@ use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
+/// The most common result type provided by Nitro CLI operations.
 pub type NitroCliResult<T> = Result<T, String>;
 
+/// The amount of time in milliseconds an enclave process will wait for certain operations.
 pub const ENCLAVE_PROC_WAIT_TIMEOUT_MSEC: isize = 3000;
+
+/// The confirmation code sent by an enclave process to a requesting CLI instance
+/// in order to signal that it is alive.
 pub const MSG_ENCLAVE_CONFIRM: u64 = 0xEEC0;
 
+/// The environment variable which holds the path to the Unix sockets directory.
 pub const SOCKETS_DIR_PATH_ENV_VAR: &str = "NITRO_CLI_SOCKETS_PATH";
+
+/// The default path to the Unix sockets directory.
 const SOCKETS_DIR_PATH: &str = "/var/run/nitro_enclaves";
 
 /// The type of commands that can be sent to an enclave process.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum EnclaveProcessCommandType {
+    /// Launch (run) an enclave (sent by the CLI).
     Run = 0,
+    /// Terminate an enclave (sent by the CLI).
     Terminate,
+    /// Notify that the enclave has terminated (sent by the enclave process to itself).
     TerminateComplete,
+    /// Describe an enclave (broadcast by the CLI).
     Describe,
+    /// Request an enclave's CID (sent by the CLI).
     GetEnclaveCID,
+    /// Notify the socket connection listener to shut down (sent by the enclave process to itself).
     ConnectionListenerStop,
+    /// Do not execute a command due to insufficient privileges (sent by the CLI, modified by the enclave process).
     NotPermitted,
 }
 
-/// The type of replies that the enclave process can send to a CLI.
+/// The type of replies that an enclave process can send to a CLI instance.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EnclaveProcessReply {
+    /// A message which must be printed to the CLI's standard output.
     StdOutMessage(String),
+    /// A messge which must be printed to the CLI's standard error.
     StdErrMessage(String),
+    /// The status of the operation that the enclave process has performed.
     Status(i32),
 }
 
+/// A trait which allows a more graceful program exit instead of the standard `panic`.
 pub trait ExitGracefully<T, E> {
+    /// Provide the inner value of a `Result` or exit gracefully with a message.
     fn ok_or_exit(self, message: &str) -> T;
 }
 
 impl<T, E: std::fmt::Debug> ExitGracefully<T, E> for Result<T, E> {
+    /// Provide the inner value of a `Result` or exit gracefully with a message.
     fn ok_or_exit(self, message: &str) -> T {
         match self {
             Ok(val) => val,
@@ -65,14 +91,14 @@ pub fn notify_error(err_msg: &str) {
     error!("{}", err_msg);
 }
 
-/// Read a LE-encoded number from a socket.
+/// Read a LE-encoded 64-bit unsigned value from a socket.
 pub fn read_u64_le(socket: &mut dyn Read) -> io::Result<u64> {
     let mut bytes = [0u8; std::mem::size_of::<u64>()];
     socket.read_exact(&mut bytes)?;
     Ok(u64::from_le_bytes(bytes))
 }
 
-/// Write a LE-encoded number to a socket.
+/// Write a LE-encoded 64-bit unsigned value to a socket.
 pub fn write_u64_le(socket: &mut dyn Write, value: u64) -> io::Result<()> {
     let bytes = value.to_le_bytes();
     socket.write_all(&bytes)
@@ -111,7 +137,7 @@ where
     Ok(())
 }
 
-/// Read the arguments of the CLI command.
+/// Receive an object of a specified type from an input stream.
 pub fn receive_from_stream<T>(input_stream: &mut dyn Read) -> io::Result<T>
 where
     T: DeserializeOwned,
@@ -124,7 +150,7 @@ where
     Ok(data)
 }
 
-/// Get the path to the sockets directory.
+/// Get the path to the directory containing the Unix sockets owned by all enclave processes.
 pub fn get_sockets_dir_path() -> PathBuf {
     let log_path = match env::var(SOCKETS_DIR_PATH_ENV_VAR) {
         Ok(env_path) => env_path,
@@ -133,7 +159,7 @@ pub fn get_sockets_dir_path() -> PathBuf {
     Path::new(&log_path).to_path_buf()
 }
 
-/// Get the path to our Unix socket.
+/// Get the path to the Unix socket owned by an enclave process which also owns the enclave with the given ID.
 pub fn get_socket_path(enclave_id: &str) -> io::Result<PathBuf> {
     // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
     let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();

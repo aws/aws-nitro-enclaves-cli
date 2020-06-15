@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use inotify::{EventMask, Inotify, WatchMask};
@@ -13,14 +14,18 @@ use std::thread::{self, JoinHandle};
 use crate::common::get_socket_path;
 use crate::common::ExitGracefully;
 
+/// The structure which manages the Unix socket that an enclave process listens on for commands.
 #[derive(Default)]
 pub struct EnclaveProcSock {
+    /// The socket's file-system path.
     socket_path: PathBuf,
+    /// The thread which listens for external events which delete the socket from the file-system.
     remove_listener_thread: Option<JoinHandle<()>>,
+    /// A flag indicating if socket removal was requested.
     requested_remove: Arc<AtomicBool>,
 }
 
-/// The listener must be cloned when launching the listening thread.
+/// The enclave process socket must allow cloning, since that is needed by the socket-listening thread.
 impl Clone for EnclaveProcSock {
     fn clone(&self) -> Self {
         // Actually clone only what's relevant for the listening thread.
@@ -39,6 +44,7 @@ impl Drop for EnclaveProcSock {
 }
 
 impl EnclaveProcSock {
+    /// Create a new `EnclaveProcSock` instance from a given enclave ID.
     pub fn new(enclave_id: &str) -> io::Result<Self> {
         let socket_path = get_socket_path(enclave_id)?;
 
@@ -49,14 +55,17 @@ impl EnclaveProcSock {
         })
     }
 
+    /// Get the path to the managed Unix socket.
     pub fn get_path(&self) -> &Path {
         &self.socket_path.as_path()
     }
 
+    /// Set the path of the managed Unix socket.
     pub fn set_path(&mut self, socket_path: PathBuf) {
         self.socket_path = socket_path;
     }
 
+    /// Start monitoring the Unix socket's state using `inotify`.
     pub fn start_monitoring(&mut self) -> io::Result<()> {
         let path_clone = self.socket_path.clone();
         let requested_remove_clone = self.requested_remove.clone();
@@ -75,6 +84,7 @@ impl EnclaveProcSock {
         Ok(())
     }
 
+    /// Remove the managed Unix socket and clean up after it. This is called with a mutable self-reference.
     fn close_mut(&mut self) {
         // Delete the socket from the disk. Also mark that this operation is intended, so that the
         // socket file monitoring thread doesn't exit forcefully when notifying the deletion.
@@ -94,12 +104,13 @@ impl EnclaveProcSock {
         }
     }
 
+    /// Remove the managed Unix socket and clean up after it.
     pub fn close(mut self) {
         self.close_mut();
     }
 }
 
-/// Listen for an inotify event when the socket gets deleted from the disk.
+/// Listen for an `inotify` event when the socket gets deleted from the disk.
 fn socket_removal_listener(
     socket_path: PathBuf,
     requested_remove: Arc<AtomicBool>,

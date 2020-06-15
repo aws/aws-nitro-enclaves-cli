@@ -1,13 +1,21 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
+/// The module which provides top-level enclave commands.
 pub mod commands;
+/// The module which provides a connection to the enclave process.
 pub mod connection;
+/// The module which provides an enclave socket monitor that listens for incoming connections.
 pub mod connection_listener;
+/// The module which provides CPU information utilities.
 pub mod cpu_info;
+/// The module which provides the enclave manager and its utilities.
 pub mod resource_manager;
+/// The module which provides the managed Unix socket needed to communicate with the enclave process.
 pub mod socket;
+/// The module which provides additional enclave process utilities.
 pub mod utils;
 
 use log::{info, warn};
@@ -48,6 +56,7 @@ fn get_logger_id(enclave_id: &str) -> String {
     format!("enc-{}:{}", tokens[0], std::process::id())
 }
 
+/// Send the given command, then close the channel that was used for sending it.
 fn send_command_and_close(cmd: EnclaveProcessCommandType, stream: &mut UnixStream) {
     enclave_proc_command_send_single::<EmptyArgs>(cmd, None, stream)
         .ok_or_exit("Failed to send command.");
@@ -95,6 +104,7 @@ fn notify_terminate(
     }))
 }
 
+/// Launch the POSIX signal handler on a dedicated thread and ensure its events are accessible.
 fn enclave_proc_configure_signal_handler(conn_listener: &ConnectionListener) {
     let mut signal_handler = SignalHandler::new_with_defaults().mask_all();
     let (local_stream, thread_stream) =
@@ -104,6 +114,7 @@ fn enclave_proc_configure_signal_handler(conn_listener: &ConnectionListener) {
     signal_handler.start_handler(thread_stream.into_raw_fd(), enclave_proc_handle_signals);
 }
 
+/// The default POSIX signal handling function, which notifies the enclave process to shut down gracefully.
 fn enclave_proc_handle_signals(comm_fd: RawFd, signal: Signal) -> bool {
     let mut stream = unsafe { UnixStream::from_raw_fd(comm_fd) };
 

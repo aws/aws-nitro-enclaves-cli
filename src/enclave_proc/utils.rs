@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use std::fs::metadata;
@@ -11,6 +12,7 @@ use crate::common::NitroCliResult;
 use crate::enclave_proc::commands::DEBUG_FLAG;
 use crate::enclave_proc::resource_manager::EnclaveManager;
 
+/// Get a string representation of the bit-mask which holds the enclave launch flags.
 pub fn flags_to_string(flags: u16) -> String {
     if flags & DEBUG_FLAG == DEBUG_FLAG {
         "DEBUG_MODE"
@@ -20,6 +22,7 @@ pub fn flags_to_string(flags: u16) -> String {
     .to_string()
 }
 
+/// Obtain the enclave information requested by the `describe-enclaves` command.
 pub fn get_enclave_describe_info(
     enclave_manager: &EnclaveManager,
 ) -> NitroCliResult<EnclaveDescribeInfo> {
@@ -36,6 +39,7 @@ pub fn get_enclave_describe_info(
     Ok(info)
 }
 
+/// Obtain the enclave information requested by the `run-enclaves` command.
 pub fn get_run_enclaves_info(
     enclave_cid: u64,
     slot_id: u64,
@@ -52,6 +56,7 @@ pub fn get_run_enclaves_info(
     Ok(info)
 }
 
+/// Generate a unique ID for a new enclave with the specified slot ID.
 pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
     let file_path = "/sys/devices/virtual/dmi/id/board_asset_tag";
     if metadata(file_path).is_ok() {
@@ -65,6 +70,7 @@ pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
     Ok(format!("i-0000000000000000-enc{:x}", slot_id))
 }
 
+/// Obtain an enclave's slot ID from its full ID.
 pub fn get_slot_id(enclave_id: String) -> Result<u64, String> {
     let tokens: Vec<&str> = enclave_id.split("-enc").collect();
 

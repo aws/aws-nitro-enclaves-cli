@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use log::{debug, info};
@@ -71,7 +72,7 @@ pub fn enclave_proc_connect_to_all() -> io::Result<Vec<UnixStream>> {
                 // At this point we have found a potential socket.
                 match UnixStream::connect(path_str) {
                     Ok(conn) => {
-                        // We have connected to an enclave process
+                        // We have connected to an enclave process.
                         info!("Connected to: {}", path_str);
                         return Some(conn);
                     }
@@ -184,7 +185,7 @@ where
     let mut stdout_str = String::new();
     let mut status: Option<i32> = None;
 
-    // The contents received on STDOUT must always form a valid JSON object.
+    // The contents meant for standard output must always form a valid JSON object.
     while let Ok(reply) = receive_from_stream::<EnclaveProcessReply>(conn) {
         match reply {
             EnclaveProcessReply::StdOutMessage(msg) => stdout_str.push_str(&msg),

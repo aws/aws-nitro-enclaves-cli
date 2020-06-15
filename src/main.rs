@@ -1,6 +1,9 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
+
+//! This is the entry point for the Nitro CLI process.
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use log::info;
@@ -18,8 +21,9 @@ use nitro_cli::enclave_proc_comm::{
 };
 use nitro_cli::{build_enclaves, console_enclaves, create_app};
 
+/// *Nitro CLI* application entry point.
 fn main() {
-    // Command line specification for NitroEnclaves CLI.
+    // Command-line specification for the Nitro CLI.
     let app = create_app!();
     let args = app.get_matches();
     let logger = logger::init_logger();

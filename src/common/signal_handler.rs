@@ -1,5 +1,6 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use log::warn;
@@ -10,11 +11,13 @@ use std::thread;
 
 use crate::common::ExitGracefully;
 
+/// The custom handler of POSIX signals.
 pub struct SignalHandler {
     sig_set: Option<SigSet>,
 }
 
 impl SignalHandler {
+    /// Create a new `SignalHandler` instance from the given list of signals.
     pub fn new(signals: &[Signal]) -> Self {
         let mut sig_set = SigSet::empty();
         for signal in signals.iter() {
@@ -26,10 +29,12 @@ impl SignalHandler {
         }
     }
 
+    /// Create a new `SignalHandler` instance from a default list of signals.
     pub fn new_with_defaults() -> Self {
         SignalHandler::new(&[SIGINT, SIGQUIT, SIGTERM, SIGHUP])
     }
 
+    /// Mask (block) all signals covered by the handler.
     pub fn mask_all(self) -> Self {
         for set in self.sig_set.iter() {
             set.thread_block().ok_or_exit("Failed to block signal set.");
@@ -37,6 +42,7 @@ impl SignalHandler {
         self
     }
 
+    /// Unmask (unblock) all signals covered by the handler.
     pub fn unmask_all(self) -> Self {
         for set in self.sig_set.iter() {
             set.thread_unblock()
@@ -45,6 +51,7 @@ impl SignalHandler {
         self
     }
 
+    /// Start listening for events on a dedicated thread and handle them using the provided function.
     pub fn start_handler(&mut self, fd: RawFd, handler: fn(RawFd, Signal) -> bool) {
         if self.sig_set.is_none() {
             return;

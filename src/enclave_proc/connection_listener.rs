@@ -1,5 +1,6 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use log::{debug, info, warn};
@@ -18,12 +19,12 @@ use crate::common::commands_parser::EmptyArgs;
 use crate::common::{enclave_proc_command_send_single, receive_from_stream};
 use crate::common::{EnclaveProcessCommandType, ExitGracefully};
 
-/// A listener which waits for external connections.
+/// A listener which waits for incoming connections on the enclave process socket.
 #[derive(Default)]
 pub struct ConnectionListener {
     /// The epoll descriptor used to register new connections.
     epoll_fd: RawFd,
-    /// The thread which actually listens for new connections
+    /// A dedicated thread that listens for new connections.
     listener_thread: Option<JoinHandle<()>>,
     /// The Unix socket that the listener binds to.
     socket: EnclaveProcSock,
@@ -42,7 +43,7 @@ impl Clone for ConnectionListener {
 }
 
 impl ConnectionListener {
-    /// Create a new connection listener.
+    /// Create a new `ConnectionListener` instance.
     pub fn new() -> Self {
         ConnectionListener {
             epoll_fd: epoll::epoll_create().ok_or_exit("Could not create epoll_fd."),
@@ -51,12 +52,12 @@ impl ConnectionListener {
         }
     }
 
-    /// Expose the epoll descriptor.
+    /// Expose the `epoll` descriptor.
     pub fn get_epoll_fd(&self) -> RawFd {
         self.epoll_fd
     }
 
-    /// Initialize the connection listener.
+    /// Initialize the connection listener from a specified enclave ID.
     pub fn start(&mut self, enclave_id: &str) -> io::Result<()> {
         // Obtain the socket to listen on.
         self.socket = EnclaveProcSock::new(enclave_id)?;
@@ -67,7 +68,7 @@ impl ConnectionListener {
         Ok(())
     }
 
-    /// Add a stream to epoll.
+    /// Add a stream to `epoll`.
     pub fn add_stream_to_epoll(&self, stream: UnixStream) {
         let stream_fd = stream.as_raw_fd();
         let mut cli_evt = EpollEvent::new(EpollFlags::EPOLLIN, stream.into_raw_fd() as u64);
@@ -75,7 +76,7 @@ impl ConnectionListener {
             .ok_or_exit("Could not add new connection descriptor to epoll.");
     }
 
-    /// Add the enclave descriptor to epoll.
+    /// Add the enclave descriptor to `epoll`.
     pub fn register_enclave_descriptor(&mut self, enc_fd: RawFd) {
         let mut enc_event = EpollEvent::new(
             EpollFlags::EPOLLIN | EpollFlags::EPOLLERR | EpollFlags::EPOLLHUP,
@@ -85,7 +86,7 @@ impl ConnectionListener {
             .ok_or_exit("Could not add enclave descriptor to epoll.");
     }
 
-    /// Handle a new connection.
+    /// Handle an incoming connection.
     pub fn handle_new_connection(&self, mut stream: UnixStream) -> EnclaveProcessCommandType {
         let cmd_type = receive_from_stream::<EnclaveProcessCommandType>(&mut stream)
             .ok_or_exit("Failed to read command type.");
@@ -98,7 +99,7 @@ impl ConnectionListener {
         cmd_type
     }
 
-    /// Wait for and handle new connections.
+    /// Listen for incoming connections and handle them as they appear.
     fn connection_listener_run(mut self) {
         // Bind the listener to the socket and spawn the listener thread.
         let listener = UnixListener::bind(self.socket.get_path()).ok_or_exit("Error binding.");

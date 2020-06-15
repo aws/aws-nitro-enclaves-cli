@@ -1,5 +1,6 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use chrono::offset::{Local, Utc};
@@ -17,13 +18,20 @@ use std::sync::{Arc, Mutex};
 
 use crate::common::ExitGracefully;
 
+/// The default logging level used by the logger.
 const DEFAULT_LOG_LEVEL: &str = "info";
+
+/// The environment variable which holds the path to the logging directory.
 const LOGS_DIR_PATH_ENV_VAR: &str = "NITRO_CLI_LOGS_PATH";
+
+/// The default path to the logging directory.
 const LOGS_DIR_PATH: &str = "/var/log/nitro_enclaves";
+
+/// The name of the output log file.
 const LOG_FILE_NAME: &str = "nitro_enclaves.log";
 
-/// A log writer class which outputs its messages to a custom file.
-/// It also allows the updating of its ID, in order to indicate which process
+/// A log writer which outputs its messages to a custom file. It also
+/// allows the updating of its ID, in order to indicate which process
 /// is actually logging a message. This implementation will also enable
 /// synchronized logging to a centralized file for multiple enclaves.
 #[derive(Clone)]

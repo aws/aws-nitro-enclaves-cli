@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use std::collections::HashSet;
@@ -8,24 +9,30 @@ use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+/// A CPU mapping structure which links a CPU ID with its corresponding core ID.
 pub struct CpuInfo {
     core_id: u32,
     cpu_id: u32,
 }
 
 impl CpuInfo {
+    /// Create a new `CpuInfo` instance from the given CPU and core IDs.
     pub fn new(cpu_id: u32, core_id: u32) -> Self {
         CpuInfo { cpu_id, core_id }
     }
 }
 
 #[derive(Debug)]
+/// Aggregate CPU information for multiple CPUs.
 pub struct CpuInfos {
+    /// The list with CPU - core mappings.
     pub core_ids: Vec<CpuInfo>,
+    /// The flag indicating if hyper-threading is enabled.
     pub hyper_threading: bool,
 }
 
 impl CpuInfos {
+    /// Create a new `CpuInfos` instance from the current system configuration.
     pub fn new() -> Result<Self, String> {
         let core_ids = CpuInfos::get_cpu_info()?;
         let hyper_threading = CpuInfos::is_hyper_threading_on(&core_ids);
@@ -35,6 +42,7 @@ impl CpuInfos {
         })
     }
 
+    /// Parse a `/proc/cpuinfo` line to obtain a numeric value.
     pub fn get_value(mut line: String) -> Result<u32, String> {
         line.retain(|c| !c.is_whitespace());
         let tokens: Vec<&str> = line.split(':').collect();
@@ -43,6 +51,7 @@ impl CpuInfos {
         u32::from_str(token).map_err(|err| format!("{}", err))
     }
 
+    /// Parse `/proc/cpuinfo` and build the list of CPU - core mappings.
     pub fn get_cpu_info() -> Result<Vec<CpuInfo>, String> {
         let mut result: Vec<CpuInfo> = Vec::new();
         let mut ids: Vec<u32> = Vec::new();
@@ -60,8 +69,7 @@ impl CpuInfos {
                 break;
             }
 
-            // given a cpu i, its cpu_id will be at 2*i and
-            // its core_id at 2*i+1
+            // Given CPU i, its ID will be 2 * i and its core ID will be 2 * i + 1.
             if line.contains("processor") {
                 ids.push(CpuInfos::get_value(line)?);
             } else if line.contains("apicid")
@@ -80,11 +88,12 @@ impl CpuInfos {
             ));
         }
 
-        // sort by core_id
+        // Sort by core ID.
         result.sort_by(|a, b| a.core_id.cmp(&b.core_id));
         Ok(result)
     }
 
+    /// Get the ID of the core which holds the specifided CPU.
     pub fn get_core_id(&self, cpu_id: u32) -> Option<u32> {
         for info in self.core_ids.iter() {
             if info.cpu_id == cpu_id {
@@ -94,6 +103,7 @@ impl CpuInfos {
         None
     }
 
+    /// Determine if hyper-threading is enabled.
     pub fn is_hyper_threading_on(cpu_info: &[CpuInfo]) -> bool {
         for i in 0..cpu_info.len() - 1 {
             if cpu_info.get(i).unwrap().core_id == cpu_info.get(i + 1).unwrap().core_id {
@@ -103,6 +113,7 @@ impl CpuInfos {
         false
     }
 
+    /// Get a list of specified size which contains valid CPU IDs.
     pub fn get_cpu_ids(&self, cpu_count: u32) -> Result<Vec<u32>, String> {
         if self.hyper_threading && cpu_count % 2 != 0 {
             return Err("cpu_count should be an even number.".to_string());
@@ -134,6 +145,7 @@ impl CpuInfos {
         ))
     }
 
+    /// Check if a list of CPU IDs contains only pairs of siblings (belonging to the same core).
     pub fn contains_sibling_pairs(&self, cpu_ids: &[u32]) -> bool {
         let mut core_ids: HashSet<u32> = HashSet::new();
 
@@ -153,6 +165,7 @@ impl CpuInfos {
         core_ids.is_empty()
     }
 
+    /// Get a list of all available CPU IDs.
     pub fn get_cpu_candidates(&self) -> Vec<u32> {
         let mut result: Vec<u32> = Vec::new();
 
@@ -164,6 +177,7 @@ impl CpuInfos {
         result
     }
 
+    /// Verify that a provided list of CPU IDs is valid.
     pub fn check_cpu_ids(&self, cpu_ids: &[u32]) -> Result<(), String> {
         if self.hyper_threading && cpu_ids.len() % 2 != 0 {
             return Err(
@@ -199,10 +213,11 @@ impl CpuInfos {
         Ok(())
     }
 
+    /// Generate all pairs of sibling CPUs (which belong to the same core).
     pub fn get_siblings(&self) -> Vec<(u32, u32)> {
         let mut result: Vec<(u32, u32)> = Vec::new();
 
-        // find the pairs of cpu_ids that have the same core_id
+        // Find the pairs of CPU IDs that have the same core ID.
         for i in 0..self.core_ids.len() - 1 {
             let info1 = self.core_ids.get(i).unwrap();
             let info2 = self.core_ids.get(i + 1).unwrap();

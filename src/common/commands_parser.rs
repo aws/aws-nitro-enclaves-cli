@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use clap::ArgMatches;
@@ -7,17 +8,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::NitroCliResult;
 
+/// The arguments used by the `run-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunEnclavesArgs {
+    /// The path to the enclave image file.
     pub eif_path: String,
+    /// The optional enclave CID
     pub enclave_cid: Option<u64>,
+    /// The amount of memory that will be given to the enclave.
     pub memory_mib: u64,
+    /// An optional list of CPU IDs that will be given to the enclave.
     pub cpu_ids: Option<Vec<u32>>,
+    /// A flag indicating if the enclave will be started in debug mode.
     pub debug_mode: Option<bool>,
+    /// The number of CPUs that the enclave will receive.
     pub cpu_count: Option<u32>,
 }
 
 impl RunEnclavesArgs {
+    /// Construct a new `RunEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         Ok(RunEnclavesArgs {
             cpu_count: parse_cpu_count(args)?,
@@ -30,14 +39,19 @@ impl RunEnclavesArgs {
     }
 }
 
+/// The arguments used by the `build-enclave` command.
 #[derive(Debug, Clone)]
 pub struct BuildEnclavesArgs {
+    /// The URI to the Docker image.
     pub docker_uri: String,
+    /// The directory containing the Docker image.
     pub docker_dir: Option<String>,
+    /// The path where the enclave image file will be written to.
     pub output: String,
 }
 
 impl BuildEnclavesArgs {
+    /// Construct a new `BuildEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         Ok(BuildEnclavesArgs {
             docker_uri: parse_docker_tag(args).ok_or("Could not find docker-uri argument")?,
@@ -47,12 +61,15 @@ impl BuildEnclavesArgs {
     }
 }
 
+/// The arguments used by the `terminate-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminateEnclavesArgs {
+    /// The ID of the enclave that is to be terminated.
     pub enclave_id: String,
 }
 
 impl TerminateEnclavesArgs {
+    /// Construct a new `TerminateEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         Ok(TerminateEnclavesArgs {
             enclave_id: parse_enclave_id(args)?,
@@ -60,12 +77,15 @@ impl TerminateEnclavesArgs {
     }
 }
 
+/// The arguments used by the `console` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsoleArgs {
+    /// The ID of the enclave whose console is to be shown.
     pub enclave_id: String,
 }
 
 impl ConsoleArgs {
+    /// Construct a new `ConsoleArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         Ok(ConsoleArgs {
             enclave_id: parse_enclave_id(args)?,
@@ -73,9 +93,11 @@ impl ConsoleArgs {
     }
 }
 
+/// The arguments used by the `describe-enclaves` command.
 #[derive(Serialize, Deserialize)]
 pub struct EmptyArgs {}
 
+/// Parse the requested amount of enclave memory from the command-line arguments.
 fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
     let memory = args
         .value_of("memory")
@@ -85,14 +107,17 @@ fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
         .map_err(|_err| "memory is not a number".to_string())
 }
 
+/// Parse the Docker tag from the command-line arguments.
 fn parse_docker_tag(args: &ArgMatches) -> Option<String> {
     args.value_of("docker-uri").map(|val| val.to_string())
 }
 
+/// Parse the Docker directory from the command-line arguments.
 fn parse_docker_dir(args: &ArgMatches) -> Option<String> {
     args.value_of("docker-dir").map(|val| val.to_string())
 }
 
+/// Parse the enclave's required CID from the command-line arguments.
 fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
     let enclave_cid = if let Some(enclave_cid) = args.value_of("enclave-cid") {
         let enclave_cid: u64 = enclave_cid
@@ -105,6 +130,7 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
     Ok(enclave_cid)
 }
 
+/// Parse the enclave image file path from the command-line arguments.
 fn parse_eif_path(args: &ArgMatches) -> NitroCliResult<String> {
     let eif_path = args
         .value_of("eif-path")
@@ -112,6 +138,7 @@ fn parse_eif_path(args: &ArgMatches) -> NitroCliResult<String> {
     Ok(eif_path.to_string())
 }
 
+/// Parse the enclave's ID from the command-line arguments.
 fn parse_enclave_id(args: &ArgMatches) -> NitroCliResult<String> {
     let enclave_id = args
         .value_of("enclave-id")
@@ -119,6 +146,7 @@ fn parse_enclave_id(args: &ArgMatches) -> NitroCliResult<String> {
     Ok(enclave_id.to_string())
 }
 
+/// Parse the list of requested CPU IDs from the command-line arguments.
 fn parse_cpu_ids(args: &ArgMatches) -> NitroCliResult<Option<Vec<u32>>> {
     let cpu_ids_arg = args.values_of("cpu-ids");
     match cpu_ids_arg {
@@ -133,6 +161,7 @@ fn parse_cpu_ids(args: &ArgMatches) -> NitroCliResult<Option<Vec<u32>>> {
     }
 }
 
+/// Parse the requested number of CPUs from the command-line arguments.
 fn parse_cpu_count(args: &ArgMatches) -> NitroCliResult<Option<u32>> {
     let cpu_count = if let Some(cpu_count) = args.value_of("cpu-count") {
         let cpu_count: u32 = cpu_count
@@ -145,10 +174,12 @@ fn parse_cpu_count(args: &ArgMatches) -> NitroCliResult<Option<u32>> {
     Ok(cpu_count)
 }
 
+/// Parse the path of an output file from the command-line arguments.
 fn parse_output(args: &ArgMatches) -> Option<String> {
     args.value_of("output-file").map(|val| val.to_string())
 }
 
+/// Parse the debug-mode flag from the command-line arguments.
 fn debug_mode(args: &ArgMatches) -> Option<bool> {
     let val = args.is_present("debug-mode");
     if val {

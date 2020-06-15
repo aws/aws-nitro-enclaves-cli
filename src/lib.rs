@@ -1,10 +1,17 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
+//! This crate provides the functionality for the Nitro CLI process.
+
+/// The common module (shared between the CLI and enclave process).
 pub mod common;
+/// The enclave process module.
 pub mod enclave_proc;
+/// The module covering the communication between a CLI instance and enclave processes.
 pub mod enclave_proc_comm;
+/// The CLI-specific utilities module.
 pub mod utils;
 
 use log::debug;
@@ -19,11 +26,13 @@ use common::NitroCliResult;
 
 use utils::Console;
 
-// Hypervisor cid as defined by:
-// http://man7.org/linux/man-pages/man7/vsock.7.html
+/// Hypervisor CID as defined by <http://man7.org/linux/man-pages/man7/vsock.7.html>.
 pub const VMADDR_CID_HYPERVISOR: u32 = 0;
+
+/// An offset applied to an enclave's CID in order to determine its console port.
 pub const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
 
+/// Information obtained from a newly-build enclave image file.
 #[derive(Serialize)]
 pub struct EnclaveBuildInfo {
     #[serde(rename(serialize = "Measurements"))]
@@ -31,11 +40,13 @@ pub struct EnclaveBuildInfo {
 }
 
 impl EnclaveBuildInfo {
+    /// Construct a new `EnclaveBuildInfo` instance from the given measurements.
     pub fn new(measurements: BTreeMap<String, String>) -> Self {
         EnclaveBuildInfo { measurements }
     }
 }
 
+/// Build an enclave image file with the provided arguments.
 pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
     debug!("build_enclaves");
     eprintln!("Start building the Enclave Image...");
@@ -43,6 +54,7 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
     Ok(())
 }
 
+/// Build an enclave image file from a Docker image.
 pub fn build_from_docker(
     docker_uri: &str,
     docker_dir: &Option<String>,
@@ -99,15 +111,14 @@ pub fn build_from_docker(
     Ok((file_output, measurements))
 }
 
-/// Returns the value of NITRO_CLI_BLOBS environment variable
+/// Returns the value of the `NITRO_CLI_BLOBS` environment variable.
 ///
-/// Environment variable that specify where all the blobs necessary for building
-/// an Image are.
-/// As of now the blobs are:
-///    bzImage: A kernel image
-///    init: The initial init process that is bootstraping the environment
-///    linuxkit: A slightly modified version of linuxkit
-///    cmdline: A file containing the kernel commandline
+/// This variable specifies where all the blobs necessary for building
+/// an enclave image are stored. As of now the blobs are:
+/// - *bzImage*: A kernel image.
+/// - *init*: The initial init process that is bootstraping the environment.
+/// - *linuxkit*: A slightly modified version of linuxkit.
+/// - *cmdline*: A file containing the kernel commandline.
 fn blobs_path() -> NitroCliResult<String> {
     // TODO Improve error message with a suggestion to the user
     // consider using the default path used by rpm install
@@ -115,9 +126,9 @@ fn blobs_path() -> NitroCliResult<String> {
         .map_err(|_err| "NITRO_CLI_BLOBS environment variable is not set".to_string())
 }
 
-/// Returns the value of NITRO_CLI_ARTIFACTS environment variable
+/// Returns the value of the `NITRO_CLI_ARTIFACTS` environment variable.
 ///
-/// This variable configures the path where the build artifacts should be saved
+/// This variable configures the path where the build artifacts should be saved.
 fn artifacts_path() -> NitroCliResult<String> {
     if let Ok(artifacts) = std::env::var("NITRO_CLI_ARTIFACTS") {
         std::fs::create_dir_all(artifacts.clone()).map_err(|err| {
@@ -170,6 +181,7 @@ pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
     Ok(())
 }
 
+/// Macro defining the arguments configuration for a *Nitro CLI* application.
 #[macro_export]
 macro_rules! create_app {
     () => {

@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use libc::{c_void, close};
@@ -17,13 +18,24 @@ use std::time::{Duration, SystemTime};
 
 use crate::common::NitroCliResult;
 
+/// The size of the buffers used for reading console data.
 const BUFFER_SIZE: usize = 1024;
-const CONSOLE_CONNECT_TIMEOUT: i64 = 20000; // millis
-const POLL_TIMEOUT: i32 = 10000; // millis
-const SO_VM_SOCKETS_CONNECT_TIMEOUT: i32 = 6;
-const TIMEOUT: u64 = 100; // millis
 
+/// The console connection time-out, in milliseconds.
+const CONSOLE_CONNECT_TIMEOUT: i64 = 20000;
+
+/// The `poll` time-out, in milliseconds.
+const POLL_TIMEOUT: i32 = 10000;
+
+/// The socket connection time-out flag.
+const SO_VM_SOCKETS_CONNECT_TIMEOUT: i32 = 6;
+
+/// The amount of time to wait between consecutive console reads, in milliseconds.
+const TIMEOUT: u64 = 100;
+
+/// The structure representing the console of an enclave.
 pub struct Console {
+    /// The file descriptor used for connecting to the enclave's console.
     fd: RawFd,
 }
 
@@ -34,6 +46,7 @@ impl Drop for Console {
 }
 
 impl Console {
+    /// Create a new blocking `Console` connection from a given enclave CID and a vsock port.
     pub fn new(cid: u32, port: u32) -> NitroCliResult<Self> {
         let socket_fd = socket(
             AddressFamily::Vsock,
@@ -53,6 +66,7 @@ impl Console {
         Ok(Console { fd: socket_fd })
     }
 
+    /// Create a new non-blocking `Console` connection from a given enclave CID and a vsock port.
     pub fn new_nonblocking(cid: u32, port: u32) -> NitroCliResult<Self> {
         // create new non blocking socket
         let socket_fd = socket(
@@ -73,8 +87,7 @@ impl Console {
             Err(error) => match error {
                 nix::Error::Sys(errno) => {
                     match errno {
-                        // if the connection is not ready, wait until
-                        // socket_fd is ready for write
+                        // If the connection is not ready, wait until socket_fd is ready for writing.
                         nix::errno::Errno::EINPROGRESS => {
                             let poll_fd = PollFd::new(socket_fd, PollFlags::POLLOUT);
                             let mut poll_fds = [poll_fd];
@@ -93,6 +106,7 @@ impl Console {
         Ok(Console { fd: socket_fd })
     }
 
+    /// Read a chunk of raw data from the console and output it.
     pub fn read_to(&self, output: &mut dyn Write) -> NitroCliResult<()> {
         loop {
             let mut buffer = [0u8; BUFFER_SIZE];
@@ -112,6 +126,7 @@ impl Console {
         Ok(())
     }
 
+    /// Read a chunk of raw data to a buffer.
     pub fn read_to_buffer(&self, buf: &mut Vec<u8>, duration: Duration) -> NitroCliResult<()> {
         let sys_time = SystemTime::now();
 
@@ -138,7 +153,7 @@ impl Console {
     }
 }
 
-/// Set a timeout on a VSock connection.
+/// Set a timeout on a vsock connection.
 fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
     let timeval = TimeVal::milliseconds(millis);
     let ret = unsafe {

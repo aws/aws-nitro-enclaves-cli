@@ -1,5 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use log::debug;
@@ -14,14 +15,22 @@ use crate::enclave_proc::cpu_info::CpuInfos;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
 use crate::enclave_proc::utils::get_enclave_describe_info;
 
-// Hypervisor cid as defined by:
-// http://man7.org/linux/man-pages/man7/vsock.7.html
+/// Hypervisor CID as defined by <http://man7.org/linux/man-pages/man7/vsock.7.html>.
 pub const VMADDR_CID_PARENT: u32 = 3;
+
+/// The vsock port used to load the enclave image.
 pub const ENCLAVE_VSOCK_LOADER_PORT: u32 = 7000;
+
+/// The vsock port used to confirm that the enclave has booted.
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
+
+/// The size of an internal data buffer.
 pub const BUFFER_SIZE: usize = 1024;
+
+/// The bit indicating if an enclave has been launched in debug mode.
 pub const DEBUG_FLAG: u16 = 0x1;
 
+/// Launch an enclave with the specified arguments and provide the launch status through the given connection.
 pub fn run_enclaves(
     args: &RunEnclavesArgs,
     connection: Option<&Connection>,
@@ -60,6 +69,7 @@ pub fn run_enclaves(
     Ok(enclave_manager)
 }
 
+/// Terminate an enclave and provide the termination status through the given connection.
 pub fn terminate_enclaves(
     enclave_manager: &mut EnclaveManager,
     connection: Option<&Connection>,
@@ -99,6 +109,7 @@ pub fn terminate_enclaves(
     )
 }
 
+/// Obtain an enclave's description and provide it through the given connection.
 pub fn describe_enclaves(
     enclave_manager: &EnclaveManager,
     connection: &Connection,

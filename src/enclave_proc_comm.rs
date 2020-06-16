@@ -242,6 +242,7 @@ pub fn enclave_process_handle_all_replies<T>(
     replies: &mut [UnixStream],
     prev_failed_conns: usize,
     print_as_vec: bool,
+    allowed_return_codes: Vec<i32>,
 ) -> NitroCliResult<()>
 where
     T: Clone + DeserializeOwned + Serialize,
@@ -273,10 +274,18 @@ where
     }
 
     // We fail on any error codes or failed connections.
-    if objects.iter().filter(|v| v.1 != 0).count() > 0 || failed_conns > 0 {
+    if objects
+        .iter()
+        .filter(|v| !allowed_return_codes.contains(&v.1))
+        .count()
+        > 0
+    {
         return Err(format!(
             "Failed to execute {} enclave process commands.",
-            objects.iter().filter(|v| v.1 != 0).count()
+            objects
+                .iter()
+                .filter(|v| !allowed_return_codes.contains(&v.1))
+                .count()
         ));
     } else if failed_conns > 0 {
         return Err(format!(

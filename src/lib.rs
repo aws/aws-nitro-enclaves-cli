@@ -20,9 +20,15 @@ use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
 
-use common::commands_parser::BuildEnclavesArgs;
-use common::NitroCliResult;
+use common::commands_parser::{BuildEnclavesArgs, EmptyArgs};
+use common::json_output::EnclaveTerminateInfo;
+use common::{enclave_proc_command_send_single, get_sockets_dir_path};
+use common::{EnclaveProcessCommandType, NitroCliResult};
+use enclave_proc_comm::enclave_process_handle_all_replies;
+use log::info;
 
 use utils::Console;
 
@@ -182,6 +188,65 @@ pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
     Ok(())
 }
 
+/// Terminates all enclave instances belonging to the current user (or all
+/// instances, if the current user has `root` permissions).
+pub fn terminate_all_enclaves() -> NitroCliResult<()> {
+    let sockets_dir = get_sockets_dir_path();
+    let mut replies: Vec<UnixStream> = vec![];
+    let sockets = std::fs::read_dir(sockets_dir.as_path())
+        .map_err(|e| format!("Error while accessing sockets directory: {}", e))?;
+
+    let mut err_socket_files: usize = 0;
+    let mut failed_connections: Vec<PathBuf> = Vec::new();
+    for socket in sockets {
+        let entry = match socket {
+            Ok(value) => value,
+            Err(_) => {
+                err_socket_files += 1;
+                continue;
+            }
+        };
+
+        // Send a `terminate-enclave` command through each socket,
+        // irrespective of the enclave process owner. The security policy
+        // inside the enclave process is responsible with checking the
+        // command's permissions.
+        let mut stream = match UnixStream::connect(entry.path()) {
+            Ok(value) => value,
+            Err(_) => {
+                failed_connections.push(entry.path());
+                continue;
+            }
+        };
+
+        if enclave_proc_command_send_single::<EmptyArgs>(
+            EnclaveProcessCommandType::Terminate,
+            None,
+            &mut stream,
+        )
+        .is_err()
+        {
+            failed_connections.push(entry.path());
+        } else {
+            replies.push(stream);
+        }
+    }
+
+    // Remove stale socket files.
+    for stale_socket in &failed_connections {
+        info!("Deleting stale socket: {:?}", stale_socket);
+        let _ = std::fs::remove_file(stale_socket);
+    }
+
+    enclave_process_handle_all_replies::<EnclaveTerminateInfo>(
+        &mut replies,
+        failed_connections.len() + err_socket_files,
+        false,
+        vec![0, libc::EACCES],
+    )
+    .map_err(|e| format!("Failed to handle all replies: {}", e))
+}
+
 /// Macro defining the arguments configuration for a *Nitro CLI* application.
 #[macro_export]
 macro_rules! create_app {
@@ -251,7 +316,16 @@ macro_rules! create_app {
                             .long("enclave-id")
                             .takes_value(true)
                             .help("Enclave ID, used to uniquely identify an enclave")
-                            .required(true),
+                            .required(true)
+                            .conflicts_with("all"),
+                    )
+                    .arg(
+                        Arg::with_name("all")
+                            .long("all")
+                            .takes_value(false)
+                            .help("Terminate all running enclave instances belonging to the current user")
+                            .required(false)
+                            .conflicts_with("enclave-id"),
                     ),
             )
             .subcommand(

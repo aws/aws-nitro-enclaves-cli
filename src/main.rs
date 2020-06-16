@@ -19,7 +19,7 @@ use nitro_cli::enclave_proc_comm::{
     enclave_proc_command_send_all, enclave_proc_connect_to_single, enclave_proc_get_cid,
     enclave_proc_spawn, enclave_process_handle_all_replies,
 };
-use nitro_cli::{build_enclaves, console_enclaves, create_app};
+use nitro_cli::{build_enclaves, console_enclaves, create_app, terminate_all_enclaves};
 
 /// *Nitro CLI* application entry point.
 fn main() {
@@ -59,25 +59,36 @@ fn main() {
 
             info!("Sent command: Run");
             replies.push(comm);
-            enclave_process_handle_all_replies::<EnclaveRunInfo>(&mut replies, 0, false)
+            enclave_process_handle_all_replies::<EnclaveRunInfo>(&mut replies, 0, false, vec![0])
                 .ok_or_exit(args.usage());
         }
         ("terminate-enclave", Some(args)) => {
-            let terminate_args = TerminateEnclavesArgs::new_with(args).ok_or_exit(args.usage());
-            let mut comm = enclave_proc_connect_to_single(&terminate_args.enclave_id)
-                .ok_or_exit("Failed to open socket.");
-            // TODO: Replicate output of old CLI on invalid enclave IDs.
-            enclave_proc_command_send_single::<EmptyArgs>(
-                EnclaveProcessCommandType::Terminate,
-                None,
-                &mut comm,
-            )
-            .ok_or_exit("Failed to send terminate command.");
+            if args.is_present("all") {
+                terminate_all_enclaves().ok_or_exit(
+                    "Failed to terminate all running enclaves belonging to current user.",
+                );
+            } else {
+                let terminate_args = TerminateEnclavesArgs::new_with(args).ok_or_exit(args.usage());
+                let mut comm = enclave_proc_connect_to_single(&terminate_args.enclave_id)
+                    .ok_or_exit("Failed to open socket.");
+                // TODO: Replicate output of old CLI on invalid enclave IDs.
+                enclave_proc_command_send_single::<EmptyArgs>(
+                    EnclaveProcessCommandType::Terminate,
+                    None,
+                    &mut comm,
+                )
+                .ok_or_exit("Failed to send terminate command.");
 
-            info!("Sent command: Terminate");
-            replies.push(comm);
-            enclave_process_handle_all_replies::<EnclaveTerminateInfo>(&mut replies, 0, false)
+                info!("Sent command: Terminate");
+                replies.push(comm);
+                enclave_process_handle_all_replies::<EnclaveTerminateInfo>(
+                    &mut replies,
+                    0,
+                    false,
+                    vec![0],
+                )
                 .ok_or_exit(args.usage());
+            }
         }
         ("describe-enclaves", _) => {
             let (comms, comm_errors) = enclave_proc_command_send_all::<EmptyArgs>(
@@ -92,6 +103,7 @@ fn main() {
                 &mut replies,
                 comm_errors,
                 true,
+                vec![0],
             )
             .ok_or_exit(args.usage());
         }

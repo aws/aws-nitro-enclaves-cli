@@ -16,7 +16,7 @@ use log::error;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
@@ -92,16 +92,28 @@ pub fn notify_error(err_msg: &str) {
 }
 
 /// Read a LE-encoded 64-bit unsigned value from a socket.
-pub fn read_u64_le(socket: &mut dyn Read) -> io::Result<u64> {
+pub fn read_u64_le(socket: &mut dyn Read) -> NitroCliResult<u64> {
     let mut bytes = [0u8; std::mem::size_of::<u64>()];
-    socket.read_exact(&mut bytes)?;
+    socket.read_exact(&mut bytes).map_err(|e| {
+        format!(
+            "Failed to read {} bytes from given socket: {:?}",
+            std::mem::size_of::<u64>(),
+            e
+        )
+    })?;
     Ok(u64::from_le_bytes(bytes))
 }
 
 /// Write a LE-encoded 64-bit unsigned value to a socket.
-pub fn write_u64_le(socket: &mut dyn Write, value: u64) -> io::Result<()> {
+pub fn write_u64_le(socket: &mut dyn Write, value: u64) -> NitroCliResult<()> {
     let bytes = value.to_le_bytes();
-    socket.write_all(&bytes)
+    socket.write_all(&bytes).map_err(|e| {
+        format!(
+            "Failed to write {} bytes to given socket: {:?}",
+            std::mem::size_of::<u64>(),
+            e
+        )
+    })
 }
 
 /// Send a command to a single socket.
@@ -109,44 +121,53 @@ pub fn enclave_proc_command_send_single<T>(
     cmd: EnclaveProcessCommandType,
     args: Option<&T>,
     mut socket: &mut UnixStream,
-) -> io::Result<()>
+) -> NitroCliResult<()>
 where
     T: Serialize,
 {
     // Serialize the command type.
     let cmd_bytes =
-        serde_cbor::to_vec(&cmd).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        serde_cbor::to_vec(&cmd).map_err(|e| format!("Invalid single command format: {:?}", e))?;
 
     // The command is written twice. The first read is done by the connection listener to check if this is
     // a shut-down command. The second read is done by the enclave process for all non-shut-down commands.
     for _ in 0..2 {
-        write_u64_le(&mut socket, cmd_bytes.len() as u64)?;
-        socket.write_all(&cmd_bytes[..])?;
+        write_u64_le(&mut socket, cmd_bytes.len() as u64)
+            .map_err(|e| format!("Failed to send single command size: {:?}", e))?;
+        socket
+            .write_all(&cmd_bytes[..])
+            .map_err(|e| format!("Failed to send single command: {:?}", e))?;
     }
 
     // Serialize the command arguments.
     if let Some(args) = args {
-        let arg_bytes =
-            serde_cbor::to_vec(args).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let arg_bytes = serde_cbor::to_vec(args)
+            .map_err(|e| format!("Invalid single command arguments: {:?}", e))?;
 
         // Write the serialized command arguments.
-        write_u64_le(&mut socket, arg_bytes.len() as u64)?;
-        socket.write_all(&arg_bytes)?;
+        write_u64_le(&mut socket, arg_bytes.len() as u64)
+            .map_err(|e| format!("Failed to send arguments size: {:?}", e))?;
+        socket
+            .write_all(&arg_bytes)
+            .map_err(|e| format!("Failed to send arguments: {:?}", e))?;
     }
 
     Ok(())
 }
 
 /// Receive an object of a specified type from an input stream.
-pub fn receive_from_stream<T>(input_stream: &mut dyn Read) -> io::Result<T>
+pub fn receive_from_stream<T>(input_stream: &mut dyn Read) -> NitroCliResult<T>
 where
     T: DeserializeOwned,
 {
-    let size = read_u64_le(input_stream)? as usize;
+    let size = read_u64_le(input_stream)
+        .map_err(|e| format!("Failed to receive data size: {:?}", e))? as usize;
     let mut raw_data: Vec<u8> = vec![0; size];
-    input_stream.read_exact(&mut raw_data[..])?;
+    input_stream
+        .read_exact(&mut raw_data[..])
+        .map_err(|e| format!("Failed to receive data: {:?}", e))?;
     let data: T = serde_cbor::from_slice(&raw_data[..])
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        .map_err(|e| format!("Failed to decode received data: {:?}", e))?;
     Ok(data)
 }
 
@@ -160,7 +181,7 @@ pub fn get_sockets_dir_path() -> PathBuf {
 }
 
 /// Get the path to the Unix socket owned by an enclave process which also owns the enclave with the given ID.
-pub fn get_socket_path(enclave_id: &str) -> io::Result<PathBuf> {
+pub fn get_socket_path(enclave_id: &str) -> NitroCliResult<PathBuf> {
     // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
     let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
     let sockets_path = get_sockets_dir_path();

@@ -79,7 +79,10 @@ fn run_terminate(
     mut enclave_manager: EnclaveManager,
 ) {
     terminate_enclaves(&mut enclave_manager, Some(&connection)).unwrap_or_else(|e| {
-        notify_error_with_conn(&format!("Failed to terminate enclave: {}", e), &connection);
+        notify_error_with_conn(
+            &format!("Failed to terminate enclave: {:?}", e),
+            &connection,
+        );
     });
 
     // Notify the main thread that enclave termination has completed.
@@ -96,22 +99,28 @@ fn notify_terminate(
     enclave_manager: EnclaveManager,
 ) -> NitroCliResult<JoinHandle<()>> {
     let (local_stream, thread_stream) =
-        UnixStream::pair().map_err(|e| format!("Failed to create stream pair: {}", e))?;
+        UnixStream::pair().map_err(|e| format!("Failed to create stream pair: {:?}", e))?;
 
-    conn_listener.add_stream_to_epoll(local_stream);
+    conn_listener
+        .add_stream_to_epoll(local_stream)
+        .map_err(|e| format!("Failed to add stream to epoll: {:?}", e))?;
     Ok(thread::spawn(move || {
         run_terminate(connection, thread_stream, enclave_manager)
     }))
 }
 
 /// Launch the POSIX signal handler on a dedicated thread and ensure its events are accessible.
-fn enclave_proc_configure_signal_handler(conn_listener: &ConnectionListener) {
+fn enclave_proc_configure_signal_handler(conn_listener: &ConnectionListener) -> NitroCliResult<()> {
     let mut signal_handler = SignalHandler::new_with_defaults().mask_all();
     let (local_stream, thread_stream) =
         UnixStream::pair().ok_or_exit("Failed to create stream pair.");
 
-    conn_listener.add_stream_to_epoll(local_stream);
+    conn_listener
+        .add_stream_to_epoll(local_stream)
+        .map_err(|e| format!("Failed to add stream to epoll: {:?}", e))?;
     signal_handler.start_handler(thread_stream.into_raw_fd(), enclave_proc_handle_signals);
+
+    Ok(())
 }
 
 /// The default POSIX signal handling function, which notifies the enclave process to shut down gracefully.
@@ -131,9 +140,12 @@ fn enclave_proc_handle_signals(comm_fd: RawFd, signal: Signal) -> bool {
 }
 
 /// Handle an event coming from an enclave.
-fn try_handle_enclave_event(connection: &Connection) -> HandledEnclaveEvent {
+fn try_handle_enclave_event(connection: &Connection) -> NitroCliResult<HandledEnclaveEvent> {
     // Check if this is an enclave connection.
-    if let Some(mut enc_events) = connection.get_enclave_event_flags() {
+    if let Some(mut enc_events) = connection
+        .get_enclave_event_flags()
+        .map_err(|e| format!("Failed to check for enclave connection: {:?}", e))?
+    {
         let enc_hup = enc_events.contains(EpollFlags::EPOLLHUP);
 
         // Check if non-hang-up events have occurred.
@@ -145,14 +157,14 @@ fn try_handle_enclave_event(connection: &Connection) -> HandledEnclaveEvent {
         // If we received the hang-up event we need to terminate cleanly.
         if enc_hup {
             warn!("Received hang-up event from the enclave. Enclave process will shut down.");
-            return HandledEnclaveEvent::HangUp;
+            return Ok(HandledEnclaveEvent::HangUp);
         }
 
         // Non-hang-up enclave events are not fatal.
-        return HandledEnclaveEvent::Unexpected;
+        return Ok(HandledEnclaveEvent::Unexpected);
     }
 
-    HandledEnclaveEvent::None
+    Ok(HandledEnclaveEvent::None)
 }
 
 /// Handle a single command, returning whenever an error occurs.
@@ -172,22 +184,22 @@ fn handle_command(
             } else {
                 let run_args = connection
                     .read::<RunEnclavesArgs>()
-                    .map_err(|e| format!("Failed to get run arguments: {}", e))?;
+                    .map_err(|e| format!("Failed to get run arguments: {:?}", e))?;
                 info!("Run args = {:?}", run_args);
 
                 *enclave_manager = run_enclaves(&run_args, Some(connection))
-                    .map_err(|e| format!("Failed to run enclave: {}", e))?;
+                    .map_err(|e| format!("Failed to run enclave: {:?}", e))?;
 
                 info!("Enclave ID = {}", enclave_manager.enclave_id);
                 logger.update_logger_id(&get_logger_id(&enclave_manager.enclave_id));
                 conn_listener
                     .start(&enclave_manager.enclave_id)
-                    .map_err(|e| format!("Failed to start connection listener: {}", e))?;
+                    .map_err(|e| format!("Failed to start connection listener: {:?}", e))?;
 
                 // Add the enclave descriptor to epoll to listen for enclave events.
                 let enc_fd = enclave_manager
                     .get_enclave_descriptor()
-                    .map_err(|e| format!("Failed to get enclave descriptor: {}", e))?;
+                    .map_err(|e| format!("Failed to get enclave descriptor: {:?}", e))?;
                 conn_listener.register_enclave_descriptor(enc_fd);
                 (0, false)
             }
@@ -234,20 +246,27 @@ fn handle_command(
 }
 
 /// The main event loop of the enclave process.
-fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
+fn process_event_loop(
+    comm_stream: UnixStream,
+    logger: &EnclaveProcLogWriter,
+) -> NitroCliResult<()> {
     let mut conn_listener = ConnectionListener::new();
     let mut enclave_manager = EnclaveManager::default();
     let mut terminate_thread: Option<std::thread::JoinHandle<()>> = None;
     let mut done = false;
+    let mut ret_value = Ok(());
 
     // Start the signal handler before spawning any other threads. This is done since the
     // handler will mask all relevant signals from the current thread and this setting will
     // be automatically inherited by all threads spawned from this point on; we want this
     // because only the dedicated thread spawned by the handler should listen for signals.
-    enclave_proc_configure_signal_handler(&conn_listener);
+    enclave_proc_configure_signal_handler(&conn_listener)
+        .map_err(|e| format!("Failed to configure signal handler: {:?}", e))?;
 
     // Add the CLI communication channel to epoll.
-    conn_listener.handle_new_connection(comm_stream);
+    conn_listener
+        .handle_new_connection(comm_stream)
+        .map_err(|e| format!("Failed to register new connection with epoll: {:?}", e))?;
 
     while !done {
         // We can get connections to CLI instances, to the enclave or to ourselves.
@@ -256,9 +275,13 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
 
         // If this is an enclave event, handle it.
         match try_handle_enclave_event(&connection) {
-            HandledEnclaveEvent::HangUp => break,
-            HandledEnclaveEvent::Unexpected => continue,
-            HandledEnclaveEvent::None => (),
+            Ok(HandledEnclaveEvent::HangUp) => break,
+            Ok(HandledEnclaveEvent::Unexpected) => continue,
+            Ok(HandledEnclaveEvent::None) => (),
+            Err(err_str) => {
+                ret_value = Err(format!("Failed to handle enclave event: {:?}", err_str));
+                break;
+            }
         }
 
         // At this point we have a connection that is not coming from an enclave.
@@ -322,6 +345,8 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     }
 
     info!("Enclave process {} exited event loop.", process::id());
+
+    ret_value
 }
 
 /// Create the enclave process.
@@ -358,6 +383,9 @@ fn create_enclave_process(logger: &EnclaveProcLogWriter) {
 /// * `logger` - The current log writer, whose ID gets updated when an enclave is launched.
 pub fn enclave_process_run(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
     create_enclave_process(logger);
-    process_event_loop(comm_stream, logger);
+    let res = process_event_loop(comm_stream, logger);
+    if let Err(err_str) = res {
+        notify_error(&err_str);
+    }
     process::exit(0);
 }

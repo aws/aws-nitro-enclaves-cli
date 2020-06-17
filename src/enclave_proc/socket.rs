@@ -5,14 +5,13 @@
 
 use inotify::{EventMask, Inotify, WatchMask};
 use log::{debug, warn};
-use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use crate::common::get_socket_path;
-use crate::common::ExitGracefully;
+use crate::common::{ExitGracefully, NitroCliResult};
 
 /// The structure which manages the Unix socket that an enclave process listens on for commands.
 #[derive(Default)]
@@ -39,14 +38,15 @@ impl Clone for EnclaveProcSock {
 
 impl Drop for EnclaveProcSock {
     fn drop(&mut self) {
-        self.close_mut();
+        self.close_mut().ok_or_exit("Failed to drop socket.");
     }
 }
 
 impl EnclaveProcSock {
     /// Create a new `EnclaveProcSock` instance from a given enclave ID.
-    pub fn new(enclave_id: &str) -> io::Result<Self> {
-        let socket_path = get_socket_path(enclave_id)?;
+    pub fn new(enclave_id: &str) -> NitroCliResult<Self> {
+        let socket_path = get_socket_path(enclave_id)
+            .map_err(|e| format!("Failed to get socket path: {:?}", e))?;
 
         Ok(EnclaveProcSock {
             socket_path,
@@ -66,18 +66,21 @@ impl EnclaveProcSock {
     }
 
     /// Start monitoring the Unix socket's state using `inotify`.
-    pub fn start_monitoring(&mut self) -> io::Result<()> {
+    pub fn start_monitoring(&mut self) -> NitroCliResult<()> {
         let path_clone = self.socket_path.clone();
         let requested_remove_clone = self.requested_remove.clone();
-        let mut socket_inotify = Inotify::init()?;
+        let mut socket_inotify = Inotify::init()
+            .map_err(|e| format!("Failed to initialize socket notifications: {:?}", e))?;
 
         // Relevant events to listen for are:
         // - IN_DELETE_SELF: triggered when the socket file inode gets removed.
         // - IN_ATTRIB: triggered when the reference count of the file inode changes.
-        socket_inotify.add_watch(
-            self.socket_path.as_path(),
-            WatchMask::ATTRIB | WatchMask::DELETE_SELF,
-        )?;
+        socket_inotify
+            .add_watch(
+                self.socket_path.as_path(),
+                WatchMask::ATTRIB | WatchMask::DELETE_SELF,
+            )
+            .map_err(|e| format!("Failed to add watch to inotify: {:?}", e))?;
         self.remove_listener_thread = Some(thread::spawn(move || {
             socket_removal_listener(path_clone, requested_remove_clone, socket_inotify)
         }));
@@ -85,13 +88,17 @@ impl EnclaveProcSock {
     }
 
     /// Remove the managed Unix socket and clean up after it. This is called with a mutable self-reference.
-    fn close_mut(&mut self) {
+    fn close_mut(&mut self) -> NitroCliResult<()> {
         // Delete the socket from the disk. Also mark that this operation is intended, so that the
         // socket file monitoring thread doesn't exit forcefully when notifying the deletion.
         self.requested_remove.store(true, Ordering::SeqCst);
         if self.socket_path.exists() {
-            std::fs::remove_file(&self.socket_path)
-                .ok_or_exit(&format!("Failed to remove socket {:?}.", self.socket_path));
+            std::fs::remove_file(&self.socket_path).map_err(|e| {
+                format!(
+                    "Failed to remove socket {:?} from disk: {:?}",
+                    self.socket_path, e
+                )
+            })?;
         }
 
         // Since the socket file has been deleted, we also wait for the event listener thread to finish.
@@ -100,13 +107,16 @@ impl EnclaveProcSock {
                 .take()
                 .unwrap()
                 .join()
-                .ok_or_exit("Failed to join socket notification thread.");
+                .map_err(|e| format!("Failed to join socket notification thread: {:?}", e))?;
         }
+
+        Ok(())
     }
 
     /// Remove the managed Unix socket and clean up after it.
-    pub fn close(mut self) {
-        self.close_mut();
+    pub fn close(mut self) -> NitroCliResult<()> {
+        self.close_mut()
+            .map_err(|e| format!("Failed to close socket: {:?}", e))
     }
 }
 
@@ -244,8 +254,9 @@ mod tests {
             assert!(result.is_ok());
 
             // Call `close_mut()` and expect `socket.requested_remove` to change to True
-            socket.close_mut();
+            let result = socket.close_mut();
 
+            assert!(result.is_ok());
             assert!(socket.requested_remove.load(Ordering::SeqCst));
         }
 

@@ -247,14 +247,14 @@ impl Connection {
     }
 
     /// Get the enclave event flags.
-    pub fn get_enclave_event_flags(&self) -> Option<EpollFlags> {
+    pub fn get_enclave_event_flags(&self) -> NitroCliResult<Option<EpollFlags>> {
         let lock = self
             .data
             .lock()
-            .ok_or_exit("Failed to get connection lock.");
+            .map_err(|e| format!("Failed to get connection lock: {:?}", e))?;
         match lock.input_stream {
-            None => Some(lock.epoll_flags),
-            _ => None,
+            None => Ok(Some(lock.epoll_flags)),
+            _ => Ok(None),
         }
     }
 

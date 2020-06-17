@@ -169,7 +169,12 @@ function driver_build {
 function configure_resource_directory {
     sudo_run "mkdir -p $1" || fail "Could not create directory \"$1\"."
     sudo_run "chown root:$NE_GROUP_NAME $1" || fail "Could not set ownership for directory \"$1\"."
-    sudo_run "chmod 774 $1" || fail "Could not set permissions for directory \"$1\"."
+
+    # We set permissions to 775 since the owner and the group should get full permissions. Any other
+    # users may read the contents of the directory and access its files, but they cannot remove any
+    # files inside the directory, which prevents unauthorised removal of the log file and any enclave
+    # socket (therefore, other users cannot terminate enclaves).
+    sudo_run "chmod 775 $1" || fail "Could not set permissions for directory \"$1\"."
 }
 
 # Configure the resource directories for Nitro CLI logging and sockets.
@@ -183,6 +188,7 @@ function configure_resource_directories {
 
 # Insert the driver and configure udev after it is inserted.
 function driver_insert {
+    local log_file="/var/log/$RES_DIR_NAME/nitro_enclaves.log"
     local loop_idx=0
 
     # Remove an older driver if it is inserted.
@@ -233,10 +239,16 @@ function driver_insert {
     sudo_run "usermod -a -G $NE_GROUP_NAME $THIS_USER" || fail "Could not add user to the NE group."
     echo "Done."
 
-    # Lastly, we configure the relevant resource directories.
+    # We configure the relevant resource directories.
     echo "Configuring the resource directories..."
     configure_resource_directories
     echo "Done."
+
+    # Lastly, we touch the log file so that any user may start a CLI instance at any time.
+    # Otherwise, users outside of the group won't be able to start a CLI instance (since they won't have
+    # permission to create the log file) until a valid user does so first.
+    sudo_run "touch $log_file" || fail "Failed to initialize log file."
+    sudo_run "chown root:$NE_GROUP_NAME $log_file && chmod 766 $log_file" || fail "Failed to set log file permissions."
 
     # If we have configured the group membership but the user still doesn't see it, we would normally need to
     # log-out and log-in or reboot. We avoid this by resetting the shell with the existing user. This must

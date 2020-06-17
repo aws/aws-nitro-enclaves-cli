@@ -4,7 +4,10 @@
 
 use log::{debug, info, warn};
 use nix::sys::epoll::{self, EpollEvent, EpollFlags, EpollOp};
+use std::fs::set_permissions;
+use std::fs::Permissions;
 use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread::{self, JoinHandle};
@@ -99,6 +102,8 @@ impl ConnectionListener {
     fn connection_listener_run(mut self) {
         // Bind the listener to the socket and spawn the listener thread.
         let listener = UnixListener::bind(self.socket.get_path()).ok_or_exit("Error binding.");
+
+        self.enable_credentials_passing(&listener);
         self.socket
             .start_monitoring()
             .ok_or_exit("Error monitoring socket.");
@@ -190,6 +195,43 @@ impl ConnectionListener {
             .ok_or_exit("Failed to remove fd from epoll.");
 
         Connection::new(events[0].events(), input_stream)
+    }
+
+    /// Enable the sending of credentials from incoming connections.
+    fn enable_credentials_passing(&self, listener: &UnixListener) {
+        let val: libc::c_int = 1;
+        let rc = unsafe {
+            libc::setsockopt(
+                listener.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_PASSCRED,
+                &val as *const libc::c_int as *const libc::c_void,
+                std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+            )
+        };
+
+        if rc < 0 {
+            warn!(
+                "Failed to enable credentials passing on socket listener: {}",
+                io::Error::last_os_error()
+            );
+        }
+
+        // Since access policy is handled within the enclave process explicitly, we
+        // allow full access to the socket itself (otherwise other users will not
+        // be allowed to connect to the socket in the first place).
+        if let Ok(sock_addr) = listener.local_addr() {
+            if let Some(sock_path) = sock_addr.as_pathname() {
+                let perms = Permissions::from_mode(0o766);
+                if let Err(e) = set_permissions(sock_path, perms) {
+                    warn!("Failed to update socket permissions: {}", e);
+                }
+            } else {
+                warn!("Failed to get the listener's socket path.");
+            }
+        } else {
+            warn!("Failed to get the socket listener's local address.")
+        }
     }
 }
 

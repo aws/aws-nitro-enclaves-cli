@@ -101,6 +101,7 @@ pub struct NitroEnclavesSlotAddMem {
 pub struct NitroEnclavesSlotAddVcpu {
     slot_uid: u64,
     cpu_id: u32,
+    padding: [u8; 4],
 }
 
 #[derive(Default, Debug, Copy, Clone, Deserialize)]
@@ -142,6 +143,7 @@ pub struct NitroEnclavesDestroy {}
 #[repr(packed)]
 pub struct NitroEnclavesCmdReply {
     pub rc: i32,
+    pub padding0: [u8; 4],
     pub slot_uid: u64,
     pub enclave_cid: u64,
     pub vsock_loader_token: u64,
@@ -151,6 +153,7 @@ pub struct NitroEnclavesCmdReply {
     pub nr_cpus: u64,
     pub flags: u64,
     pub state: u16,
+    pub padding1: [u8; 6],
 }
 
 impl NitroEnclavesEnclaveStart {
@@ -213,7 +216,12 @@ impl NitroEnclavesSlotAddMem {
 
 impl NitroEnclavesSlotAddVcpu {
     pub fn new(slot_uid: u64, cpu_id: u32) -> Self {
-        NitroEnclavesSlotAddVcpu { slot_uid, cpu_id }
+        let padding: [u8; 4] = [0; 4];
+        NitroEnclavesSlotAddVcpu {
+            slot_uid,
+            cpu_id,
+            padding,
+        }
     }
     pub fn submit(self, cli_dev: &mut CliDev) -> NitroCliResult<NitroEnclavesCmdReply> {
         cli_dev.submit_and_wait_reply(NitroEnclavesCmdType::NitroEnclavesSlotAddVcpu, self)

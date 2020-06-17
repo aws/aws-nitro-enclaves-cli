@@ -6,10 +6,12 @@ use chrono::offset::{Local, Utc};
 use chrono::DateTime;
 use flexi_logger::writers::LogWriter;
 use flexi_logger::{DeferredNow, LogTarget, Record};
+use nix::unistd::Uid;
 use std::env;
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, Permissions};
 use std::io::{Result, Write};
 use std::ops::{Deref, DerefMut};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -35,7 +37,7 @@ impl EnclaveProcLogWriter {
     pub fn new() -> Result<Self> {
         // All logging shall be directed to a centralized file.
         Ok(EnclaveProcLogWriter {
-            out_file: Arc::new(Mutex::new(open_log_file(&get_log_file_path()))),
+            out_file: Arc::new(Mutex::new(open_log_file(&get_log_file_path())?)),
             logger_id: Arc::new(Mutex::new(String::new())),
         })
     }
@@ -44,7 +46,7 @@ impl EnclaveProcLogWriter {
     fn safe_open_log_file(&self) {
         let log_path = &get_log_file_path();
         if !log_path.exists() {
-            let new_file = open_log_file(log_path);
+            let new_file = open_log_file(log_path).ok_or_exit("Failed to open log file.");
             let mut file_ref = self.out_file.lock().ok_or_exit("Failed to lock log file.");
             *file_ref.deref_mut() = new_file;
         }
@@ -120,13 +122,22 @@ fn get_log_file_path() -> PathBuf {
 }
 
 /// Open a file at a given location for writing and appending.
-fn open_log_file(file_path: &Path) -> File {
-    OpenOptions::new()
+fn open_log_file(file_path: &Path) -> Result<File> {
+    let file = OpenOptions::new()
         .create(true)
         .append(true)
         .read(false)
-        .open(file_path)
-        .ok_or_exit("Failed to open log file.")
+        .open(file_path)?;
+
+    // The log file should be write-accessible to any user, since
+    // any user may launch a CLI instance. Only the file's owner
+    // may change its permissions.
+    if Uid::from_raw(file.metadata()?.uid()) == Uid::current() {
+        let perms = Permissions::from_mode(0o766);
+        file.set_permissions(perms)?;
+    }
+
+    Ok(file)
 }
 
 /// Initialize logging.
@@ -163,7 +174,7 @@ mod tests {
         if let Ok(file0) = file0 {
             let test_file_path = file0.path();
 
-            let f = open_log_file(&test_file_path);
+            let f = open_log_file(&test_file_path).unwrap();
             let metadata = f.metadata();
             assert!(metadata.is_ok());
 
@@ -172,7 +183,7 @@ mod tests {
                 let permissions = metadata.permissions();
                 let mode = permissions.mode();
 
-                assert_eq!(mode & 0o777, 0o600);
+                assert_eq!(mode & 0o777, 0o766);
             }
         }
     }

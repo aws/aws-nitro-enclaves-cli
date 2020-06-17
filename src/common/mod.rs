@@ -32,6 +32,7 @@ pub enum EnclaveProcessCommandType {
     Describe,
     GetEnclaveCID,
     ConnectionListenerStop,
+    NotPermitted,
 }
 
 /// The type of replies that the enclave process can send to a CLI.

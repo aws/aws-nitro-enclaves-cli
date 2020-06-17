@@ -152,28 +152,34 @@ fn handle_command(
     conn_listener: &mut ConnectionListener,
     enclave_manager: &mut EnclaveManager,
     terminate_thread: &mut Option<std::thread::JoinHandle<()>>,
-) -> NitroCliResult<bool> {
-    match cmd {
+) -> NitroCliResult<(i32, bool)> {
+    Ok(match cmd {
         EnclaveProcessCommandType::Run => {
-            let run_args = connection
-                .read::<RunEnclavesArgs>()
-                .map_err(|e| format!("Failed to get run arguments: {}", e))?;
-            info!("Run args = {:?}", run_args);
+            // We should never receive a Run command if we are already running.
+            if !enclave_manager.enclave_id.is_empty() {
+                (libc::EEXIST, false)
+            } else {
+                let run_args = connection
+                    .read::<RunEnclavesArgs>()
+                    .map_err(|e| format!("Failed to get run arguments: {}", e))?;
+                info!("Run args = {:?}", run_args);
 
-            *enclave_manager = run_enclaves(&run_args, Some(connection))
-                .map_err(|e| format!("Failed to run enclave: {}", e))?;
+                *enclave_manager = run_enclaves(&run_args, Some(connection))
+                    .map_err(|e| format!("Failed to run enclave: {}", e))?;
 
-            info!("Enclave ID = {}", enclave_manager.enclave_id);
-            logger.update_logger_id(&get_logger_id(&enclave_manager.enclave_id));
-            conn_listener
-                .start(&enclave_manager.enclave_id)
-                .map_err(|e| format!("Failed to start connection listener: {}", e))?;
+                info!("Enclave ID = {}", enclave_manager.enclave_id);
+                logger.update_logger_id(&get_logger_id(&enclave_manager.enclave_id));
+                conn_listener
+                    .start(&enclave_manager.enclave_id)
+                    .map_err(|e| format!("Failed to start connection listener: {}", e))?;
 
-            // Add the enclave descriptor to epoll to listen for enclave events.
-            let enc_fd = enclave_manager
-                .get_enclave_descriptor()
-                .map_err(|e| format!("Failed to get enclave descriptor: {}", e))?;
-            conn_listener.register_enclave_descriptor(enc_fd);
+                // Add the enclave descriptor to epoll to listen for enclave events.
+                let enc_fd = enclave_manager
+                    .get_enclave_descriptor()
+                    .map_err(|e| format!("Failed to get enclave descriptor: {}", e))?;
+                conn_listener.register_enclave_descriptor(enc_fd);
+                (0, false)
+            }
         }
 
         EnclaveProcessCommandType::Terminate => {
@@ -182,11 +188,12 @@ fn handle_command(
                 conn_listener,
                 enclave_manager.clone(),
             )?);
+            (0, false)
         }
 
         EnclaveProcessCommandType::TerminateComplete => {
             info!("Enclave has completed termination.");
-            return Ok(true);
+            (0, true)
         }
 
         EnclaveProcessCommandType::GetEnclaveCID => {
@@ -196,6 +203,7 @@ fn handle_command(
             connection
                 .write_u64(enclave_cid)
                 .map_err(|e| format!("Failed to send enclave CID: {}", e))?;
+            (0, false)
         }
 
         EnclaveProcessCommandType::Describe => {
@@ -205,12 +213,13 @@ fn handle_command(
 
             describe_enclaves(&enclave_manager, connection)
                 .map_err(|e| format!("Failed to describe enclave: {}", e))?;
+            (0, false)
         }
 
-        EnclaveProcessCommandType::ConnectionListenerStop => return Ok(true),
-    };
+        EnclaveProcessCommandType::ConnectionListenerStop => (0, true),
 
-    Ok(false)
+        EnclaveProcessCommandType::NotPermitted => (libc::EACCES, false),
+    })
 }
 
 /// The main event loop of the enclave process.
@@ -243,7 +252,7 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
 
         // At this point we have a connection that is not coming from an enclave.
         // Read the command that should be executed.
-        let cmd = match connection.read::<EnclaveProcessCommandType>() {
+        let cmd = match connection.read_command() {
             Ok(value) => value,
             Err(e) => {
                 notify_error_with_conn(&format!("Failed to read command type: {}", e), &connection);
@@ -263,11 +272,11 @@ fn process_event_loop(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
 
         // Obtain the status code and whether the event loop must be exited.
         let (status_code, do_break) = match status {
-            Ok(value) => (0, value),
+            Ok(value) => value,
             Err(e) => {
                 // Any encountered error is both logged and send to the other side of the connection.
                 notify_error_with_conn(&format!("Error: {}", e), &connection);
-                (1, true)
+                (libc::EINVAL, true)
             }
         };
 

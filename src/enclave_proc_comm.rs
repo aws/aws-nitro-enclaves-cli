@@ -69,15 +69,23 @@ pub fn enclave_proc_connect_to_all() -> io::Result<Vec<UnixStream>> {
                 }
 
                 // At this point we have found a potential socket.
-                if let Ok(conn) = UnixStream::connect(path_str) {
-                    // We have connected to an enclave process
-                    info!("Connected to: {}", path_str);
-                    return Some(conn);
+                match UnixStream::connect(path_str) {
+                    Ok(conn) => {
+                        // We have connected to an enclave process
+                        info!("Connected to: {}", path_str);
+                        return Some(conn);
+                    }
+                    Err(e) => {
+                        if e.kind() == ErrorKind::PermissionDenied {
+                            // Don't touch the socket if connection failed due to insufficient permissions.
+                            info!("Connection to '{}' failed: {}", path_str, e);
+                        } else {
+                            // For all other connection errors, assume the socket is stale and delete it.
+                            info!("Deleting stale socket: {}", path_str);
+                            fs::remove_file(path_str).ok_or_exit("Failed to delete socket.");
+                        }
+                    }
                 }
-
-                // Can't connect to the enclave process, so delete the socket.
-                info!("Deleting stale socket: {}", path_str);
-                fs::remove_file(path_str).ok_or_exit("Failed to delete socket.");
             }
 
             None

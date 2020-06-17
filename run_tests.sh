@@ -41,7 +41,7 @@ pytest-3 tests/integration/test_installation.py \
 	|| test_failed
 
 # Clean up build artefacts
-rm -rf .build-*
+make clean
 
 # Run cargo fmt
 echo "=================== cargo fmt ========================="

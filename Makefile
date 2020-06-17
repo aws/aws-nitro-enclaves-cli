@@ -298,3 +298,4 @@ uninstall:
 .PHONY: clean
 clean:
 	$(RM) -rf $(OBJ_PATH)
+	$(RM) -f .build*

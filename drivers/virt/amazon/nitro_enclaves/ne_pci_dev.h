@@ -135,7 +135,7 @@ struct enclave_start_req {
 	u64 enclave_cid;
 	/* Flags for the enclave to start with (e.g. debug mode). */
 	u64 flags;
-} __attribute__ ((__packed__));
+};
 
 struct enclave_start_reply {
 	s64 rc;
@@ -151,34 +151,34 @@ struct enclave_start_reply {
 	 * VMM endpoint via vsock.
 	 */
 	u64 vsock_loader_token;
-} __attribute__ ((__packed__));
+};
 
 struct enclave_get_slot_req {
 	/* Context ID (CID) for the enclave vsock device. */
 	u64 enclave_cid;
-} __attribute__ ((__packed__));
+};
 
 struct enclave_get_slot_reply {
 	s64 rc;
 	/* Slot unique id mapped to the enclave. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct enclave_stop_req {
 	/* Slot unique id mapped to the enclave to stop. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct enclave_stop_reply {
 	s64 rc;
 	/* Slot unique id mapped to the enclave. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct slot_alloc_req {
 	/* In order to avoid weird sizeof edge cases. */
 	u8 unused;
-} __attribute__ ((__packed__));
+};
 
 struct slot_alloc_reply {
 	s64 rc;
@@ -189,18 +189,18 @@ struct slot_alloc_reply {
 	 * the lower levels.
 	 */
 	u64 mem_regions;
-} __attribute__ ((__packed__));
+};
 
 struct slot_free_req {
 	/* Slot unique id mapped to the slot to free. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct slot_free_reply {
 	s64 rc;
 	/* Slot unique id mapped to the enclave. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct slot_add_mem_req {
 	/* Slot unique id mapped to the slot to add the memory region to. */
@@ -209,53 +209,54 @@ struct slot_add_mem_req {
 	u64 paddr;
 	/* Memory size, in bytes, of the memory region to add to the slot. */
 	u64 size;
-} __attribute__ ((__packed__));
+};
 
 struct slot_add_mem_reply {
 	s64 rc;
 	/* Slot unique id mapped to the enclave. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct slot_add_vcpu_req {
 	/* Slot unique id mapped to the slot to add the vCPU to. */
 	u64 slot_uid;
 	/* vCPU ID of the CPU to add to the enclave. */
 	u32 vcpu_id;
-} __attribute__ ((__packed__));
+	u8 padding[4];
+};
 
 struct slot_add_vcpu_reply {
 	s64 rc;
 	/* Slot unique id mapped to the enclave. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct slot_count_req {
 	/* In order to avoid weird sizeof edge cases. */
 	u8 unused;
-} __attribute__ ((__packed__));
+};
 
 struct slot_count_reply {
 	s64 rc;
 	/* Number of active slots. */
 	u64 slot_count;
-} __attribute__ ((__packed__));
+};
 
 struct next_slot_req {
 	/* Slot unique id of the next slot in the iteration. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct next_slot_reply {
 	s64 rc;
 	/* Slot unique id mapped to the enclave. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct slot_info_req {
 	/* Slot unique id mapped to the slot to get information about. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct slot_info_reply {
 	s64 rc;
@@ -276,29 +277,29 @@ struct slot_info_reply {
 	u64 flags;
 	/* The current state of the enclave. */
 	u16 state;
-} __attribute__ ((__packed__));
+};
 
 struct slot_add_bulk_vcpus_req {
 	/* Slot unique id mapped to the slot to add vCPUs to. */
 	u64 slot_uid;
 	/* Number of vCPUs to add to the slot. */
 	u64 nr_vcpus;
-} __attribute__ ((__packed__));
+};
 
 struct slot_add_bulk_vcpus_reply {
 	s64 rc;
 	/* Slot unique id mapped to the enclave. */
 	u64 slot_uid;
-} __attribute__ ((__packed__));
+};
 
 struct shutdown_req {
 	/* In order to avoid weird sizeof edge cases. */
 	u8 unused;
-} __attribute__ ((__packed__));
+};
 
 struct shutdown_reply {
 	s64 rc;
-} __attribute__ ((__packed__));
+};
 
 /*
  * TODO: Have a union in a general reply data structure, including all
@@ -306,6 +307,7 @@ struct shutdown_reply {
  */
 struct ne_pci_dev_cmd_reply {
 	s32 rc;
+	u8 padding0[4];
 	/* Valid for all commands except SLOT_COUNT and SHUTDOWN. */
 	u64 slot_uid;
 	/* Valid for ENCLAVE_START command. */
@@ -324,7 +326,8 @@ struct ne_pci_dev_cmd_reply {
 	u64 flags;
 	/* Valid for SLOT_INFO command. */
 	u16 state;
-} __attribute__ ((__packed__));
+	u8 padding1[6];
+};
 
 
 /**

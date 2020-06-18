@@ -27,6 +27,14 @@ fn main() {
                 .required(true),
         )
         .arg(
+            Arg::with_name("nsm_path")
+                .short("n")
+                .long("nsm")
+                .help("Path to the NitroSecureModule Kernel Driver")
+                .takes_value(true)
+                .required(true),
+        )
+        .arg(
             Arg::with_name("kernel_img_path")
                 .short("k")
                 .long("kernel")
@@ -78,6 +86,7 @@ fn main() {
 
     let docker_image = matches.value_of("docker_image").unwrap();
     let init_path = matches.value_of("init_path").unwrap();
+    let nsm_path = matches.value_of("nsm_path").unwrap();
     let kernel_img_path = matches.value_of("kernel_img_path").unwrap();
     let cmdline = matches.value_of("cmdline").unwrap();
     let linuxkit_path = matches.value_of("linuxkit_path").unwrap();
@@ -92,6 +101,7 @@ fn main() {
     let mut img = Docker2Eif::new(
         docker_image.to_string(),
         init_path.to_string(),
+        nsm_path.to_string(),
         kernel_img_path.to_string(),
         cmdline.to_string(),
         linuxkit_path.to_string(),

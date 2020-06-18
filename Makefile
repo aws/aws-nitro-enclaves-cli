@@ -274,6 +274,7 @@ install: install-tools nitro_enclaves
 	$(INSTALL) -D -m 0755 blobs/bzImage ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/bzImage
 	$(INSTALL) -D -m 0755 blobs/cmdline ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/cmdline
 	$(INSTALL) -D -m 0755 blobs/init ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/init
+	$(INSTALL) -D -m 0755 blobs/nsm.ko ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/nsm.ko
 	$(INSTALL) -D -m 0755 blobs/linuxkit ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/linuxkit
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves
 	$(INSTALL) -D -m 0755 drivers/virt/amazon/nitro_enclaves/nitro_enclaves.ko \

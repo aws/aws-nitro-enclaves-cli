@@ -10,6 +10,7 @@ build/
 **/*o.mod.o
 **/*mod.c
 **/*ko
+!blobs/nsm.ko
 **/*order
 **/*symvers
 **/*.tmp_versions

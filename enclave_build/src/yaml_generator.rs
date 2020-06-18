@@ -7,7 +7,7 @@ use tempfile::NamedTempFile;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct BootstrapRamfsTemplate {
-    files: (DirTemplate, FileTemplate),
+    files: (DirTemplate, FileTemplate, FileTemplate),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,6 +47,7 @@ pub enum YamlGeneratorError {
 pub struct YamlGenerator {
     docker_image: String,
     init_path: String,
+    nsm_path: String,
     cmd_path: String,
     env_path: String,
 }
@@ -55,12 +56,14 @@ impl YamlGenerator {
     pub fn new(
         docker_image: String,
         init_path: String,
+        nsm_path: String,
         cmd_path: String,
         env_path: String,
     ) -> Self {
         YamlGenerator {
             docker_image,
             init_path,
+            nsm_path,
             cmd_path,
             env_path,
         }
@@ -77,6 +80,11 @@ impl YamlGenerator {
                 FileTemplate {
                     path: String::from("init"),
                     source: self.init_path.clone(),
+                    mode: String::from("0755"),
+                },
+                FileTemplate {
+                    path: String::from("nsm.ko"),
+                    source: self.nsm_path.clone(),
                     mode: String::from("0755"),
                 },
             ),
@@ -163,6 +171,7 @@ mod tests {
         let yaml_generator = YamlGenerator::new(
             String::from("docker_image"),
             String::from("path_to_init"),
+            String::from("path_to_nsm"),
             String::from("path_to_cmd"),
             String::from("path_to_env"),
         );
@@ -180,6 +189,9 @@ mod tests {
              \n    mode: \"0755\"\
              \n  - path: init\
              \n    source: path_to_init\
+             \n    mode: \"0755\"\
+             \n  - path: nsm.ko\
+             \n    source: path_to_nsm\
              \n    mode: \"0755\"\
              "
         );

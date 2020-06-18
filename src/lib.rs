@@ -68,6 +68,7 @@ pub fn build_from_docker(
     let mut docker2eif = enclave_build::Docker2Eif::new(
         docker_uri.to_string(),
         format!("{}/init", blobs_path),
+        format!("{}/nsm.ko", blobs_path),
         format!("{}/bzImage", blobs_path),
         cmdline.trim().to_string(),
         format!("{}/linuxkit", blobs_path),

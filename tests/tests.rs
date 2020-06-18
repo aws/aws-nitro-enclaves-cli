@@ -66,11 +66,11 @@ mod tests {
             .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "ef88ef509be5b62eb5bcc74267bbd0904f47c0fd664e5e419d0055a0f321e7c4bdae25fd5ecae2554b882b4088c77e9e"
+            "6feb4a4250b8c5f653f0d3f9f7f2520c9b342e85010993936e81142a914c187d154cf0b93eba02714b916b12f2dc1bd7"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "f26275a4f280e8d35cbc7f628a20d65f00e282659a9e826be141fd0adc06e839175c94cff8ae97ea3d2d76261e16b6c0"
+            "20e82cca04407f81529a1220671cab405940d9f2a4e24b5276dfd84fdd4f504ac93c296753a3f3f4d80cd55e1779c5e1"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
@@ -109,11 +109,11 @@ mod tests {
             .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "39b4df57e27ce11466b7bff76a15fefbcbea24341f970c3124b8e852808d86301555a9d9b2a8486dfcd1fbbb9dcc70ce"
+            "9dd030f3e3f422f9276a5db3d1a8d89845fbb164c93b763bd16c6e64c022417cc663856078a1de8c7a17a2c35ea4f967"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "f26275a4f280e8d35cbc7f628a20d65f00e282659a9e826be141fd0adc06e839175c94cff8ae97ea3d2d76261e16b6c0"
+            "20e82cca04407f81529a1220671cab405940d9f2a4e24b5276dfd84fdd4f504ac93c296753a3f3f4d80cd55e1779c5e1"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
@@ -140,7 +140,7 @@ mod tests {
         .expect("Docker build failed");
 
         let args = RunEnclavesArgs {
-            enclave_cid: Some(17),
+            enclave_cid: None,
             eif_path: build_args.output,
             cpu_ids: None,
             cpu_count: Some(2),
@@ -169,7 +169,7 @@ mod tests {
         .expect("Docker build failed");
 
         let args = RunEnclavesArgs {
-            enclave_cid: Some(29),
+            enclave_cid: None,
             eif_path: build_args.output,
             cpu_ids: None,
             cpu_count: Some(2),
@@ -205,7 +205,7 @@ mod tests {
             .expect("Failed to check that the enclave booted");
 
         let contents = String::from_utf8(buffer).unwrap();
-        let boot = contents.contains("Run /init as init process");
+        let boot = contents.contains("nsm: loading out-of-tree module");
 
         assert_eq!(boot, true);
 
@@ -256,7 +256,7 @@ mod tests {
             eif_path: build_args.output,
             cpu_ids: None,
             cpu_count: Some(2),
-            memory_mib: 64,
+            memory_mib: 128,
             debug_mode: Some(true),
         };
 

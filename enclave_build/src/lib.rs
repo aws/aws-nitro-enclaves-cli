@@ -17,6 +17,7 @@ pub struct Docker2Eif<'a> {
     docker_image: String,
     docker: DockerUtil,
     init_path: String,
+    nsm_path: String,
     kernel_img_path: String,
     cmdline: String,
     linuxkit_path: String,
@@ -30,6 +31,7 @@ pub enum Docker2EifError {
     DockerfilePathError,
     ImagePullError,
     InitPathError,
+    NsmPathError,
     KernelPathError,
     LinuxkitExecError,
     LinuxkitPathError,
@@ -42,6 +44,7 @@ impl<'a> Docker2Eif<'a> {
     pub fn new(
         docker_image: String,
         init_path: String,
+        nsm_path: String,
         kernel_img_path: String,
         cmdline: String,
         linuxkit_path: String,
@@ -52,6 +55,8 @@ impl<'a> Docker2Eif<'a> {
 
         if !Path::new(&init_path).is_file() {
             return Err(Docker2EifError::InitPathError);
+        } else if !Path::new(&nsm_path).is_file() {
+            return Err(Docker2EifError::NsmPathError);
         } else if !Path::new(&kernel_img_path).is_file() {
             return Err(Docker2EifError::KernelPathError);
         } else if !Path::new(&linuxkit_path).is_file() {
@@ -64,6 +69,7 @@ impl<'a> Docker2Eif<'a> {
             docker_image,
             docker,
             init_path,
+            nsm_path,
             kernel_img_path,
             cmdline,
             linuxkit_path,
@@ -102,6 +108,7 @@ impl<'a> Docker2Eif<'a> {
         let yaml_generator = YamlGenerator::new(
             self.docker_image.clone(),
             self.init_path.clone(),
+            self.nsm_path.clone(),
             cmd_file.path().to_str().unwrap().to_string(),
             env_file.path().to_str().unwrap().to_string(),
         );

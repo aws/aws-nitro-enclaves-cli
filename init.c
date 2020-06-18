@@ -36,6 +36,7 @@
 #include <sys/mount.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -51,7 +52,9 @@ _Noreturn void die(const char *msg);
         } \
     } while (0)
 
+#define finit_module(fd, param_values, flags) syscall(__NR_finit_module, fd, param_values, flags)
 #define DEFAULT_PATH_ENV "PATH=/sbin:/usr/sbin:/bin:/usr/bin"
+#define NSM_PATH "nsm.ko"
 #define TIMEOUT 20000 // millis
 #define VSOCK_PORT 9000
 #define VSOCK_CID 3
@@ -360,6 +363,19 @@ void enclave_ready() {
     die_on(close(socket_fd), "close");
 }
 
+void init_nsm_driver() {
+    int fd;
+    int rc;
+
+    fd = open(NSM_PATH, O_RDONLY | O_CLOEXEC);
+    die_on(fd < 0, "failed to open nsm fd");
+
+    rc = finit_module(fd, "", 0);
+    die_on(rc < 0, "failed to insert nsm driver");
+
+    die_on(close(fd), "close nsm fd");
+}
+
 int main(int argc, char **argv) {
     // Block all signals in init. SIGCHLD will still cause wait() to return.
     sigset_t set;
@@ -370,6 +386,9 @@ int main(int argc, char **argv) {
     // Init /dev and start /dev/console for early debugging
     init_dev();
     init_console();
+
+    // Insert the Nitro Secure Module driver
+    init_nsm_driver();
 
     // Signal nitro-cli that the enclave has started
     enclave_ready();

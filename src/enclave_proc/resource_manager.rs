@@ -59,9 +59,6 @@ pub struct EnclaveStartMetadata {
     flags: u64,
     /// Slot-unique ID mapped to the enclave to start.
     slot_uid: u64,
-    /// Token used by user space to send the enclave image to the enclave VMM endpoint via vsock.
-    #[allow(dead_code)]
-    vsock_loader_token: u64,
 }
 
 /// Helper class to allocate the resources needed by an enclave.
@@ -533,7 +530,6 @@ impl EnclaveStartMetadata {
             slot_uid: 0,
             enclave_cid: enclave_handle.enclave_cid.unwrap_or(0),
             flags: enclave_handle.flags,
-            vsock_loader_token: 0,
         }
     }
 
@@ -542,7 +538,6 @@ impl EnclaveStartMetadata {
             slot_uid: 0,
             enclave_cid: 0,
             flags: 0,
-            vsock_loader_token: 0,
         }
     }
 }

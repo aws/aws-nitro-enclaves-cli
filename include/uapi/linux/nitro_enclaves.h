@@ -52,11 +52,6 @@ struct enclave_start_metadata {
 	__u64 flags;
 	/* Slot unique id mapped to the enclave to start. */
 	__u64 slot_uid;
-	/**
-	 * Token used by user space to send the enclave image to the enclave
-	 * VMM endpoint via vsock.
-	 */
-	__u64 vsock_loader_token;
 };
 
 #endif /* _UAPI_LINUX_NITRO_ENCLAVES_H_ */

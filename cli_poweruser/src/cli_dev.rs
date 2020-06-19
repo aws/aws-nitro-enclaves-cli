@@ -146,7 +146,6 @@ pub struct NitroEnclavesCmdReply {
     pub padding0: [u8; 4],
     pub slot_uid: u64,
     pub enclave_cid: u64,
-    pub vsock_loader_token: u64,
     pub slot_count: u64,
     pub mem_regions: u64,
     pub mem_size: u64,

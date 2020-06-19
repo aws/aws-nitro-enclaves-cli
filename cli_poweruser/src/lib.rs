@@ -43,7 +43,6 @@ use crate::json_output::{get_enclave_describe_info, get_run_enclaves_info};
 pub const VMADDR_CID_HYPERVISOR: u32 = 0;
 pub const VMADDR_CID_PARENT: u32 = 3;
 pub const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
-pub const ENCLAVE_VSOCK_LOADER_PORT: u32 = 7000;
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
 pub const BUFFER_SIZE: usize = 1024;
 pub type NitroCliResult<T> = Result<T, String>;

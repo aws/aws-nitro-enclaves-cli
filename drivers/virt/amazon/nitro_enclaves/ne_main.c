@@ -398,8 +398,6 @@ static int ne_enclave_start_ioctl(struct ne_enclave *ne_enclave,
 	ne_enclave->state = NE_STATE_RUNNING;
 
 	enclave_start_metadata->enclave_cid = cmd_reply.enclave_cid;
-	enclave_start_metadata->vsock_loader_token =
-		cmd_reply.vsock_loader_token;
 
 	return 0;
 }

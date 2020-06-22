@@ -21,6 +21,8 @@ pub struct EnclaveDescribeInfo {
     #[serde(rename = "NumberOfCPUs")]
     /// The number of CPUs used by the enclave.
     pub cpu_count: u64,
+    #[serde(rename = "CPU IDs")]
+    pub cpu_ids: Vec<u32>,
     #[serde(rename = "MemoryMiB")]
     /// The memory provided to the enclave (in MiB).
     pub memory_mib: u64,
@@ -38,6 +40,7 @@ impl EnclaveDescribeInfo {
         enclave_id: String,
         enclave_cid: u64,
         cpu_count: u64,
+        cpu_ids: Vec<u32>,
         memory_mib: u64,
         state: String,
         flags: String,
@@ -47,6 +50,7 @@ impl EnclaveDescribeInfo {
             process_id: std::process::id(),
             enclave_cid,
             cpu_count,
+            cpu_ids,
             memory_mib,
             state,
             flags,

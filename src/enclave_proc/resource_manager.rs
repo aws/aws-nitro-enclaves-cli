@@ -21,6 +21,8 @@ use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::utils::get_run_enclaves_info;
 
+type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u16, EnclaveState);
+
 /// IOCTL code for `KVM_CREATE_VM`.
 pub const KVM_CREATE_VM: u64 = nix::request_code_none!(KVMIO, 0x01) as _;
 
@@ -596,14 +598,13 @@ impl EnclaveManager {
     /// Get the resources needed for describing an enclave.
     ///
     /// The enclave handle is locked during this operation.
-    pub fn get_description_resources(
-        &self,
-    ) -> NitroCliResult<(u64, u64, u64, u64, u16, EnclaveState)> {
+    pub fn get_description_resources(&self) -> NitroCliResult<UnpackedHandle> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
         Ok((
             locked_handle.slot_uid,
             locked_handle.enclave_cid.unwrap(),
             locked_handle.cpu_ids.len() as u64,
+            locked_handle.cpu_ids.clone(),
             locked_handle.allocated_memory_mib,
             locked_handle.flags as u16,
             locked_handle.state.clone(),

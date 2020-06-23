@@ -30,7 +30,7 @@ fn main() {
     let mut replies: Vec<UnixStream> = vec![];
 
     logger.update_logger_id(format!("nitro-cli:{}", std::process::id()).as_str());
-    info!("Start Nitro CLI");
+    info!("Start Nitro CLI.");
 
     match args.subcommand() {
         ("run-enclave", Some(args)) => {
@@ -45,7 +45,7 @@ fn main() {
             )
             .ok_or_exit("Failed to send single command.");
 
-            info!("Sent command: Run");
+            info!("Sent command: Run.");
             replies.push(comm);
             enclave_process_handle_all_replies::<EnclaveRunInfo>(&mut replies, 0, false)
                 .ok_or_exit(args.usage());
@@ -62,7 +62,7 @@ fn main() {
             )
             .ok_or_exit("Failed to send terminate command.");
 
-            info!("Sent command: Terminate");
+            info!("Sent command: Terminate.");
             replies.push(comm);
             enclave_process_handle_all_replies::<EnclaveTerminateInfo>(&mut replies, 0, false)
                 .ok_or_exit(args.usage());
@@ -74,7 +74,7 @@ fn main() {
             )
             .ok_or_exit("Failed to broadcast describe command.");
 
-            info!("Sent command: Describe");
+            info!("Sent command: Describe.");
             replies.extend(comms);
             enclave_process_handle_all_replies::<EnclaveDescribeInfo>(
                 &mut replies,

@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![allow(non_camel_case_types)]
 
 //! This crate provides the functionality for the Nitro CLI process.
 
+/// The module used for generating Rust bindings from the driver code.
+pub mod bindings;
 /// The common module (shared between the CLI and enclave process).
 pub mod common;
 /// The enclave process module.

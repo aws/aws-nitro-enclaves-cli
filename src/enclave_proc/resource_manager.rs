@@ -14,6 +14,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::bindings::enclave_start_metadata;
 use crate::common::notify_error;
 use crate::common::{ExitGracefully, NitroCliResult};
 use crate::enclave_proc::commands::{DEBUG_FLAG, ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
@@ -21,6 +22,7 @@ use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::utils::get_run_enclaves_info;
 
+type EnclaveStartMetadata = enclave_start_metadata;
 type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u16, EnclaveState);
 
 /// IOCTL code for `KVM_CREATE_VM`.
@@ -64,18 +66,6 @@ pub struct MemoryRegion {
     mem_addr: u64,
     /// The region's size in bytes.
     mem_size: u64,
-}
-
-/// Meta-data necessary for the starting of an enclave.
-#[repr(packed)]
-pub struct EnclaveStartMetadata {
-    /// The Context ID (CID) for the enclave's vsock device. If 0, the CID is auto-generated.
-    enclave_cid: u64,
-    /// Flags for the enclave to start with (ex.: debug mode).
-    #[allow(dead_code)]
-    flags: u64,
-    /// Slot-unique ID mapped to the enclave.
-    slot_uid: u64,
 }
 
 /// Helper structure to allocate memory resources needed by an enclave.

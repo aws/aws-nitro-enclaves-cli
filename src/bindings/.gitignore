@@ -1,0 +1,3 @@
+# Empty directory needed by bindgen to generate Rust bindings
+*
+!.gitignore

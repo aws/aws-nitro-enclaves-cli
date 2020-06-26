@@ -14,9 +14,6 @@ RUN apt-get install -y gcc libssl-dev
 RUN apt-get install -y pkg-config
 RUN apt-get install -y musl-tools
 
-# Install bindgen dependencies
-RUN apt-get install -y llvm-dev libclang-dev clang
-
 # Build static version of Openssl.
 RUN apt-get install -y wget unzip
 ENV OPENSSL_VERSION=OpenSSL_1_1_1d

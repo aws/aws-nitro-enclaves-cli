@@ -9,4 +9,7 @@ clap = "2.33.0"
 sha2 = "0.8"
 hex = "0.3.2"
 crc = "1.8"
-eif_defs = {path = "../eif_defs"}
+eif_defs = { path = "../eif_defs" }
+rust-cose = { path = "../rust-cose" }
+openssl = "0.10"
+serde_cbor = "0.11"

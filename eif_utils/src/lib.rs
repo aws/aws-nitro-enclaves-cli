@@ -4,7 +4,12 @@
 #![deny(warnings)]
 use crc::{crc32, Hasher32};
 use eif_defs::eif_hasher::EifHasher;
-use eif_defs::{EifHeader, EifSectionHeader, EifSectionType, EIF_MAGIC, MAX_NUM_SECTIONS};
+use eif_defs::{
+    EifHeader, EifSectionHeader, EifSectionType, PcrInfo, PcrSignature, EIF_MAGIC, MAX_NUM_SECTIONS,
+};
+use openssl::ec::EcKey;
+use rust_cose::{COSESign1, HeaderMap};
+use serde_cbor::to_vec;
 use sha2::Digest;
 use std::collections::BTreeMap;
 
@@ -23,12 +28,45 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
 use std::path::Path;
-use std::slice;
+
+pub const DEFAULT_SECTIONS_COUNT: u16 = 2;
+
+#[derive(Clone, Debug)]
+pub struct SignEnclaveInfo {
+    pub signing_certificate: Vec<u8>,
+    pub private_key: Vec<u8>,
+}
+
+impl SignEnclaveInfo {
+    pub fn new(cert_path: &str, key_path: &str) -> Result<Self, String> {
+        let mut certificate_file = File::open(cert_path)
+            .map_err(|err| format!("Could not open the certificate file: {:?}", err))?;
+        let mut signing_certificate = Vec::new();
+        certificate_file
+            .read_to_end(&mut signing_certificate)
+            .map_err(|err| format!("Could not read the certificate file: {:?}", err))?;
+
+        let mut key_file = File::open(key_path)
+            .map_err(|err| format!("Could not open the key file: {:?}", err))?;
+        let mut private_key = Vec::new();
+        key_file
+            .read_to_end(&mut private_key)
+            .map_err(|err| format!("Could not read the key file: {:?}", err))?;
+
+        Ok(SignEnclaveInfo {
+            signing_certificate,
+            private_key,
+        })
+    }
+}
 
 pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     kernel: File,
     cmdline: Vec<u8>,
     ramdisks: Vec<File>,
+    sign_info: Option<SignEnclaveInfo>,
+    signature: Option<Vec<u8>>,
+    signature_size: u64,
     default_mem: u64,
     default_cpus: u64,
     /// Hash of the whole EifImage.
@@ -43,13 +81,21 @@ pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
 }
 
 impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
-    pub fn new(kernel_path: &Path, cmdline: String, hasher: T) -> Self {
+    pub fn new(
+        kernel_path: &Path,
+        cmdline: String,
+        sign_info: Option<SignEnclaveInfo>,
+        hasher: T,
+    ) -> Self {
         let kernel_file = File::open(kernel_path).expect("Invalid kernel path");
         let cmdline = CString::new(cmdline).expect("Invalid cmdline");
         EifBuilder {
             kernel: kernel_file,
             cmdline: cmdline.into_bytes(),
             ramdisks: Vec::new(),
+            sign_info,
+            signature: None,
+            signature_size: 0,
             default_mem: 1024 * 1024 * 1024,
             default_cpus: 2,
             image_hasher: EifHasher::new_without_cache(hasher.clone())
@@ -70,7 +116,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
     /// The first two sections are the kernel and the cmdline.
     fn num_sections(&self) -> u16 {
-        2 + self.ramdisks.len() as u16
+        DEFAULT_SECTIONS_COUNT + self.ramdisks.len() as u16 + self.sign_info.iter().count() as u16
     }
 
     fn sections_offsets(&self) -> [u64; MAX_NUM_SECTIONS] {
@@ -79,7 +125,11 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         result[1] = self.cmdline_offset();
 
         for i in { 0..self.ramdisks.len() } {
-            result[i + 2] = self.ramdisk_offset(i);
+            result[i + DEFAULT_SECTIONS_COUNT as usize] = self.ramdisk_offset(i);
+        }
+
+        if self.sign_info.is_some() {
+            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.signature_offset();
         }
 
         result
@@ -92,7 +142,11 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         result[1] = self.cmdline_size();
 
         for i in { 0..self.ramdisks.len() } {
-            result[i + 2] = self.ramdisk_size(&self.ramdisks[i]);
+            result[i + DEFAULT_SECTIONS_COUNT as usize] = self.ramdisk_size(&self.ramdisks[i]);
+        }
+
+        if self.sign_info.is_some() {
+            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.signature_size();
         }
 
         result
@@ -103,7 +157,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
     }
 
     fn kernel_offset(&self) -> u64 {
-        self.eif_header_offset() + std::mem::size_of::<EifHeader>() as u64
+        self.eif_header_offset() + EifHeader::size() as u64
     }
 
     fn kernel_size(&self) -> u64 {
@@ -111,7 +165,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
     }
 
     fn cmdline_offset(&self) -> u64 {
-        self.kernel_offset() + std::mem::size_of::<EifSectionHeader>() as u64 + self.kernel_size()
+        self.kernel_offset() + EifSectionHeader::size() as u64 + self.kernel_size()
     }
 
     fn cmdline_size(&self) -> u64 {
@@ -121,18 +175,68 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
     fn ramdisk_offset(&self, index: usize) -> u64 {
         self.cmdline_offset()
             + self.cmdline_size()
-            + std::mem::size_of::<EifSectionHeader>() as u64
+            + EifSectionHeader::size() as u64
             + self.ramdisks[0..index]
                 .iter()
                 .fold(0, |mut total_len, file| {
                     total_len += file.metadata().expect("Invalid ramdisk metadata").len()
-                        + std::mem::size_of::<EifSectionHeader>() as u64;
+                        + EifSectionHeader::size() as u64;
                     total_len
                 })
     }
 
     fn ramdisk_size(&self, ramdisk: &File) -> u64 {
         ramdisk.metadata().unwrap().len() as u64
+    }
+
+    fn signature_offset(&self) -> u64 {
+        let index = self.ramdisks.len() - 1;
+        self.ramdisk_offset(index)
+            + EifSectionHeader::size() as u64
+            + self.ramdisk_size(&self.ramdisks[index])
+    }
+
+    fn signature_size(&self) -> u64 {
+        self.signature_size
+    }
+
+    /// Generate the signature of a certain PCR.
+    fn generate_pcr_signature(
+        &mut self,
+        register_index: i32,
+        register_value: Vec<u8>,
+    ) -> PcrSignature {
+        let sign_info = self.sign_info.as_ref().unwrap();
+        let signing_certificate = sign_info.signing_certificate.clone();
+        let pcr_info = PcrInfo::new(register_index, register_value);
+
+        let payload = to_vec(&pcr_info).expect("Could not serialize PCR info");
+        let private_key = EcKey::private_key_from_pem(&sign_info.private_key)
+            .expect("Could not deserialize the PEM-formatted private key");
+
+        let signature = COSESign1::new(&payload, &HeaderMap::new(), private_key.as_ref())
+            .unwrap()
+            .as_bytes(false)
+            .unwrap();
+
+        PcrSignature {
+            signing_certificate,
+            signature,
+        }
+    }
+
+    /// Generate the signature of the EIF.
+    /// eif_signature = [pcr0_signature]
+    fn generate_eif_signature(&mut self, measurements: &BTreeMap<String, String>) {
+        let pcr0_index = 0;
+        let pcr0_value = hex::decode(measurements.get("PCR0").unwrap()).unwrap();
+        let pcr0_signature = self.generate_pcr_signature(pcr0_index, pcr0_value);
+
+        let eif_signature = vec![pcr0_signature];
+        let serialized_signature =
+            to_vec(&eif_signature).expect("Could not serialize the signature");
+        self.signature_size = serialized_signature.len() as u64;
+        self.signature = Some(serialized_signature)
     }
 
     pub fn header(&mut self) -> EifHeader {
@@ -151,14 +255,11 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         }
     }
 
+    /// Compute the crc for the whole enclave image, excluding the
+    /// eif_crc32 field from the EIF header.
     pub fn compute_crc(&mut self) {
         let eif_header = self.header();
-        let eif_buffer = unsafe {
-            slice::from_raw_parts(
-                &eif_header as *const EifHeader as *const u8,
-                std::mem::size_of::<EifHeader>(),
-            )
-        };
+        let eif_buffer = eif_header.to_be_bytes();
         // The last field of the EifHeader is the CRC itself, so we need
         // to exclude it from contributing to the CRC.
         let len_without_crc = eif_buffer.len() - size_of::<u32>();
@@ -170,12 +271,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             section_size: self.kernel_size(),
         };
 
-        let eif_buffer = unsafe {
-            slice::from_raw_parts(
-                &eif_section as *const EifSectionHeader as *const u8,
-                std::mem::size_of::<EifSectionHeader>(),
-            )
-        };
+        let eif_buffer = eif_section.to_be_bytes();
         self.eif_crc.write(&eif_buffer[..]);
         let mut kernel_file = &self.kernel;
 
@@ -195,13 +291,8 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             section_size: self.cmdline_size(),
         };
 
-        let eif_buffer = unsafe {
-            slice::from_raw_parts(
-                &eif_section as *const EifSectionHeader as *const u8,
-                std::mem::size_of::<EifSectionHeader>(),
-            )
-        };
-        self.eif_crc.write(eif_buffer);
+        let eif_buffer = eif_section.to_be_bytes();
+        self.eif_crc.write(&eif_buffer[..]);
         self.eif_crc.write(&self.cmdline[..]);
 
         for mut ramdisk in &self.ramdisks {
@@ -211,12 +302,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 section_size: self.ramdisk_size(&ramdisk),
             };
 
-            let eif_buffer = unsafe {
-                slice::from_raw_parts(
-                    &eif_section as *const EifSectionHeader as *const u8,
-                    std::mem::size_of::<EifSectionHeader>(),
-                )
-            };
+            let eif_buffer = eif_section.to_be_bytes();
             self.eif_crc.write(&eif_buffer[..]);
 
             ramdisk
@@ -228,6 +314,18 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 .expect("Failed to read kernel content");
             self.eif_crc.write(&buffer[..]);
         }
+
+        if let Some(signature) = &self.signature {
+            let eif_section = EifSectionHeader {
+                section_type: EifSectionType::EifSectionSignature,
+                flags: 0,
+                section_size: self.signature_size(),
+            };
+
+            let eif_buffer = eif_section.to_be_bytes();
+            self.eif_crc.write(&eif_buffer[..]);
+            self.eif_crc.write(&signature[..]);
+        }
     }
 
     pub fn write_header(&mut self, file: &mut File) {
@@ -236,14 +334,8 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             "Could not seek while writing eif \
              header",
         );
-        let eif_buffer = unsafe {
-            slice::from_raw_parts(
-                &eif_header as *const EifHeader as *const u8,
-                std::mem::size_of::<EifHeader>(),
-            )
-        };
-        self.image_hasher.write_all(eif_buffer).unwrap();
-        file.write_all(eif_buffer)
+        let eif_buffer = eif_header.to_be_bytes();
+        file.write_all(&eif_buffer[..])
             .expect("Failed to write eif header");
     }
 
@@ -257,16 +349,9 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         eif_file
             .seek(SeekFrom::Start(self.kernel_offset()))
             .expect("Could not seek while writing kernel section");
-        let eif_buffer = unsafe {
-            slice::from_raw_parts(
-                &eif_section as *const EifSectionHeader as *const u8,
-                std::mem::size_of::<EifSectionHeader>(),
-            )
-        };
-        self.image_hasher.write_all(eif_buffer).unwrap();
-        self.bootstrap_hasher.write_all(eif_buffer).unwrap();
+        let eif_buffer = eif_section.to_be_bytes();
         eif_file
-            .write_all(eif_buffer)
+            .write_all(&eif_buffer[..])
             .expect("Failed to write kernel header");
         let mut kernel_file = &self.kernel;
 
@@ -278,8 +363,6 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             .read_to_end(&mut buffer)
             .expect("Failed to read kernel content");
 
-        self.image_hasher.write_all(&buffer[..]).unwrap();
-        self.bootstrap_hasher.write_all(&buffer[..]).unwrap();
         eif_file
             .write_all(&buffer[..])
             .expect("Failed to write kernel data");
@@ -298,20 +381,11 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 "Could not seek while writing
         cmdline section",
             );
-        let eif_buffer = unsafe {
-            slice::from_raw_parts(
-                &eif_section as *const EifSectionHeader as *const u8,
-                std::mem::size_of::<EifSectionHeader>(),
-            )
-        };
-        self.image_hasher.write_all(eif_buffer).unwrap();
-        self.bootstrap_hasher.write_all(eif_buffer).unwrap();
+        let eif_buffer = eif_section.to_be_bytes();
         eif_file
-            .write_all(eif_buffer)
+            .write_all(&eif_buffer[..])
             .expect("Failed to write cmdline header");
 
-        self.image_hasher.write_all(&self.cmdline[..]).unwrap();
-        self.bootstrap_hasher.write_all(&self.cmdline[..]).unwrap();
         eif_file
             .write_all(&self.cmdline[..])
             .expect("Failed write cmdline header");
@@ -331,25 +405,76 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                     "Could not seek while writing
         kernel section",
                 );
-            let eif_buffer = unsafe {
-                slice::from_raw_parts(
-                    &eif_section as *const EifSectionHeader as *const u8,
-                    std::mem::size_of::<EifSectionHeader>(),
-                )
+            let eif_buffer = eif_section.to_be_bytes();
+            eif_file
+                .write_all(&eif_buffer[..])
+                .expect("Failed to write section header");
+
+            ramdisk
+                .seek(SeekFrom::Start(0))
+                .expect("Could not seek ramdisk to begining");
+            let mut buffer = Vec::new();
+            ramdisk
+                .read_to_end(&mut buffer)
+                .expect("Failed to read ramdisk content");
+            eif_file
+                .write_all(&buffer[..])
+                .expect("Failed to write ramdisk data");
+        }
+    }
+
+    pub fn write_signature(&mut self, eif_file: &mut File) {
+        if let Some(signature) = &self.signature {
+            let eif_section = EifSectionHeader {
+                section_type: EifSectionType::EifSectionSignature,
+                flags: 0,
+                section_size: self.signature_size(),
             };
 
             eif_file
-                .write_all(eif_buffer)
-                .expect("Failed to write section header");
-            self.image_hasher.write_all(&eif_buffer[..]).unwrap();
-            // The first ramdisk is provided by amazon and it contains the
-            // code to bootstrap the docker container
-            if index == 0 {
-                self.bootstrap_hasher.write_all(&eif_buffer[..]).unwrap();
-            } else {
-                self.customer_app_hasher.write_all(&eif_buffer[..]).unwrap();
-            }
+                .seek(SeekFrom::Start(self.signature_offset()))
+                .expect("Could not seek while writing signature section");
+            let eif_buffer = eif_section.to_be_bytes();
+            eif_file
+                .write_all(&eif_buffer[..])
+                .expect("Failed to write signature header");
 
+            eif_file
+                .write_all(&signature[..])
+                .expect("Failed write signature header");
+        }
+    }
+
+    pub fn write_to(&mut self, output_file: &mut File) -> BTreeMap<String, String> {
+        let measurements = self.boot_measurement();
+        if self.sign_info.is_some() {
+            self.generate_eif_signature(&measurements);
+        }
+        self.compute_crc();
+        self.write_header(output_file);
+        self.write_kernel(output_file);
+        self.write_cmdline(output_file);
+        self.write_ramdisks(output_file);
+        self.write_signature(output_file);
+        measurements
+    }
+
+    pub fn measure(&mut self) {
+        let mut kernel_file = &self.kernel;
+        kernel_file
+            .seek(SeekFrom::Start(0))
+            .expect("Could not seek kernel to begining");
+        let mut buffer = Vec::new();
+        kernel_file
+            .read_to_end(&mut buffer)
+            .expect("Failed to read kernel content");
+        self.image_hasher.write_all(&buffer[..]).unwrap();
+        self.bootstrap_hasher.write_all(&buffer[..]).unwrap();
+
+        self.image_hasher.write_all(&self.cmdline[..]).unwrap();
+        self.bootstrap_hasher.write_all(&self.cmdline[..]).unwrap();
+
+        for (index, mut ramdisk) in (&self.ramdisks).iter().enumerate() {
             ramdisk
                 .seek(SeekFrom::Start(0))
                 .expect("Could not seek kernel to begining");
@@ -358,26 +483,18 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 .read_to_end(&mut buffer)
                 .expect("Failed to read kernel content");
             self.image_hasher.write_all(&buffer[..]).unwrap();
+            // The first ramdisk is provided by amazon and it contains the
+            // code to bootstrap the docker container.
             if index == 0 {
                 self.bootstrap_hasher.write_all(&buffer[..]).unwrap();
             } else {
                 self.customer_app_hasher.write_all(&buffer[..]).unwrap();
             }
-            eif_file
-                .write_all(&buffer[..])
-                .expect("Failed to write kernel data");
         }
     }
 
-    pub fn write_to(&mut self, output_file: &mut File) {
-        self.compute_crc();
-        self.write_header(output_file);
-        self.write_kernel(output_file);
-        self.write_cmdline(output_file);
-        self.write_ramdisks(output_file);
-    }
-
-    pub fn boot_measurement(mut self) -> BTreeMap<String, String> {
+    pub fn boot_measurement(&mut self) -> BTreeMap<String, String> {
+        self.measure();
         let mut measurements = BTreeMap::new();
         let image_hasher = hex::encode(
             self.image_hasher

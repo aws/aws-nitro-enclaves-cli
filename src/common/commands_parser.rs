@@ -48,15 +48,32 @@ pub struct BuildEnclavesArgs {
     pub docker_dir: Option<String>,
     /// The path where the enclave image file will be written to.
     pub output: String,
+    /// The path to the signing certificate for signed enclaves.
+    pub signing_certificate: Option<String>,
+    /// The path to the private key for signed enclaves.
+    pub private_key: Option<String>,
 }
 
 impl BuildEnclavesArgs {
     /// Construct a new `BuildEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        let signing_certificate = parse_signing_certificate(args);
+        let private_key = parse_private_key(args);
+
+        match (&signing_certificate, &private_key) {
+            (Some(_), None) => return Err("Could not find private-key argument".to_string()),
+            (None, Some(_)) => {
+                return Err("Could not find signing-certificate argument".to_string())
+            }
+            _ => (),
+        };
+
         Ok(BuildEnclavesArgs {
             docker_uri: parse_docker_tag(args).ok_or("Could not find docker-uri argument")?,
             docker_dir: parse_docker_dir(args),
             output: parse_output(args).ok_or("Could not find output argument")?,
+            signing_certificate,
+            private_key,
         })
     }
 }
@@ -187,6 +204,15 @@ fn debug_mode(args: &ArgMatches) -> Option<bool> {
     } else {
         None
     }
+}
+
+fn parse_signing_certificate(args: &ArgMatches) -> Option<String> {
+    args.value_of("signing-certificate")
+        .map(|val| val.to_string())
+}
+
+fn parse_private_key(args: &ArgMatches) -> Option<String> {
+    args.value_of("private-key").map(|val| val.to_string())
 }
 
 #[cfg(test)]

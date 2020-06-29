@@ -67,6 +67,18 @@ fn main() {
                 .required(true),
         )
         .arg(
+            Arg::with_name("signing-certificate")
+                .long("signing-certificate")
+                .help("Specify the path to the signing certificate")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("private-key")
+                .long("private-key")
+                .help("Specify the path to the private-key")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("build")
                 .short("b")
                 .long("build")
@@ -91,6 +103,14 @@ fn main() {
     let cmdline = matches.value_of("cmdline").unwrap();
     let linuxkit_path = matches.value_of("linuxkit_path").unwrap();
     let output = matches.value_of("output").unwrap();
+    let signing_certificate = match matches.value_of("signing_certificate") {
+        Some(cert) => Some(cert.to_string()),
+        None => None,
+    };
+    let private_key = match matches.value_of("private_certificate") {
+        Some(key) => Some(key.to_string()),
+        None => None,
+    };
     let mut output = OpenOptions::new()
         .read(true)
         .write(true)
@@ -107,6 +127,8 @@ fn main() {
         linuxkit_path.to_string(),
         &mut output,
         ".".to_string(),
+        &signing_certificate,
+        &private_key,
     )
     .unwrap();
 

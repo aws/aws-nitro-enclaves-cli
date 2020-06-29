@@ -4,8 +4,8 @@
 
 use super::cli_dev::*;
 
-use crate::resource_manager::ResourceAllocator;
 use crate::resource_allocator_driver::nitro_cli_slot_mem_region;
+use crate::resource_manager::ResourceAllocator;
 use crate::ExitGracefully;
 use crate::NitroCliResult;
 use crate::ResourceAllocatorDriver;
@@ -16,8 +16,8 @@ use log::debug;
 use num_traits::FromPrimitive;
 
 use std::fs::OpenOptions;
-use std::io::Write;
 use std::io::SeekFrom;
+use std::io::Write;
 
 use std::io::Read;
 use std::io::Seek;
@@ -279,19 +279,17 @@ pub fn alloc_mem(args: &ArgMatches) -> NitroCliResult<()> {
 }
 
 /// Writes a specific chunk of the eif file into the supplied memory region
-fn fill_region_from_file(region: &nitro_cli_slot_mem_region, eif_path: String, eif_offset: u64, _region_offset: u64) -> u64 {
-    let mut eif_file = OpenOptions::new()
-            .read(true)
-            .open(eif_path)
-            .unwrap();
+fn fill_region_from_file(
+    region: &nitro_cli_slot_mem_region,
+    eif_path: String,
+    eif_offset: u64,
+    _region_offset: u64,
+) -> u64 {
+    let mut eif_file = OpenOptions::new().read(true).open(eif_path).unwrap();
 
-    let mut dev_mem = OpenOptions::new()
-            .write(true)
-            .open("/dev/mem")
-            .unwrap();
+    let mut dev_mem = OpenOptions::new().write(true).open("/dev/mem").unwrap();
 
-    let _ = eif_file
-        .seek(SeekFrom::Start(eif_offset));
+    let _ = eif_file.seek(SeekFrom::Start(eif_offset));
 
     let mut buf = [0u8; 4096];
     let mut written: u64 = 0;
@@ -299,11 +297,9 @@ fn fill_region_from_file(region: &nitro_cli_slot_mem_region, eif_path: String, e
     let _ = dev_mem.seek(SeekFrom::Start(region.mem_gpa));
 
     while written < region.mem_size {
-        let write_size =
-            std::cmp::min(buf.len(), (region.mem_size - written) as usize);
+        let write_size = std::cmp::min(buf.len(), (region.mem_size - written) as usize);
 
-        let write_size = eif_file.read(&mut buf[..write_size])
-            .unwrap();
+        let write_size = eif_file.read(&mut buf[..write_size]).unwrap();
 
         if write_size == 0 {
             return eif_file.seek(SeekFrom::Current(0)).unwrap();
@@ -345,7 +341,10 @@ pub fn alloc_mem_with_file(args: &ArgMatches) -> NitroCliResult<()> {
         if should_write {
             new_offset = fill_region_from_file(&region, eif_path.to_string(), eif_offset, 0);
         }
-        println!("mem_gpa={}\nmem_size={}\nnew_eif_offset={}", region.mem_gpa, region.mem_size, new_offset)
+        println!(
+            "mem_gpa={}\nmem_size={}\nnew_eif_offset={}",
+            region.mem_gpa, region.mem_size, new_offset
+        )
     }
 
     Ok(())

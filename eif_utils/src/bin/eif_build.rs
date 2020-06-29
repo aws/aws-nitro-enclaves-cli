@@ -15,7 +15,7 @@
 use std::path::Path;
 
 use clap::{App, Arg};
-use eif_utils::EifBuilder;
+use eif_utils::{EifBuilder, SignEnclaveInfo};
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fmt::Debug;
 use std::fs::OpenOptions;
@@ -59,6 +59,18 @@ fn main() {
                 .number_of_values(1),
         )
         .arg(
+            Arg::with_name("signing-certificate")
+                .long("signing-certificate")
+                .help("Specify the path to the signing certificate")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("private-key")
+                .long("private-key")
+                .help("Specify the path to the private-key")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("sha256")
                 .long("sha256")
                 .help("Sets algorithm to be used for measuring the image")
@@ -98,12 +110,45 @@ fn main() {
         .value_of("output")
         .expect("Output file should be provided");
 
+    let signing_certificate = matches.value_of("signing-certificate");
+
+    let private_key = matches.value_of("private-key");
+
+    let sign_info = match (signing_certificate, private_key) {
+        (None, None) => None,
+        (Some(cert_path), Some(key_path)) => {
+            Some(SignEnclaveInfo::new(&cert_path, &key_path).expect("Could not read signing info"))
+        }
+        _ => panic!("Both signing-certificate and private-key parameters must be provided"),
+    };
+
     if sha512 {
-        build_eif(kernel_path, cmdline, ramdisks, output_path, Sha512::new());
+        build_eif(
+            kernel_path,
+            cmdline,
+            ramdisks,
+            output_path,
+            sign_info,
+            Sha512::new(),
+        );
     } else if sha256 {
-        build_eif(kernel_path, cmdline, ramdisks, output_path, Sha256::new());
+        build_eif(
+            kernel_path,
+            cmdline,
+            ramdisks,
+            output_path,
+            sign_info,
+            Sha256::new(),
+        );
     } else {
-        build_eif(kernel_path, cmdline, ramdisks, output_path, Sha384::new());
+        build_eif(
+            kernel_path,
+            cmdline,
+            ramdisks,
+            output_path,
+            sign_info,
+            Sha384::new(),
+        );
     }
 }
 
@@ -112,6 +157,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
     cmdline: &str,
     ramdisks: Vec<&str>,
     output_path: &str,
+    sign_info: Option<SignEnclaveInfo>,
     hasher: T,
 ) {
     let mut output_file = OpenOptions::new()
@@ -122,7 +168,12 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
         .open(output_path)
         .expect("Could not create output file");
 
-    let mut build = EifBuilder::new(&Path::new(kernel_path), cmdline.to_string(), hasher.clone());
+    let mut build = EifBuilder::new(
+        &Path::new(kernel_path),
+        cmdline.to_string(),
+        sign_info.clone(),
+        hasher.clone(),
+    );
     for ramdisk in ramdisks {
         build.add_ramdisk(Path::new(ramdisk));
     }

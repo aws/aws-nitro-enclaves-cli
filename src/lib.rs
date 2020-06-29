@@ -56,7 +56,13 @@ impl EnclaveBuildInfo {
 pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
     debug!("build_enclaves");
     eprintln!("Start building the Enclave Image...");
-    build_from_docker(&args.docker_uri, &args.docker_dir, &args.output)?;
+    build_from_docker(
+        &args.docker_uri,
+        &args.docker_dir,
+        &args.output,
+        &args.signing_certificate,
+        &args.private_key,
+    )?;
     Ok(())
 }
 
@@ -65,6 +71,8 @@ pub fn build_from_docker(
     docker_uri: &str,
     docker_dir: &Option<String>,
     output_path: &str,
+    signing_certificate: &Option<String>,
+    private_key: &Option<String>,
 ) -> NitroCliResult<(File, BTreeMap<String, String>)> {
     let blobs_path = blobs_path()?;
     let mut cmdline_file = File::open(format!("{}/cmdline", blobs_path))
@@ -92,6 +100,8 @@ pub fn build_from_docker(
         format!("{}/linuxkit", blobs_path),
         &mut file_output,
         artifacts_path()?,
+        signing_certificate,
+        private_key,
     )
     .map_err(|err| format!("Failed to create Eif image: {:?}", err))?;
 
@@ -353,6 +363,18 @@ macro_rules! create_app {
                             .help("Location where the Enclave Image should be saved")
                             .group("action")
                             .required(true)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("signing-certificate")
+                            .long("signing-certificate")
+                            .help("Local path to developer's X509 signing certificate.")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("private-key")
+                            .long("private-key")
+                            .help("Local path to developer's Eliptic Curve private key.")
                             .takes_value(true),
                     ),
             )

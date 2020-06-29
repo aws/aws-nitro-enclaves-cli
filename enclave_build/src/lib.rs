@@ -8,7 +8,7 @@ use std::process::Command;
 mod docker;
 mod yaml_generator;
 use docker::DockerUtil;
-use eif_utils::EifBuilder;
+use eif_utils::{EifBuilder, SignEnclaveInfo};
 use sha2::Digest;
 use std::collections::BTreeMap;
 use yaml_generator::YamlGenerator;
@@ -23,6 +23,7 @@ pub struct Docker2Eif<'a> {
     linuxkit_path: String,
     artifacts_prefix: String,
     output: &'a mut File,
+    sign_info: Option<SignEnclaveInfo>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -38,6 +39,8 @@ pub enum Docker2EifError {
     ArtifactsPrefixError,
     RamfsError,
     RemoveFileError,
+    SignImageError(String),
+    SignArgsError,
 }
 
 impl<'a> Docker2Eif<'a> {
@@ -50,6 +53,8 @@ impl<'a> Docker2Eif<'a> {
         linuxkit_path: String,
         output: &'a mut File,
         artifacts_prefix: String,
+        certificate_path: &Option<String>,
+        key_path: &Option<String>,
     ) -> Result<Self, Docker2EifError> {
         let docker = DockerUtil::new(docker_image.clone());
 
@@ -65,6 +70,15 @@ impl<'a> Docker2Eif<'a> {
             return Err(Docker2EifError::ArtifactsPrefixError);
         }
 
+        let sign_info = match (certificate_path, key_path) {
+            (None, None) => None,
+            (Some(cert_path), Some(key_path)) => Some(
+                SignEnclaveInfo::new(&cert_path, &key_path)
+                    .map_err(|err| Docker2EifError::SignImageError(format!("{:?}", err)))?,
+            ),
+            _ => return Err(Docker2EifError::SignArgsError),
+        };
+
         Ok(Docker2Eif {
             docker_image,
             docker,
@@ -75,6 +89,7 @@ impl<'a> Docker2Eif<'a> {
             linuxkit_path,
             output,
             artifacts_prefix,
+            sign_info,
         })
     }
 
@@ -169,6 +184,7 @@ impl<'a> Docker2Eif<'a> {
         let mut build = EifBuilder::new(
             &Path::new(&self.kernel_img_path),
             self.cmdline.clone(),
+            self.sign_info.clone(),
             sha2::Sha384::new(),
         );
 
@@ -178,7 +194,7 @@ impl<'a> Docker2Eif<'a> {
 
         build.add_ramdisk(Path::new(&bootstrap_ramfs));
         build.add_ramdisk(Path::new(&customer_ramfs));
-        build.write_to(self.output);
-        Ok(build.boot_measurement())
+
+        Ok(build.write_to(self.output))
     }
 }

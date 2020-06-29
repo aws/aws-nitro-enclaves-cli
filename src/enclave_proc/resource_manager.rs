@@ -3,6 +3,13 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+mod bindings {
+    #![allow(missing_docs)]
+    #![allow(non_camel_case_types)]
+
+    include!(concat!(env!("OUT_DIR"), "/driver-structs.rs"));
+}
+
 use kvm_bindings::kvm_userspace_memory_region;
 use kvm_bindings::KVMIO;
 use log::{debug, error, info};
@@ -21,6 +28,8 @@ use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::utils::get_run_enclaves_info;
 
+/// CamelCase alias for the bindgen generated driver struct.
+pub type EnclaveStartMetadata = bindings::enclave_start_metadata;
 type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u16, EnclaveState);
 
 /// IOCTL code for `KVM_CREATE_VM`.
@@ -64,18 +73,6 @@ pub struct MemoryRegion {
     mem_addr: u64,
     /// The region's size in bytes.
     mem_size: u64,
-}
-
-/// Meta-data necessary for the starting of an enclave.
-#[repr(packed)]
-pub struct EnclaveStartMetadata {
-    /// The Context ID (CID) for the enclave's vsock device. If 0, the CID is auto-generated.
-    enclave_cid: u64,
-    /// Flags for the enclave to start with (ex.: debug mode).
-    #[allow(dead_code)]
-    flags: u64,
-    /// Slot-unique ID mapped to the enclave.
-    slot_uid: u64,
 }
 
 /// Helper structure to allocate memory resources needed by an enclave.
@@ -555,6 +552,7 @@ impl EnclaveStartMetadata {
         }
     }
 
+    #[allow(dead_code)]
     /// Create an empty `EnclaveStartMetadata` instance.
     pub fn new_empty() -> Self {
         EnclaveStartMetadata {

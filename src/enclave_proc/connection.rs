@@ -157,8 +157,7 @@ impl Connection {
 
         // First, read the incoming command.
         let mut cmd =
-            receive_from_stream::<EnclaveProcessCommandType>(lock.input_stream.as_mut().unwrap())
-                .map_err(|e| e.to_string())?;
+            receive_from_stream::<EnclaveProcessCommandType>(lock.input_stream.as_mut().unwrap())?;
 
         // Next, read the credentials of the command requester.
         let conn_fd = lock.input_stream.as_ref().unwrap().as_raw_fd();
@@ -205,7 +204,7 @@ impl Connection {
             return Err("Cannot read from this connection.".to_string());
         }
 
-        receive_from_stream::<T>(lock.input_stream.as_mut().unwrap()).map_err(|e| e.to_string())
+        receive_from_stream::<T>(lock.input_stream.as_mut().unwrap())
     }
 
     /// Write a 64-bit unsigned value on this connection.
@@ -215,7 +214,7 @@ impl Connection {
             return Err("Cannot write a 64-bit value to this connection.".to_string());
         }
 
-        write_u64_le(lock.input_stream.as_mut().unwrap(), value).map_err(|e| e.to_string())
+        write_u64_le(lock.input_stream.as_mut().unwrap(), value)
     }
 
     /// Write a message to the standard output of the connection's other end.
@@ -268,8 +267,10 @@ impl Connection {
         let mut stream = lock.input_stream.as_mut().unwrap();
         let reply_bytes = serde_cbor::to_vec(reply).map_err(|e| e.to_string())?;
 
-        write_u64_le(&mut stream, reply_bytes.len() as u64).map_err(|e| e.to_string())?;
-        stream.write_all(&reply_bytes).map_err(|e| e.to_string())
+        write_u64_le(&mut stream, reply_bytes.len() as u64)?;
+        stream
+            .write_all(&reply_bytes)
+            .map_err(|e| format!("Failed to write to stream: {:?}", e))
     }
 }
 

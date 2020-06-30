@@ -19,7 +19,6 @@ page_size = "0.4"
 signal-hook = "0.1"
 serde_cbor = "0.10"
 procfs = "0.7"
-kvm-bindings = "0.2"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build"}
 

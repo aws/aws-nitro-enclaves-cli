@@ -118,7 +118,7 @@ function configure_huge_pages {
 
 # Print the script's usage instructions.
 function print_usage {
-    echo "Usage: $0 [-d <driver-directory>] [-b] [-c] [-i] [-r] [-h] [-m <memory_mb_needed>]"
+    echo "Usage: $0 [-d <driver-directory>] [-b] [-c] [-i] [-r] [-h] [-m <memory_mb_needed>] [-p <cpu_pool>]"
     echo -e "\t-d: The path to the directory containing the driver source code, including headers."
     echo -e "\t-b: Build the driver."
     echo -e "\t-c: Clean up the driver build."
@@ -126,11 +126,12 @@ function print_usage {
     echo -e "\t-r: Remove the driver."
     echo -e "\t-h: Print these help messages."
     echo -e "\t-m: The amount of memory that will be needed for running enclaves, in megabytes."
+    echo -e "\t-p: The CPU pool that taken from the parent instance and made available for enclaves."
 }
 
 # Verify that the provided driver directory is correct.
 function verify_driver_directory {
-    declare -a subdirs=("include/linux" "include/uapi/linux" "drivers/virt/amazon/$DRIVER_NAME")
+    declare -a subdirs=("include/linux" "include/uapi/linux" "drivers/virt/$DRIVER_NAME")
     for subdir in "${subdirs[@]}"; do
         [ -d "$DRIVER_DIR/$subdir" ] || return 1
     done
@@ -263,7 +264,7 @@ function run_in_driver_dir {
     local driver_source_dir
 
     verify_driver_directory || fail "Driver directory '$DRIVER_DIR' is invalid."
-    driver_source_dir="$DRIVER_DIR/drivers/virt/amazon/$DRIVER_NAME"
+    driver_source_dir="$DRIVER_DIR/drivers/virt/$DRIVER_NAME"
     pushd "$driver_source_dir" &> /dev/null || fail "Driver source directory '$driver_source_dir' can't be accessed."
 
     # Run the function here.
@@ -272,10 +273,17 @@ function run_in_driver_dir {
     popd &> /dev/null
 }
 
+# Configure the CPU pool.
+function configure_cpu_pool {
+    echo "Configuring the enclave CPU pool..."
+    sudo_run "echo $1 > /sys/module/nitro_enclaves/parameters/ne_cpus" || fail "Failed to configure the CPU pool."
+    echo "Done."
+}
+
 # Script entry point.
 [ "$#" -gt 0 ] || fail "No arguments given."
 
-while getopts ":hd:cbrim:" opt; do
+while getopts ":hd:cbrim:p:" opt; do
     case ${opt} in
         h)  # Help was requested.
             print_usage
@@ -304,6 +312,10 @@ while getopts ":hd:cbrim:" opt; do
 
         m)  # Configure the huge page memory.
             configure_huge_pages "$OPTARG"
+            ;;
+
+        p)  # Configure the CPU pool.
+            configure_cpu_pool "$OPTARG"
             ;;
 
         \?) # Invalid option(s) provided.

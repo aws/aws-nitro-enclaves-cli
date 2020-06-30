@@ -3,231 +3,123 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-use std::collections::HashSet;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::str::FromStr;
+use std::collections::BTreeSet;
+use std::process::Command;
 
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
-/// A CPU mapping structure which links a CPU ID with its corresponding core ID.
+use crate::common::commands_parser::RunEnclavesArgs;
+use crate::common::NitroCliResult;
+
+/// The CPU configuration requested by the user.
+#[derive(Clone, PartialEq)]
+pub enum EnclaveCpuConfig {
+    /// A list with the desired CPU IDs.
+    List(Vec<u32>),
+    /// The number of desired CPU IDs.
+    Count(u32),
+}
+
+/// Aggregate CPU information for multiple CPUs.
+#[derive(Debug)]
 pub struct CpuInfo {
-    core_id: u32,
-    cpu_id: u32,
+    /// The list with the CPUs available for enclaves.
+    cpu_ids: Vec<u32>,
+}
+
+impl Default for EnclaveCpuConfig {
+    fn default() -> Self {
+        EnclaveCpuConfig::Count(0)
+    }
 }
 
 impl CpuInfo {
-    /// Create a new `CpuInfo` instance from the given CPU and core IDs.
-    pub fn new(cpu_id: u32, core_id: u32) -> Self {
-        CpuInfo { cpu_id, core_id }
-    }
-}
-
-#[derive(Debug)]
-/// Aggregate CPU information for multiple CPUs.
-pub struct CpuInfos {
-    /// The list with CPU - core mappings.
-    pub core_ids: Vec<CpuInfo>,
-    /// The flag indicating if hyper-threading is enabled.
-    pub hyper_threading: bool,
-}
-
-impl CpuInfos {
-    /// Create a new `CpuInfos` instance from the current system configuration.
+    /// Create a new `CpuInfo` instance from the current system configuration.
     pub fn new() -> Result<Self, String> {
-        let core_ids = CpuInfos::get_cpu_info()?;
-        let hyper_threading = CpuInfos::is_hyper_threading_on(&core_ids);
-        Ok(CpuInfos {
-            core_ids,
-            hyper_threading,
+        Ok(CpuInfo {
+            cpu_ids: CpuInfo::get_cpu_info()?,
         })
     }
 
-    /// Parse a `/proc/cpuinfo` line to obtain a numeric value.
-    pub fn get_value(mut line: String) -> Result<u32, String> {
-        line.retain(|c| !c.is_whitespace());
-        let tokens: Vec<&str> = line.split(':').collect();
-        let token = *tokens.get(1).unwrap();
-
-        u32::from_str(token).map_err(|err| format!("{}", err))
-    }
-
-    /// Parse `/proc/cpuinfo` and build the list of CPU - core mappings.
-    pub fn get_cpu_info() -> Result<Vec<CpuInfo>, String> {
-        let mut result: Vec<CpuInfo> = Vec::new();
-        let mut ids: Vec<u32> = Vec::new();
-        let file = File::open("/proc/cpuinfo")
-            .map_err(|err| format!("Could not open /proc/cpuinfo: {}", err))?;
-        let mut reader = BufReader::new(file);
-
-        loop {
-            let mut line = String::new();
-            let len = reader
-                .read_line(&mut line)
-                .map_err(|err| format!("{}", err))?;
-
-            if len == 0 {
-                break;
+    /// Get the CPU configuration from the command-line arguments.
+    pub fn get_cpu_config(&self, args: &RunEnclavesArgs) -> NitroCliResult<EnclaveCpuConfig> {
+        if let Some(cpu_ids) = args.cpu_ids.clone() {
+            self.check_cpu_ids(&cpu_ids)?;
+            Ok(EnclaveCpuConfig::List(cpu_ids))
+        } else if let Some(cpu_count) = args.cpu_count {
+            if self.cpu_ids.len() < cpu_count as usize {
+                return Err(format!(
+                    "Insufficient CPUs available (requested {}, but maximum is {}).",
+                    cpu_count,
+                    self.cpu_ids.len()
+                ));
             }
-
-            // Given CPU i, its ID will be 2 * i and its core ID will be 2 * i + 1.
-            if line.contains("processor") {
-                ids.push(CpuInfos::get_value(line)?);
-            } else if line.contains("apicid")
-                && !line.contains("initial")
-                && !line.contains("flags")
-            {
-                let id = CpuInfos::get_value(line)?;
-                ids.push(id >> 1);
-            }
-        }
-
-        for i in 0..ids.len() / 2 {
-            result.push(CpuInfo::new(
-                *ids.get(2 * i).unwrap(),
-                *ids.get(2 * i + 1).unwrap(),
-            ));
-        }
-
-        // Sort by core ID.
-        result.sort_by(|a, b| a.core_id.cmp(&b.core_id));
-        Ok(result)
-    }
-
-    /// Get the ID of the core which holds the specifided CPU.
-    pub fn get_core_id(&self, cpu_id: u32) -> Option<u32> {
-        for info in self.core_ids.iter() {
-            if info.cpu_id == cpu_id {
-                return Some(info.core_id);
-            }
-        }
-        None
-    }
-
-    /// Determine if hyper-threading is enabled.
-    pub fn is_hyper_threading_on(cpu_info: &[CpuInfo]) -> bool {
-        for i in 0..cpu_info.len() - 1 {
-            if cpu_info.get(i).unwrap().core_id == cpu_info.get(i + 1).unwrap().core_id {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Get a list of specified size which contains valid CPU IDs.
-    pub fn get_cpu_ids(&self, cpu_count: u32) -> Result<Vec<u32>, String> {
-        if self.hyper_threading && cpu_count % 2 != 0 {
-            return Err("cpu_count should be an even number.".to_string());
-        }
-
-        let mut count: u32 = cpu_count;
-        let mut result: Vec<u32> = Vec::new();
-
-        for info in self.core_ids.iter() {
-            if info.core_id != 0 {
-                result.push(info.cpu_id);
-                count -= 1;
-            }
-
-            if count == 0 {
-                return Ok(result);
-            }
-        }
-
-        let valid_cpus = if self.hyper_threading {
-            self.core_ids.len() - 2
+            Ok(EnclaveCpuConfig::Count(cpu_count))
         } else {
-            self.core_ids.len() - 1
-        };
-
-        Err(format!(
-            "Could not find the requested number of cpus. Maximum number of available cpus: {}",
-            valid_cpus
-        ))
-    }
-
-    /// Check if a list of CPU IDs contains only pairs of siblings (belonging to the same core).
-    pub fn contains_sibling_pairs(&self, cpu_ids: &[u32]) -> bool {
-        let mut core_ids: HashSet<u32> = HashSet::new();
-
-        for id in cpu_ids.iter() {
-            match self.get_core_id(*id) {
-                Some(core_id) => {
-                    if !core_ids.contains(&core_id) {
-                        core_ids.insert(core_id);
-                    } else {
-                        core_ids.remove(&core_id);
-                    }
-                }
-                _ => return false,
-            }
+            // Should not happen.
+            Err("Invalid CPU configuration argument.".to_string())
         }
-
-        core_ids.is_empty()
-    }
-
-    /// Get a list of all available CPU IDs.
-    pub fn get_cpu_candidates(&self) -> Vec<u32> {
-        let mut result: Vec<u32> = Vec::new();
-
-        for info in self.core_ids.iter() {
-            if info.core_id != 0 {
-                result.push(info.cpu_id);
-            }
-        }
-        result
     }
 
     /// Verify that a provided list of CPU IDs is valid.
     pub fn check_cpu_ids(&self, cpu_ids: &[u32]) -> Result<(), String> {
-        if self.hyper_threading && cpu_ids.len() % 2 != 0 {
-            return Err(
-                "Hyper-threading is enabled, so sibling pairs need to be provided".to_string(),
-            );
+        // Ensure there are no duplicate IDs.
+        let mut unique_ids = BTreeSet::new();
+
+        for cpu_id in cpu_ids {
+            unique_ids.insert(cpu_id);
         }
 
-        for id in cpu_ids.iter() {
-            match self.get_core_id(*id) {
-                Some(0) => {
-                    return Err(format!(
-                        "Cpus with core id 0 can't be used. Hint: You can use {:?}",
-                        self.get_cpu_candidates()
-                    ))
-                }
-                None => {
-                    return Err(format!(
-                        "Cpus ids are not valid. Hint: You can use {:?}",
-                        self.get_cpu_candidates()
-                    ))
-                }
-                _ => (),
-            }
-        }
-
-        if self.hyper_threading && !self.contains_sibling_pairs(cpu_ids) {
+        if unique_ids.len() < cpu_ids.len() {
             return Err(format!(
-                "Hyper-threading is enabled, cpus must be on the same physical core. Hint: The following cpus are siblings {:?}",
-                self.get_siblings()
+                "The CPU ID list contains {} duplicate(s).",
+                cpu_ids.len() - unique_ids.len()
             ));
         }
 
-        Ok(())
-    }
-
-    /// Generate all pairs of sibling CPUs (which belong to the same core).
-    pub fn get_siblings(&self) -> Vec<(u32, u32)> {
-        let mut result: Vec<(u32, u32)> = Vec::new();
-
-        // Find the pairs of CPU IDs that have the same core ID.
-        for i in 0..self.core_ids.len() - 1 {
-            let info1 = self.core_ids.get(i).unwrap();
-            let info2 = self.core_ids.get(i + 1).unwrap();
-
-            if info1.core_id == info2.core_id && info1.core_id != 0 {
-                result.push((info1.cpu_id, info2.cpu_id));
+        // Ensure the requested CPUs are available in the CPU pool.
+        for cpu_id in unique_ids {
+            if !self.cpu_ids.contains(cpu_id) {
+                return Err(format!("The CPU with ID {} is not available.", cpu_id));
             }
         }
 
-        result
+        // At this point, all requested CPU IDs are part of the enclave CPU pool.
+        Ok(())
+    }
+
+    /// Get a list of all available CPU IDs.
+    pub fn get_cpu_candidates(&self) -> Vec<u32> {
+        self.cpu_ids.clone()
+    }
+
+    /// Parse a `lscpu` line to obtain a numeric value.
+    pub fn get_value(line: &str) -> Result<u32, String> {
+        let mut line_str = line.to_string();
+        line_str.retain(|c| !c.is_whitespace());
+        line_str
+            .parse::<u32>()
+            .map_err(|e| format!("Failed to parse CPU ID: {}", e))
+    }
+
+    /// Parse `lscpu -p=cpu -c` and build the list of off-line CPUs.
+    fn get_cpu_info() -> NitroCliResult<Vec<u32>> {
+        let mut result: Vec<u32> = Vec::new();
+        let output = Command::new("lscpu")
+            .arg("-p=cpu")
+            .arg("-c")
+            .output()
+            .map_err(|e| format!("Failed to execute \"lscpu -p=cpu -c\": {}", e))?;
+
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        for line in output_str.lines() {
+            if line.starts_with('#') {
+                continue;
+            }
+
+            let cpu_id = CpuInfo::get_value(line)?;
+            result.push(cpu_id);
+        }
+
+        Ok(result)
     }
 }
 

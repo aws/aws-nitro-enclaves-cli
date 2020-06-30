@@ -11,7 +11,7 @@ use crate::common::json_output::EnclaveTerminateInfo;
 use crate::common::NitroCliResult;
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
-use crate::enclave_proc::cpu_info::CpuInfos;
+use crate::enclave_proc::cpu_info::CpuInfo;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
 use crate::enclave_proc::utils::get_enclave_describe_info;
 
@@ -20,12 +20,6 @@ pub const VMADDR_CID_PARENT: u32 = 3;
 
 /// The vsock port used to confirm that the enclave has booted.
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
-
-/// The size of an internal data buffer.
-pub const BUFFER_SIZE: usize = 1024;
-
-/// The bit indicating if an enclave has been launched in debug mode.
-pub const DEBUG_FLAG: u16 = 0x1;
 
 /// Launch an enclave with the specified arguments and provide the launch status through the given connection.
 pub fn run_enclaves(
@@ -37,21 +31,11 @@ pub fn run_enclaves(
     let eif_file =
         File::open(&args.eif_path).map_err(|e| format!("Failed to open the eif file: {}", e))?;
 
-    let cpu_infos = CpuInfos::new()?;
-    let cpu_ids = if let Some(cpu_ids) = args.cpu_ids.clone() {
-        cpu_infos.check_cpu_ids(&cpu_ids)?;
-        Some(cpu_ids)
-    } else if let Some(cpu_count) = args.cpu_count {
-        Some(cpu_infos.get_cpu_ids(cpu_count)?)
-    } else {
-        // Should not happen
-        None
-    };
-
+    let cpu_ids = CpuInfo::new()?.get_cpu_config(args)?;
     let mut enclave_manager = EnclaveManager::new(
         args.enclave_cid,
         args.memory_mib,
-        cpu_ids.unwrap(),
+        cpu_ids,
         eif_file,
         args.debug_mode.unwrap_or(false),
     )

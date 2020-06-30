@@ -9,12 +9,12 @@ use std::io::Read;
 
 use crate::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo};
 use crate::common::NitroCliResult;
-use crate::enclave_proc::commands::DEBUG_FLAG;
 use crate::enclave_proc::resource_manager::EnclaveManager;
+use crate::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
 
 /// Get a string representation of the bit-mask which holds the enclave launch flags.
-pub fn flags_to_string(flags: u16) -> String {
-    if flags & DEBUG_FLAG == DEBUG_FLAG {
+pub fn flags_to_string(flags: u64) -> String {
+    if flags & NE_ENCLAVE_DEBUG_MODE == NE_ENCLAVE_DEBUG_MODE {
         "DEBUG_MODE"
     } else {
         "NONE"
@@ -131,12 +131,12 @@ mod tests {
     }
 
     /// Tests that `flags_to_string()` returns the correct String representation
-    /// when the DEBUG_FLAG is either set or unset.
+    /// when the NE_ENCLAVE_DEBUG_MODE is either set or unset.
     #[test]
     fn test_flags_to_string() {
-        let mut flags: u16 = 0;
+        let mut flags: u64 = 0;
 
-        flags |= DEBUG_FLAG;
+        flags |= NE_ENCLAVE_DEBUG_MODE;
         let mut result = flags_to_string(flags);
 
         assert!(result.eq("DEBUG_MODE"));

@@ -3,48 +3,64 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-use kvm_bindings::kvm_userspace_memory_region;
-use kvm_bindings::KVMIO;
 use log::{debug, error, info};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::os::raw::c_ulong;
+use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::common::notify_error;
 use crate::common::{ExitGracefully, NitroCliResult};
-use crate::enclave_proc::commands::{DEBUG_FLAG, ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
+use crate::enclave_proc::commands::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
+use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
 use crate::enclave_proc::utils::get_run_enclaves_info;
 
-type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u16, EnclaveState);
+/// The internal data type needed for describing an enclave.
+type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u64, EnclaveState);
 
-/// IOCTL code for `KVM_CREATE_VM`.
-pub const KVM_CREATE_VM: u64 = nix::request_code_none!(KVMIO, 0x01) as _;
+/// The bit indicating if an enclave has been launched in debug mode.
+pub const NE_ENCLAVE_DEBUG_MODE: u64 = 0x1;
 
-/// IOCTL code for `KVM_SET_USER_MEMORY_REGION`.
-pub const KVM_SET_USER_MEMORY_REGION: u64 = nix::request_code_write!(
-    KVMIO,
-    0x46,
-    std::mem::size_of::<kvm_userspace_memory_region>()
-) as _;
-
-/// IOCTL code for `KVM_CREATE_VCPU`.
-pub const KVM_CREATE_VCPU: u64 = nix::request_code_none!(KVMIO, 0x41) as _;
-
-/// IOCTL code for `NE_ENCLAVE_START`.
-pub const NE_ENCLAVE_START: u64 =
-    nix::request_code_readwrite!(0x42, 0x1, std::mem::size_of::<EnclaveStartMetadata>()) as _;
+/// The expected driver version that is synchronized to the current version of the CLI.
+const NE_API_VERSION: i32 = 1;
 
 /// The maximum allowable memory size of an enclave is 4 GB.
 const ENCLAVE_MEMORY_MAX_SIZE: u64 = 1 << 32;
 
-/// Offset where the enclave image file should be loaded to.
-const OFFSET_IMGFORMAT: usize = 8 * 1024 * 1024;
+/// Enclave Image Format (EIF) flag.
+const NE_EIF_IMAGE: u64 = 0x01;
+
+/// Flag indicating a memory region for enclave general usage.
+const NE_DEFAULT_MEMORY_REGION: u64 = 0;
+
+/// Magic number for Nitro Enclave IOCTL codes.
+const NE_MAGIC: u64 = 0xAE;
+
+/// IOCTL code for `NE_GET_API_VERSION`.
+const NE_GET_API_VERSION: u64 = nix::request_code_none!(NE_MAGIC, 0x20) as _;
+
+/// IOCTL code for `NE_CREATE_VM`.
+pub const NE_CREATE_VM: u64 = nix::request_code_read!(NE_MAGIC, 0x21, size_of::<u64>()) as _;
+
+/// IOCTL code for `NE_CREATE_VCPU`.
+pub const NE_CREATE_VCPU: u64 = nix::request_code_readwrite!(NE_MAGIC, 0x22, size_of::<u32>()) as _;
+
+/// IOCTL code for `NE_GET_IMAGE_LOAD_INFO`.
+pub const NE_GET_IMAGE_LOAD_INFO: u64 =
+    nix::request_code_readwrite!(NE_MAGIC, 0x23, size_of::<ImageLoadInfo>()) as _;
+
+/// IOCTL code for `NE_SET_USER_MEMORY_REGION`.
+pub const NE_SET_USER_MEMORY_REGION: u64 =
+    nix::request_code_write!(NE_MAGIC, 0x24, size_of::<MemoryRegion>()) as _;
+
+/// IOCTL code for `NE_START_ENCLAVE`.
+pub const NE_START_ENCLAVE: u64 =
+    nix::request_code_readwrite!(NE_MAGIC, 0x25, size_of::<EnclaveStartInfo>()) as _;
 
 /// The state an enclave may be in.
 #[derive(Clone)]
@@ -60,22 +76,32 @@ pub enum EnclaveState {
 /// A memory region used by the enclave memory allocator.
 #[derive(Clone)]
 pub struct MemoryRegion {
-    /// The region's virtual address.
-    mem_addr: u64,
+    /// Flags to determine the usage for the memory region.
+    flags: u64,
     /// The region's size in bytes.
     mem_size: u64,
+    /// The region's virtual address.
+    mem_addr: u64,
 }
 
 /// Meta-data necessary for the starting of an enclave.
 #[repr(packed)]
-pub struct EnclaveStartMetadata {
-    /// The Context ID (CID) for the enclave's vsock device. If 0, the CID is auto-generated.
-    enclave_cid: u64,
+pub struct EnclaveStartInfo {
     /// Flags for the enclave to start with (ex.: debug mode).
     #[allow(dead_code)]
     flags: u64,
-    /// Slot-unique ID mapped to the enclave.
-    slot_uid: u64,
+    /// The Context ID (CID) for the enclave's vsock device. If 0, the CID is auto-generated.
+    enclave_cid: u64,
+}
+
+/// Information necessary for in-memory enclave image loading.
+#[derive(Debug)]
+struct ImageLoadInfo {
+    /// Flags to determine the enclave image type (e.g. Enclave Image Format - EIF).
+    flags: u64,
+
+    /// Offset in enclave memory where to start placing the enclave image.
+    memory_offset: u64,
 }
 
 /// Helper structure to allocate memory resources needed by an enclave.
@@ -94,6 +120,9 @@ struct ResourceAllocator {
 /// Helper structure for managing an enclave's resources.
 #[derive(Default)]
 struct EnclaveHandle {
+    /// The CPU configuration as requested by the user.
+    #[allow(dead_code)]
+    cpu_config: EnclaveCpuConfig,
     /// List of CPU IDs provided to the enclave.
     cpu_ids: Vec<u32>,
     /// List of corresponding CPU descriptors provided by the driver.
@@ -162,9 +191,19 @@ impl MemoryRegion {
 
         // Record the allocated region.
         Ok(MemoryRegion {
-            mem_addr: addr as u64,
+            flags: NE_DEFAULT_MEMORY_REGION,
             mem_size: region_size,
+            mem_addr: addr as u64,
         })
+    }
+
+    /// Create a new `MemoryRegion` instance with the specified values.
+    pub fn new_with(flags: u64, mem_addr: u64, mem_size: u64) -> Self {
+        MemoryRegion {
+            flags,
+            mem_size,
+            mem_addr,
+        }
     }
 
     /// Free the memory region, if it has been allocated earlier.
@@ -214,12 +253,12 @@ impl MemoryRegion {
     }
 
     /// Get the virtual address of the memory region.
-    pub fn mem_addr(&mut self) -> u64 {
+    pub fn mem_addr(&self) -> u64 {
         self.mem_addr
     }
 
     /// Get the size in bytes of the memory region.
-    pub fn mem_size(&mut self) -> u64 {
+    pub fn mem_size(&self) -> u64 {
         self.mem_size
     }
 }
@@ -321,7 +360,7 @@ impl EnclaveHandle {
     fn new(
         enclave_cid: Option<u64>,
         memory_mib: u64,
-        cpu_ids: Vec<u32>,
+        cpu_config: EnclaveCpuConfig,
         eif_file: File,
         debug_mode: bool,
     ) -> NitroCliResult<Self> {
@@ -334,24 +373,36 @@ impl EnclaveHandle {
             return Err(format!("Requested memory is lower than the enclave image. At least {} MiB must be allocated.", eif_size >> 20));
         }
 
+        // Open the device file.
         let dev_file = OpenOptions::new()
             .read(true)
             .write(true)
             .open("/dev/nitro_enclaves")
             .map_err(|e| format!("Failed to open device file: {:?}", e))?;
-        let enc_type: c_ulong = 0;
-        let enc_fd = unsafe { libc::ioctl(dev_file.as_raw_fd(), KVM_CREATE_VM as _, &enc_type) };
-        let flags: u64 = if debug_mode { u64::from(DEBUG_FLAG) } else { 0 };
+
+        // Check that the driver's version is the expected one.
+        let driver_version = unsafe { libc::ioctl(dev_file.as_raw_fd(), NE_GET_API_VERSION as _) };
+        if driver_version != NE_API_VERSION {
+            return Err(format!(
+                "Driver version mismatch: expected {}, found {}",
+                NE_API_VERSION, driver_version
+            ));
+        }
+
+        let mut slot_uid: u64 = 0;
+        let enc_fd = unsafe { libc::ioctl(dev_file.as_raw_fd(), NE_CREATE_VM as _, &mut slot_uid) };
+        let flags: u64 = if debug_mode { NE_ENCLAVE_DEBUG_MODE } else { 0 };
 
         if enc_fd < 0 {
-            return Err("Failed to get enclave device descriptor.".to_string());
+            return Err(format!("Invalid enclave file descriptor ({}).", enc_fd));
         }
 
         Ok(EnclaveHandle {
-            cpu_ids,
+            cpu_config,
+            cpu_ids: vec![],
             cpu_fds: vec![],
             allocated_memory_mib: 0,
-            slot_uid: 0,
+            slot_uid,
             enclave_cid,
             flags,
             enc_fd,
@@ -373,11 +424,10 @@ impl EnclaveHandle {
         })?;
 
         self.enclave_cid = Some(enclave_start.enclave_cid);
-        self.slot_uid = enclave_start.slot_uid;
 
         let info = get_run_enclaves_info(
             enclave_start.enclave_cid,
-            enclave_start.slot_uid,
+            self.slot_uid,
             self.cpu_ids.clone(),
             self.allocated_memory_mib,
         )?;
@@ -408,28 +458,29 @@ impl EnclaveHandle {
             .as_mut()
             .ok_or_else(|| "Cannot get eif_file".to_string())?;
 
-        write_eif_to_regions(eif_file, regions)?;
+        let mut image_load_info = ImageLoadInfo {
+            flags: NE_EIF_IMAGE,
+            memory_offset: 0,
+        };
+        let rc = unsafe {
+            libc::ioctl(
+                self.enc_fd,
+                NE_GET_IMAGE_LOAD_INFO as _,
+                &mut image_load_info,
+            )
+        };
+        if rc < 0 {
+            return Err(format!("Failed to get image load information: {}", rc));
+        }
+
+        debug!("Memory load information: {:?}", image_load_info);
+        write_eif_to_regions(eif_file, regions, image_load_info.memory_offset as usize)?;
 
         // Provide the regions to the driver for ownership change.
         for region in regions {
-            let kvm_mem_region = kvm_userspace_memory_region {
-                slot: 0,
-                flags: 0,
-                userspace_addr: region.mem_addr,
-                guest_phys_addr: 0,
-                memory_size: region.mem_size,
-            };
-
-            let rc = unsafe {
-                libc::ioctl(
-                    self.enc_fd,
-                    KVM_SET_USER_MEMORY_REGION as _,
-                    &kvm_mem_region,
-                )
-            };
+            let rc = unsafe { libc::ioctl(self.enc_fd, NE_SET_USER_MEMORY_REGION as _, region) };
             if rc < 0 {
-                error!("Failed to KVM_SET_USER_MEMORY_REGION: {}\n", rc);
-                return Err("".to_string());
+                return Err(format!("Failed to set enclave memory region: {}", rc));
             }
         }
 
@@ -438,28 +489,52 @@ impl EnclaveHandle {
         Ok(())
     }
 
+    /// Initialize a single vCPU from a given ID.
+    fn init_single_cpu(&mut self, mut cpu_id: u32) -> NitroCliResult<()> {
+        let cpu_fd = unsafe { libc::ioctl(self.enc_fd, NE_CREATE_VCPU as _, &mut cpu_id) };
+
+        if cpu_fd < 0 {
+            return Err(format!(
+                "Failed to create vCPU {}: {}",
+                cpu_id,
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        self.cpu_ids.push(cpu_id);
+        self.cpu_fds.push(cpu_fd);
+        debug!(
+            "Created vCPU descriptor {} for CPU with ID {}.",
+            cpu_fd, cpu_id
+        );
+
+        Ok(())
+    }
+
     /// Provide CPUs from the parent instance to the enclave.
     fn init_cpus(&mut self) -> NitroCliResult<()> {
-        for cpu_id in &self.cpu_ids {
-            let vcpu_fd = unsafe { libc::ioctl(self.enc_fd, KVM_CREATE_VCPU as _, cpu_id) };
-            if vcpu_fd < 0 {
-                return Err(format!(
-                    "Creating vCPU {} failed with error: {}",
-                    cpu_id,
-                    std::io::Error::last_os_error()
-                ));
-            }
+        let cpu_config = self.cpu_config.clone();
 
-            self.cpu_fds.push(vcpu_fd);
+        match cpu_config {
+            EnclaveCpuConfig::List(cpu_ids) => {
+                for cpu_id in cpu_ids {
+                    self.init_single_cpu(cpu_id.clone())?;
+                }
+            }
+            EnclaveCpuConfig::Count(cpu_count) => {
+                for _ in 0..cpu_count {
+                    self.init_single_cpu(0)?;
+                }
+            }
         }
 
         Ok(())
     }
 
     /// Start an enclave after providing it with its necessary resources.
-    fn start(&mut self, connection: Option<&Connection>) -> NitroCliResult<EnclaveStartMetadata> {
-        let mut start = EnclaveStartMetadata::new(&self);
-        let rc = unsafe { libc::ioctl(self.enc_fd, NE_ENCLAVE_START as _, &mut start) };
+    fn start(&mut self, connection: Option<&Connection>) -> NitroCliResult<EnclaveStartInfo> {
+        let mut start = EnclaveStartInfo::new(&self);
+        let rc = unsafe { libc::ioctl(self.enc_fd, NE_START_ENCLAVE as _, &mut start) };
 
         if rc < 0 {
             return Err(format!("Failed to start enclave: {}", rc));
@@ -545,22 +620,20 @@ impl Drop for EnclaveHandle {
     }
 }
 
-impl EnclaveStartMetadata {
-    /// Create a new `EnclaveStartMetadata` instance from the given enclave handle.
+impl EnclaveStartInfo {
+    /// Create a new `EnclaveStartInfo` instance from the given enclave handle.
     fn new(enclave_handle: &EnclaveHandle) -> Self {
-        EnclaveStartMetadata {
-            slot_uid: 0,
-            enclave_cid: enclave_handle.enclave_cid.unwrap_or(0),
+        EnclaveStartInfo {
             flags: enclave_handle.flags,
+            enclave_cid: enclave_handle.enclave_cid.unwrap_or(0),
         }
     }
 
-    /// Create an empty `EnclaveStartMetadata` instance.
+    /// Create an empty `EnclaveStartInfo` instance.
     pub fn new_empty() -> Self {
-        EnclaveStartMetadata {
-            slot_uid: 0,
-            enclave_cid: 0,
+        EnclaveStartInfo {
             flags: 0,
+            enclave_cid: 0,
         }
     }
 }
@@ -570,7 +643,7 @@ impl EnclaveManager {
     pub fn new(
         enclave_cid: Option<u64>,
         memory_mib: u64,
-        cpu_ids: Vec<u32>,
+        cpu_ids: EnclaveCpuConfig,
         eif_file: File,
         debug_mode: bool,
     ) -> NitroCliResult<Self> {
@@ -606,7 +679,7 @@ impl EnclaveManager {
             locked_handle.cpu_ids.len() as u64,
             locked_handle.cpu_ids.clone(),
             locked_handle.allocated_memory_mib,
-            locked_handle.flags as u16,
+            locked_handle.flags,
             locked_handle.state.clone(),
         ))
     }
@@ -666,7 +739,11 @@ impl EnclaveManager {
 }
 
 /// Write an enclave image file to the specified list of memory regions.
-fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroCliResult<()> {
+fn write_eif_to_regions(
+    eif_file: &mut File,
+    regions: &[MemoryRegion],
+    image_write_offset: usize,
+) -> NitroCliResult<()> {
     let file_size = eif_file
         .metadata()
         .map_err(|err| format!("Error during fs::metadata: {}", err))?
@@ -681,7 +758,7 @@ fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroC
     for region in regions {
         if total_written
             >= file_size
-                .checked_add(OFFSET_IMGFORMAT)
+                .checked_add(image_write_offset)
                 .ok_or_else(|| "Memory overflow".to_string())?
         {
             // All bytes have been written.
@@ -690,13 +767,13 @@ fn write_eif_to_regions(eif_file: &mut File, regions: &[MemoryRegion]) -> NitroC
         if total_written
             .checked_add(region.mem_size as usize)
             .ok_or_else(|| "Memory overflow".to_string())?
-            < OFFSET_IMGFORMAT
+            < image_write_offset
         {
-            // All bytes need to be skiped to get to OFFSET_IMGFORMAT.
+            // All bytes need to be skiped to get to the image write offset.
         } else {
-            let offset = OFFSET_IMGFORMAT.saturating_sub(total_written);
+            let offset = image_write_offset.saturating_sub(total_written);
             let bytes_left_in_file = file_size
-                .checked_add(OFFSET_IMGFORMAT)
+                .checked_add(image_write_offset)
                 .ok_or_else(|| "Memory overflow".to_string())?
                 .checked_sub(total_written)
                 .ok_or_else(|| "Corruption, written more than file size".to_string())?;

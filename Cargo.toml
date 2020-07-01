@@ -22,6 +22,9 @@ procfs = "0.7"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build"}
 
+[build-dependencies]
+bindgen = { version=">=0.54" }
+
 [dev-dependencies]
 log = "0.4"
 num-derive = "0.2"

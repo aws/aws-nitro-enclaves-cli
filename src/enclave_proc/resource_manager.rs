@@ -3,7 +3,15 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+mod bindings {
+    #![allow(missing_docs)]
+    #![allow(non_camel_case_types)]
+
+    include!(concat!(env!("OUT_DIR"), "/driver_structs.rs"));
+}
+
 use log::{debug, error, info};
+use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::SeekFrom;
@@ -19,6 +27,15 @@ use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
 use crate::enclave_proc::utils::get_run_enclaves_info;
+
+/// CamelCase alias for the bindgen generated driver struct (ne_enclave_start_info).
+pub type EnclaveStartInfo = bindings::ne_enclave_start_info;
+
+/// CamelCase alias for the bindgen generated driver struct (ne_user_memory_region).
+pub type UserMemoryRegion = bindings::ne_user_memory_region;
+
+/// CamelCase alias for the bindgen generate struct (ne_image_load_info).
+pub type ImageLoadInfo = bindings::ne_image_load_info;
 
 /// The internal data type needed for describing an enclave.
 type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u64, EnclaveState);
@@ -62,17 +79,6 @@ pub const NE_SET_USER_MEMORY_REGION: u64 =
 pub const NE_START_ENCLAVE: u64 =
     nix::request_code_readwrite!(NE_MAGIC, 0x25, size_of::<EnclaveStartInfo>()) as _;
 
-/// The state an enclave may be in.
-#[derive(Clone)]
-pub enum EnclaveState {
-    /// The enclave is not running (it's either not started or has been terminated).
-    Empty,
-    /// The enclave is running.
-    Running,
-    /// The enclave is in the process of terminating.
-    Terminating,
-}
-
 /// A memory region used by the enclave memory allocator.
 #[derive(Clone)]
 pub struct MemoryRegion {
@@ -84,24 +90,15 @@ pub struct MemoryRegion {
     mem_addr: u64,
 }
 
-/// Meta-data necessary for the starting of an enclave.
-#[repr(packed)]
-pub struct EnclaveStartInfo {
-    /// Flags for the enclave to start with (ex.: debug mode).
-    #[allow(dead_code)]
-    flags: u64,
-    /// The Context ID (CID) for the enclave's vsock device. If 0, the CID is auto-generated.
-    enclave_cid: u64,
-}
-
-/// Information necessary for in-memory enclave image loading.
-#[derive(Debug)]
-struct ImageLoadInfo {
-    /// Flags to determine the enclave image type (e.g. Enclave Image Format - EIF).
-    flags: u64,
-
-    /// Offset in enclave memory where to start placing the enclave image.
-    memory_offset: u64,
+/// The state an enclave may be in.
+#[derive(Clone)]
+pub enum EnclaveState {
+    /// The enclave is not running (it's either not started or has been terminated).
+    Empty,
+    /// The enclave is running.
+    Running,
+    /// The enclave is in the process of terminating.
+    Terminating,
 }
 
 /// Helper structure to allocate memory resources needed by an enclave.
@@ -168,6 +165,19 @@ impl ToString for EnclaveState {
 impl Default for EnclaveState {
     fn default() -> Self {
         EnclaveState::Empty
+    }
+}
+
+/// Construct a UserMemoryRegion object from a MemoryRegion instance.
+/// Implementing the `From` trait automatically gives access to an
+/// implementation of `Into` which can be used for a MemoryRegion instance.
+impl From<&MemoryRegion> for UserMemoryRegion {
+    fn from(mem_reg: &MemoryRegion) -> UserMemoryRegion {
+        UserMemoryRegion {
+            flags: mem_reg.flags,
+            memory_size: mem_reg.mem_size,
+            userspace_addr: mem_reg.mem_addr,
+        }
     }
 }
 
@@ -478,7 +488,14 @@ impl EnclaveHandle {
 
         // Provide the regions to the driver for ownership change.
         for region in regions {
-            let rc = unsafe { libc::ioctl(self.enc_fd, NE_SET_USER_MEMORY_REGION as _, region) };
+            let user_mem_region: UserMemoryRegion = region.into();
+            let rc = unsafe {
+                libc::ioctl(
+                    self.enc_fd,
+                    NE_SET_USER_MEMORY_REGION as _,
+                    &user_mem_region,
+                )
+            };
             if rc < 0 {
                 return Err(format!("Failed to set enclave memory region: {}", rc));
             }

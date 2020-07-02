@@ -106,12 +106,12 @@ nitro_cli_resource_allocator: drivers/nitro_cli_resource_allocator/nitro_cli_res
 nitro_cli_resource_allocator-clean:
 	PREV_DIR=$$PWD && cd drivers/nitro_cli_resource_allocator/ && make clean && cd $$PREV_DIR \
 
-nitro_enclaves: drivers/virt/amazon/nitro_enclaves/ne_main.c driver-deps
-	PREV_DIR=$$PWD && cd drivers/virt/amazon/nitro_enclaves/ && make && cd $$PREV_DIR
+nitro_enclaves: drivers/virt/nitro_enclaves/ne_misc_dev.c drivers/virt/nitro_enclaves/ne_pci_dev.c driver-deps
+	PREV_DIR=$$PWD && cd drivers/virt/nitro_enclaves/ && make && cd $$PREV_DIR
 
 .PHONY: nitro_enclaves-clean
 nitro_enclaves-clean:
-	PREV_DIR=$$PWD && cd drivers/virt/amazon/nitro_enclaves/ && make clean && cd $$PREV_DIR
+	PREV_DIR=$$PWD && cd drivers/virt/nitro_enclaves/ && make clean && cd $$PREV_DIR
 
 .PHONY: driver-clean
 driver-clean: nitro_enclaves-clean nitro_cli_resource_allocator-clean
@@ -183,8 +183,9 @@ command-executer: build-setup build-container .build-command-executer
 				--target-dir=/nitro_build/nitro_cli \
 				--message-format json \
 				| tee /nitro_build/nitro-tests-build.log | \
-				jq -r "select(.profile.test == true) | .filenames[]" \
-					 > /nitro_build/test_executables.txt && \
+				jq -r "select(.profile.test == true) | .filenames[], .package_id" | \
+				paste -d " " - - | cut -d " " -f 1,2 \
+					> /nitro_build/test_executables.txt && \
 			chmod -R 777 nitro_build '
 	touch $@
 
@@ -277,9 +278,10 @@ install: install-tools nitro_enclaves
 	$(INSTALL) -D -m 0755 blobs/nsm.ko ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/nsm.ko
 	$(INSTALL) -D -m 0755 blobs/linuxkit ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/linuxkit
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves
-	$(INSTALL) -D -m 0755 drivers/virt/amazon/nitro_enclaves/nitro_enclaves.ko \
+	$(INSTALL) -D -m 0755 drivers/virt/nitro_enclaves/nitro_enclaves.ko \
                ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves/nitro_enclaves.ko
 	$(INSTALL) -m 0644 tools/env.sh ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
+	$(INSTALL) -m 0744 tools/nitro-cli-config.sh ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-config.sh
 	sed -i "2 a NITRO_CLI_INSTALL_DIR=$$(readlink -f ${NITRO_CLI_INSTALL_DIR})" \
 		${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
 	echo "Installation finished"
@@ -295,6 +297,7 @@ uninstall:
 	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${CONF_DIR}/vsock_proxy/config.yaml
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-config.sh
 
 .PHONY: clean
 clean:

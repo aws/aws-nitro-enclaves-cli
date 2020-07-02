@@ -35,6 +35,11 @@ def test_install_uninstall():
                        "/etc/profile.d//nitro-cli-env.sh && nitro-cli --help && vsock-proxy --help\""
         helpers.run_cmd_ok(help_cmd)
 
+        # Perform clean-up.
         uninstall_cmd = make + " uninstall"
         helpers.run_cmd_ok(uninstall_cmd)
         helpers.check_no_files(install_dir.name)
+
+        # Also remove the inserted driver.
+        rmmod_cmd = "rmmod nitro_enclaves"
+        helpers.run_cmd_ok(rmmod_cmd)

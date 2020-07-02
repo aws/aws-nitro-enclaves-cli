@@ -64,7 +64,7 @@ def test_run_invalid_cpu_count(init_resources):
         result = run_enclave_err(SAMPLE_EIF, "1028", "3")
         result = run_enclave_err(SAMPLE_EIF, "1028", "-3")
         result = run_enclave_err(SAMPLE_EIF, "1028", "zzz")
-        result = run_enclave_err(SAMPLE_EIF, "1028", str(os.cpu_count()))
+        result = run_enclave_err(SAMPLE_EIF, "1028", str(get_cpu_count()))
 
         # At the end check we can still launch enclaves.
         result = run_enclave_ok(SAMPLE_EIF, "1028", "2")

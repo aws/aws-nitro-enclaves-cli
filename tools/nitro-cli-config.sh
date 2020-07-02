@@ -126,7 +126,8 @@ function print_usage {
     echo -e "\t-r: Remove the driver."
     echo -e "\t-h: Print these help messages."
     echo -e "\t-m: The amount of memory that will be needed for running enclaves, in megabytes."
-    echo -e "\t-p: The CPU pool that taken from the parent instance and made available for enclaves."
+    echo -e "\t-p: The CPU pool that is taken from the parent instance and made available for enclaves. The pool format"
+    echo -e "\t    is given in: https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html#cpu-lists"
 }
 
 # Verify that the provided driver directory is correct.

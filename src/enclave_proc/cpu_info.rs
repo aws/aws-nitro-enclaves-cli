@@ -129,259 +129,126 @@ mod tests {
 
     #[test]
     fn test_get_value_correct_format() {
-        let test_proc0 = String::from("processor:\t3");
-        let result0 = CpuInfos::get_value(test_proc0);
+        let result0 = CpuInfo::get_value("\t3");
         assert!(result0.is_ok());
         assert_eq!(result0.unwrap(), 3);
 
-        let test_proc1 = String::from("processor\t  :   \t  4");
-        let result1 = CpuInfos::get_value(test_proc1);
+        let result1 = CpuInfo::get_value("   \t  4");
         assert!(result1.is_ok());
         assert_eq!(result1.unwrap(), 4);
 
-        let test_proc2 = String::from("\t\nprocessor\t:  \n 12");
-        let result2 = CpuInfos::get_value(test_proc2);
+        let result2 = CpuInfo::get_value("  \n 12");
         assert!(result2.is_ok());
         assert_eq!(result2.unwrap(), 12);
     }
 
     #[test]
     fn test_get_value_incorrect_format() {
-        let test_proc0 = String::from("processor:\t-2");
-        let result0 = CpuInfos::get_value(test_proc0);
+        let result0 = CpuInfo::get_value("\t-2");
         assert!(result0.is_err());
         if let Err(err_str) = result0 {
-            assert!(err_str.eq("invalid digit found in string"));
+            assert!(err_str.starts_with("Failed to parse CPU ID"));
         }
 
-        let test_proc1 = String::from("processor:\n\n0x06");
-        let result1 = CpuInfos::get_value(test_proc1);
+        let result1 = CpuInfo::get_value("\n\n0x06");
         assert!(result1.is_err());
         if let Err(err_str) = result1 {
-            assert!(err_str.eq("invalid digit found in string"));
+            assert!(err_str.starts_with("Failed to parse CPU ID"));
         }
 
-        let test_proc2 = String::from("processor:     processor");
-        let result2 = CpuInfos::get_value(test_proc2);
+        let result2 = CpuInfo::get_value("     processor");
         assert!(result2.is_err());
         if let Err(err_str) = result2 {
-            assert!(err_str.eq("invalid digit found in string"));
+            assert!(err_str.starts_with("Failed to parse CPU ID"));
         }
     }
 
     #[test]
-    fn test_get_core_id_correct() {
-        let cpu_infos = CpuInfos::new();
+    fn test_get_cpu_config_invalid_input() {
+        let cpu_info = CpuInfo::new().unwrap();
+        let mut run_args = RunEnclavesArgs {
+            eif_path: String::new(),
+            enclave_cid: None,
+            memory_mib: 0,
+            debug_mode: None,
+            cpu_ids: None,
+            cpu_count: Some(343),
+        };
 
-        if let Ok(cpu_infos) = cpu_infos {
-            for i in 0..cpu_infos.core_ids.len() {
-                let cpu_id = i as u32;
-                let index = cpu_infos.core_ids.iter().position(|r| r.cpu_id == cpu_id);
-                assert_eq!(
-                    cpu_infos.get_core_id(cpu_id).unwrap(),
-                    cpu_infos.core_ids[index.unwrap()].core_id
-                );
-            }
+        let mut result = cpu_info.get_cpu_config(&run_args);
+        assert!(result.is_err());
+
+        if let Err(err_str) = result {
+            assert!(err_str.starts_with("Insufficient CPUs available"));
+        }
+
+        run_args.cpu_count = None;
+        run_args.cpu_ids = Some(vec![1, 2, 3, 4, 5, 6, 7]);
+        result = cpu_info.get_cpu_config(&run_args);
+        assert!(result.is_err());
+
+        if let Err(err_str) = result {
+            assert!(err_str.starts_with("The CPU with ID"));
+            assert!(err_str.ends_with("is not available."));
         }
     }
 
     #[test]
-    fn test_get_core_id_incorrect() {
-        let cpu_infos = CpuInfos::new();
+    fn test_get_cpu_config_valid_input() {
+        let cpu_info = CpuInfo::new().unwrap();
+        let mut run_args = RunEnclavesArgs {
+            eif_path: String::new(),
+            enclave_cid: None,
+            memory_mib: 0,
+            debug_mode: None,
+            cpu_ids: None,
+            cpu_count: Some(2),
+        };
 
-        if let Ok(cpu_infos) = cpu_infos {
-            let cpu_id0 = 200;
-            let result0 = cpu_infos.get_core_id(cpu_id0);
+        let mut result = cpu_info.get_cpu_config(&run_args);
+        assert!(result.is_ok());
+        assert!(result.unwrap() == EnclaveCpuConfig::Count(2));
 
-            assert_eq!(result0, None);
-        }
-    }
+        run_args.cpu_count = None;
+        run_args.cpu_ids = Some(vec![1, 3]);
 
-    #[test]
-    fn test_is_hyperthreading_on_on() {
-        let mut cpu_info = Vec::<CpuInfo>::new();
-
-        cpu_info.push(CpuInfo::new(2, 0));
-        cpu_info.push(CpuInfo::new(0, 0));
-
-        let result = CpuInfos::is_hyper_threading_on(&cpu_info);
-
-        assert_eq!(result, true);
-    }
-
-    #[test]
-    fn test_is_hyperthreading_on_off() {
-        let mut cpu_info = Vec::<CpuInfo>::new();
-
-        cpu_info.push(CpuInfo::new(3, 1));
-        cpu_info.push(CpuInfo::new(0, 0));
-
-        let result = CpuInfos::is_hyper_threading_on(&cpu_info);
-
-        assert_eq!(result, false);
-    }
-
-    #[test]
-    fn test_get_cpu_ids_invalid_input() {
-        let cpu_infos = CpuInfos::new();
-
-        if let Ok(cpu_infos) = cpu_infos {
-            if cpu_infos.hyper_threading {
-                let cpu_count = 1;
-                let result = cpu_infos.get_cpu_ids(cpu_count);
-
-                assert!(result.is_err());
-
-                if let Err(err_str) = result {
-                    assert!(err_str.eq("cpu_count should be an even number."));
-                }
-            } else {
-                let cpu_count = 43;
-                let result = cpu_infos.get_cpu_ids(cpu_count);
-
-                assert!(result.is_err());
-
-                if let Err(err_str) = result {
-                    assert!(err_str.starts_with("Could not find the requested number of cpus."));
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn test_get_cpu_ids_valid_input() {
-        let cpu_infos = CpuInfos::new();
-
-        if let Ok(cpu_infos) = cpu_infos {
-            if cpu_infos.hyper_threading {
-                let cpu_count = 2;
-                let result = cpu_infos.get_cpu_ids(cpu_count);
-
-                assert!(result.is_ok());
-                assert_eq!(2, result.unwrap().len());
-            } else {
-                let cpu_count = 1;
-                let result = cpu_infos.get_cpu_ids(cpu_count);
-
-                assert!(result.is_ok());
-                assert_eq!(1, result.unwrap().len());
-            }
-        }
-    }
-
-    #[test]
-    fn test_contains_sibling_pairs() {
-        let cpu_infos = CpuInfos::new();
-
-        if let Ok(cpu_infos) = cpu_infos {
-            let cpu_ids = cpu_infos
-                .core_ids
-                .iter()
-                .filter(|r| r.core_id == 0)
-                .map(|r| r.cpu_id)
-                .collect::<Vec<_>>();
-
-            let result = cpu_infos.contains_sibling_pairs(&cpu_ids);
-            if CpuInfos::is_hyper_threading_on(&cpu_infos.core_ids) {
-                assert!(result);
-            } else {
-                assert!(!result);
-            }
-        }
+        result = cpu_info.get_cpu_config(&run_args);
+        assert!(result.is_ok());
+        assert!(result.unwrap() == EnclaveCpuConfig::List(vec![1, 3]));
     }
 
     #[test]
     fn test_get_cpu_candidates() {
-        let cpu_infos = CpuInfos::new();
+        let cpu_info = CpuInfo::new().unwrap();
+        let candidate_cpus = cpu_info.get_cpu_candidates();
 
-        if let Ok(cpu_infos) = cpu_infos {
-            let candidate_cpus = cpu_infos.get_cpu_candidates();
-
-            assert!(candidate_cpus.len() > 0);
-        }
+        assert!(candidate_cpus.len() > 0);
     }
 
     #[test]
-    fn test_check_cpu_ids_invalid() {
-        let cpu_infos = CpuInfos::new();
+    fn test_check_cpu_ids() {
+        let cpu_info = CpuInfo::new().unwrap();
+        let mut cpu_ids: Vec<u32> = vec![1];
 
-        if let Ok(cpu_infos) = cpu_infos {
-            if cpu_infos.hyper_threading {
-                let mut cpu_ids = Vec::<u32>::new();
+        let mut result = cpu_info.check_cpu_ids(&cpu_ids);
+        assert!(result.is_ok());
 
-                cpu_ids.push(1);
-
-                let result = cpu_infos.check_cpu_ids(&cpu_ids);
-
-                assert!(result.is_err());
-                if let Err(err_str) = result {
-                    assert!(err_str
-                        .eq("Hyper-threading is enabled, so sibling pairs need to be provided"));
-                }
-            } else {
-                let mut cpu_ids = Vec::<u32>::new();
-
-                // Add all cpus having core_id set to 0
-                for i in 0..cpu_infos.core_ids.len() {
-                    // Safe to unwrap since `i` will not exceed the bounds
-                    if cpu_infos.core_ids.get(i).unwrap().core_id == 0 {
-                        cpu_ids.push(cpu_infos.core_ids.get(i).unwrap().cpu_id);
-                    }
-                }
-
-                let result = cpu_infos.check_cpu_ids(&cpu_ids);
-
-                assert!(result.is_err());
-                if let Err(err_str) = result {
-                    assert!(err_str.starts_with("Cpus with core id 0 can't be used."));
-                }
-            }
+        cpu_ids = vec![1, 1];
+        result = cpu_info.check_cpu_ids(&cpu_ids);
+        assert!(result.is_err());
+        if let Err(err_str) = result {
+            assert!(err_str.eq("The CPU ID list contains 1 duplicate(s)."));
         }
-    }
 
-    #[test]
-    fn test_check_cpu_ids_valid() {
-        let cpu_infos = CpuInfos::new();
+        cpu_ids = vec![1, 3];
+        result = cpu_info.check_cpu_ids(&cpu_ids);
+        assert!(result.is_ok());
 
-        if let Ok(cpu_infos) = cpu_infos {
-            if cpu_infos.hyper_threading {
-                let mut cpu_ids = Vec::<u32>::new();
-
-                // Add 2 cpus having core_id != 0
-                for i in 0..cpu_infos.core_ids.len() {
-                    // Safe to unwrap since `i` will not exceed the bounds
-                    if cpu_infos.core_ids.get(i).unwrap().core_id != 0 {
-                        cpu_ids.push(cpu_infos.core_ids.get(i).unwrap().cpu_id);
-
-                        if cpu_ids.len() == 2 {
-                            break;
-                        }
-                    }
-                }
-
-                let result = cpu_infos.check_cpu_ids(&cpu_ids);
-
-                assert!(result.is_ok());
-            }
-        }
-    }
-
-    #[test]
-    fn test_get_siblings() {
-        let cpu_infos = CpuInfos::new();
-
-        if let Ok(cpu_infos) = cpu_infos {
-            let mut core_ids = HashSet::<u32>::new();
-
-            for i in 0..cpu_infos.core_ids.len() {
-                // Safe to unwrap since `i` will not exceed the bounds
-                core_ids.insert(cpu_infos.core_ids.get(i).unwrap().core_id);
-            }
-
-            let siblings = cpu_infos.get_siblings();
-
-            // Do not consider core_id 0
-            assert_eq!(core_ids.len() - 1, siblings.len());
+        cpu_ids = vec![1, 3, 5];
+        result = cpu_info.check_cpu_ids(&cpu_ids);
+        assert!(result.is_err());
+        if let Err(err_str) = result {
+            assert!(err_str.eq("The CPU with ID 5 is not available."));
         }
     }
 }

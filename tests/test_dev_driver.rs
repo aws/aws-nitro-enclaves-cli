@@ -3,23 +3,49 @@
 #![deny(warnings)]
 
 use std::fs::File;
-use std::os::raw::c_ulong;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::Command;
 
 use nitro_cli::common::NitroCliResult;
-use nitro_cli::enclave_proc::cpu_info::CpuInfos;
+use nitro_cli::enclave_proc::cpu_info::CpuInfo;
 use nitro_cli::enclave_proc::resource_manager::{
-    EnclaveStartMetadata, MemoryRegion, KVM_CREATE_VCPU, KVM_CREATE_VM, KVM_SET_USER_MEMORY_REGION,
-    NE_ENCLAVE_START,
+    EnclaveStartInfo, MemoryRegion, NE_CREATE_VCPU, NE_CREATE_VM, NE_SET_USER_MEMORY_REGION,
+    NE_START_ENCLAVE,
 };
-
-use kvm_bindings::kvm_userspace_memory_region;
 
 #[allow(non_upper_case_globals)]
 pub const MiB: u64 = 1024 * 1024;
 const ENCLAVE_MEM_CHUNKS: u64 = 40;
 pub const NE_DEVICE_PATH: &str = "/dev/nitro_enclaves";
+
+/// This is similar to `MemoryRegion`, except it doesn't implement `Drop`.
+#[allow(dead_code)]
+pub struct EnclaveMemoryRegion {
+    /// Flags to determine the usage for the memory region.
+    flags: u64,
+    /// The region's size in bytes.
+    mem_size: u64,
+    /// The region's virtual address.
+    mem_addr: u64,
+}
+
+impl EnclaveMemoryRegion {
+    fn new(flags: u64, mem_addr: u64, mem_size: u64) -> Self {
+        EnclaveMemoryRegion {
+            flags,
+            mem_size,
+            mem_addr,
+        }
+    }
+
+    fn new_from(region: &MemoryRegion) -> Self {
+        EnclaveMemoryRegion {
+            flags: 0,
+            mem_size: region.mem_size(),
+            mem_addr: region.mem_addr(),
+        }
+    }
+}
 
 /// Class that covers communication with the NE driver.
 pub struct NitroEnclavesDeviceDriver {
@@ -38,11 +64,17 @@ impl NitroEnclavesDeviceDriver {
 
     /// Allocate an enclave slot and return an enclave fd.
     pub fn create_enclave(&mut self) -> NitroCliResult<NitroEnclave> {
-        let enc_type: c_ulong = 0;
+        let mut slot_uid: u64 = 0;
         // This is safe because we are providing valid values.
-        let enc_fd = unsafe { libc::ioctl(self.file.as_raw_fd(), KVM_CREATE_VM as _, &enc_type) };
+        let enc_fd =
+            unsafe { libc::ioctl(self.file.as_raw_fd(), NE_CREATE_VM as _, &mut slot_uid) };
+
         if enc_fd < 0 {
             return Err(format!("Could not create an enclave fd: {}.", enc_fd));
+        }
+
+        if slot_uid == 0 {
+            return Err("Obtained invalid slot ID.".to_string());
         }
 
         Ok(NitroEnclave::new(enc_fd).unwrap())
@@ -50,6 +82,7 @@ impl NitroEnclavesDeviceDriver {
 }
 
 /// Class for managing a Nitro Enclave Vcpu file descriptor.
+#[derive(Debug)]
 pub struct EnclaveVcpu {
     vcpu_fd: RawFd,
 }
@@ -95,17 +128,8 @@ impl NitroEnclave {
         }
     }
 
-    pub fn add_mem_region(
-        &mut self,
-        kvm_mem_region: kvm_userspace_memory_region,
-    ) -> NitroCliResult<()> {
-        let rc = unsafe {
-            libc::ioctl(
-                self.enc_fd,
-                KVM_SET_USER_MEMORY_REGION as _,
-                &kvm_mem_region,
-            )
-        };
+    pub fn add_mem_region(&mut self, mem_region: EnclaveMemoryRegion) -> NitroCliResult<()> {
+        let rc = unsafe { libc::ioctl(self.enc_fd, NE_SET_USER_MEMORY_REGION as _, &mem_region) };
         if rc < 0 {
             return Err(format!("Could not add memory region: {}.", rc));
         }
@@ -114,7 +138,8 @@ impl NitroEnclave {
     }
 
     pub fn add_cpu(&mut self, cpu_id: u32) -> NitroCliResult<EnclaveVcpu> {
-        let vcpu_fd = unsafe { libc::ioctl(self.enc_fd, KVM_CREATE_VCPU as _, &cpu_id) };
+        let mut actual_cpu_id: u32 = cpu_id;
+        let vcpu_fd = unsafe { libc::ioctl(self.enc_fd, NE_CREATE_VCPU as _, &mut actual_cpu_id) };
         if vcpu_fd < 0 {
             return Err(format!("Could not add vcpu: {}.", vcpu_fd));
         }
@@ -122,8 +147,8 @@ impl NitroEnclave {
         Ok(EnclaveVcpu::new(vcpu_fd).unwrap())
     }
 
-    pub fn start(&mut self, start_metadata: EnclaveStartMetadata) -> NitroCliResult<()> {
-        let rc = unsafe { libc::ioctl(self.enc_fd, NE_ENCLAVE_START as _, &start_metadata) };
+    pub fn start(&mut self, start_info: EnclaveStartInfo) -> NitroCliResult<()> {
+        let rc = unsafe { libc::ioctl(self.enc_fd, NE_START_ENCLAVE as _, &start_info) };
         if rc < 0 {
             return Err(format!("Could not start enclave: {}.", rc));
         }
@@ -196,15 +221,19 @@ mod test_dev_driver {
     #[test]
     pub fn test_ne_dev_open() {
         let mut driver = NitroEnclavesDeviceDriver::new().expect("Failed to open NE device");
-
-        // Create a Nitro Enclave without providing a valid type.
-        let enc_fd = unsafe { libc::ioctl(driver.file.as_raw_fd(), KVM_CREATE_VM as _, 0) };
-        assert!(enc_fd < 0, "Could create enclave with invalid type");
+        let enc_fd = unsafe { libc::ioctl(driver.file.as_raw_fd(), NE_CREATE_VM as _, 0) };
+        assert!(
+            enc_fd < 0,
+            "Should not have been able to create enclave descriptor"
+        );
 
         // Test unexpected ioctl.
         let enc_fd =
-            unsafe { libc::ioctl(driver.file.as_raw_fd(), KVM_SET_USER_MEMORY_REGION as _, 0) };
-        assert!(enc_fd < 0, "Could create enclave with invalid ioctl");
+            unsafe { libc::ioctl(driver.file.as_raw_fd(), NE_SET_USER_MEMORY_REGION as _, 0) };
+        assert!(
+            enc_fd < 0,
+            "Should not have been able to create enclave with invalid ioctl"
+        );
 
         let mut slot_alloc_num: u64 = 1;
         if let Ok(value) = std::env::var("NE_SLOT_ALLOC_NUM") {
@@ -232,47 +261,39 @@ mod test_dev_driver {
         let mut enclave = driver.create_enclave().unwrap();
 
         // Add invalid memory region.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: 0,
-            guest_phys_addr: 0,
-            memory_size: 2 * MiB as u64,
-        });
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new(0, 0, 2 * MiB as u64));
         assert_eq!(result.is_err(), true);
 
         // Create a memory region using hugetlbfs.
-        let mut region = MemoryRegion::new(2 * MiB).unwrap();
+        let region = MemoryRegion::new(2 * MiB).unwrap();
 
         // Add unaligned memory region.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: region.mem_addr() + 1,
-            guest_phys_addr: 0,
-            memory_size: region.mem_size(),
-        });
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
+            0,
+            region.mem_addr() + 1,
+            region.mem_size(),
+        ));
         assert_eq!(result.is_err(), true);
 
         // Add wrongly sized memory regions of 1 MiB.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: 0,
-            memory_size: region.mem_size() / 2,
-        });
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
+            0,
+            region.mem_addr(),
+            region.mem_size() / 2,
+        ));
         assert_eq!(result.is_err(), true);
 
-        // TODO: Enable the following test with Nitro Enclaves Kernel Driver v2.
-        // let result = enclave.add_mem_region(kvm_userspace_memory_region {
-        //     slot: 0,
-        //     flags: 0,
-        //     userspace_addr: region.mem_addr(),
-        //     guest_phys_addr: 0,
-        //     memory_size: region.mem_size() * 2,
-        // });
-        // assert_eq!(result.is_err(), true);
+        // Note: The test is expected to fail, but the failure comes from the hypervisor
+        // and not from the driver. This translates into the call succeeding to map the
+        // first 2 MB (i.e. the region actually gets mapped) but failing on the next 2 MB
+        // since there is no second region available. This does mean that the original
+        // memory region remains mapped despite the ioctl() returning failure.
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
+            0,
+            region.mem_addr(),
+            region.mem_size() * 2,
+        ));
+        assert_eq!(result.is_err(), true);
 
         let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
         check_dmesg
@@ -280,115 +301,44 @@ mod test_dev_driver {
             .expect("Failed to record current line");
 
         // Correctly add the memory region.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: 0,
-            memory_size: region.mem_size(),
-        });
+        let region = MemoryRegion::new(2 * MiB).unwrap();
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(&region));
         assert_eq!(result.is_err(), false);
 
         check_dmesg.expect_no_changes().unwrap();
 
         // Add the same memory region twice.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: 0,
-            memory_size: region.mem_size(),
-        });
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(&region));
         assert_eq!(result.is_err(), true);
 
-        let mut region = MemoryRegion::new(2 * MiB).unwrap();
-        // Add a memory region with invalid slot.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 1024,
-            flags: 0,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: 0,
-            memory_size: region.mem_size(),
-        });
-        // Kernel Driver does not use the slot.
-        assert_eq!(result.is_err(), false);
-
-        let mut region = MemoryRegion::new(2 * MiB).unwrap();
-        // Add a memory region with invalid slot.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 1024,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: 0,
-            memory_size: region.mem_size(),
-        });
+        // Add a memory region with invalid flags.
+        let region = MemoryRegion::new(2 * MiB).unwrap();
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
+            1024,
+            region.mem_addr(),
+            region.mem_size(),
+        ));
         // Kernel Driver does not use the flags.
         assert_eq!(result.is_err(), false);
-
-        let mut region = MemoryRegion::new(2 * MiB).unwrap();
-        // Add a memory region with guest_phys_addr.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: 1024,
-            memory_size: region.mem_size(),
-        });
-        // Kernel Driver does not use the guest_phys_addr.
-        assert_eq!(result.is_err(), false);
-
-        let mut region = MemoryRegion::new(2 * MiB).unwrap();
-        // Add a memory region with guest_phys_addr that does not overflow.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: u64::max_value() - 2 * MiB,
-            memory_size: region.mem_size(),
-        });
-        // Kernel Driver checks if the guest_phys_addr + memory_size overflows.
-        assert_eq!(result.is_err(), false);
-
-        let mut region = MemoryRegion::new(2 * MiB).unwrap();
-        // Add a memory region with guest_phys_addr that does overflow.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: u64::max_value(),
-            memory_size: region.mem_size(),
-        });
-        assert_eq!(result.is_err(), true);
     }
 
     #[test]
     pub fn test_enclave_vcpu() {
         let mut driver = NitroEnclavesDeviceDriver::new().expect("Failed to open NE device");
         let mut enclave = driver.create_enclave().unwrap();
-        let cpu_infos = CpuInfos::new().expect("Failed to obtain CpuInfos");
-
-        // Cpu id 0 is reserved for the EC2 Instance.
-        let result = enclave.add_cpu(0);
-        assert_eq!(result.is_err(), true);
-
-        // For hyper-threading the sibling of cpu id 0 is reserved.
-        if cpu_infos.hyper_threading {
-            let sibling = cpu_infos.core_ids.len() / 2;
-            let result = enclave.add_cpu(sibling as u32);
-            assert_eq!(result.is_err(), true);
-        }
+        let cpu_info = CpuInfo::new().expect("Failed to obtain CpuInfo.");
 
         // Add an invalid cpu id.
         let result = enclave.add_cpu(u32::max_value());
         assert_eq!(result.is_err(), true);
 
-        let mut candidates = cpu_infos.get_cpu_candidates();
+        let mut candidates = cpu_info.get_cpu_candidates();
         // Instance does not have the appropriate number of cpus.
         if candidates.len() == 0 {
             return;
         }
-        let cpu_id = candidates.pop().unwrap();
 
+        let cpu_id = candidates.pop().unwrap();
         let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
         check_dmesg
             .record_current_line()
@@ -397,7 +347,6 @@ mod test_dev_driver {
         // Insert the first valid cpu id.
         let result = enclave.add_cpu(cpu_id);
         assert_eq!(result.is_err(), false);
-
         check_dmesg.expect_no_changes().unwrap();
 
         // Try inserting the cpu twice.
@@ -413,6 +362,7 @@ mod test_dev_driver {
             let result = enclave.add_cpu(*cpu);
             assert_eq!(result.is_err(), false);
         }
+
         check_dmesg.expect_no_changes().unwrap();
     }
 
@@ -423,7 +373,7 @@ mod test_dev_driver {
         let mut enclave = driver.create_enclave().unwrap();
 
         // Start enclave without resources.
-        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        let result = enclave.start(EnclaveStartInfo::new_empty());
         assert_eq!(result.is_err(), true);
 
         // Allocate memory for the enclave.
@@ -433,22 +383,16 @@ mod test_dev_driver {
 
         // Add memory to the enclave.
         for region in &mut mem_regions {
-            let result = enclave.add_mem_region(kvm_userspace_memory_region {
-                slot: 0,
-                flags: 0,
-                userspace_addr: region.mem_addr(),
-                guest_phys_addr: 0,
-                memory_size: region.mem_size(),
-            });
+            let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(region));
             assert_eq!(result.is_err(), false);
         }
 
         // Start the enclave without cpus.
-        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        let result = enclave.start(EnclaveStartInfo::new_empty());
         assert_eq!(result.is_err(), true);
 
-        let cpu_infos = CpuInfos::new().expect("Failed to obtain CpuInfos.");
-        let candidates = cpu_infos.get_cpu_candidates();
+        let cpu_info = CpuInfo::new().expect("Failed to obtain CpuInfo.");
+        let candidates = cpu_info.get_cpu_candidates();
         // Instance does not have the appropriate number of cpus.
         if candidates.len() < 2 {
             return;
@@ -465,7 +409,7 @@ mod test_dev_driver {
         }
 
         // Start enclave without memory.
-        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        let result = enclave.start(EnclaveStartInfo::new_empty());
         assert_eq!(result.is_err(), true);
 
         drop(enclave);
@@ -474,13 +418,7 @@ mod test_dev_driver {
 
         // Add memory to the enclave.
         for region in &mut mem_regions {
-            let result = enclave.add_mem_region(kvm_userspace_memory_region {
-                slot: 0,
-                flags: 0,
-                userspace_addr: region.mem_addr(),
-                guest_phys_addr: 0,
-                memory_size: region.mem_size(),
-            });
+            let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(region));
             assert_eq!(result.is_err(), false);
         }
 
@@ -489,7 +427,7 @@ mod test_dev_driver {
         assert_eq!(result.is_err(), false);
 
         // Start without cpu pair.
-        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        let result = enclave.start(EnclaveStartInfo::new_empty());
         assert_eq!(result.is_err(), true);
 
         // Add the first cpu pair.
@@ -502,35 +440,24 @@ mod test_dev_driver {
             .expect("Failed to record current line");
 
         // Start the enclave.
-        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        let result = enclave.start(EnclaveStartInfo::new_empty());
         assert_eq!(result.is_err(), false);
 
         check_dmesg.expect_no_changes().unwrap();
 
         // Try starting an already running enclave.
-        let result = enclave.start(EnclaveStartMetadata::new_empty());
+        let result = enclave.start(EnclaveStartInfo::new_empty());
         assert_eq!(result.is_err(), true);
 
         // Try adding an already added memory region
         // after the enclave start.
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: mem_regions[0].mem_addr(),
-            guest_phys_addr: 0,
-            memory_size: mem_regions[0].mem_size(),
-        });
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(&mem_regions[0]));
         assert_eq!(result.is_err(), true);
 
         // Try adding a new memory region after the enclave start.
-        let mut region = MemoryRegion::new(2 * MiB).unwrap();
-        let result = enclave.add_mem_region(kvm_userspace_memory_region {
-            slot: 0,
-            flags: 0,
-            userspace_addr: region.mem_addr(),
-            guest_phys_addr: 0,
-            memory_size: region.mem_size(),
-        });
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(
+            &MemoryRegion::new(2 * MiB).unwrap(),
+        ));
         assert_eq!(result.is_err(), true);
 
         // Try adding an already added vcpu after enclave start.
@@ -554,8 +481,8 @@ mod test_dev_driver {
             mem_regions.push(MemoryRegion::new(2 * MiB).unwrap());
         }
 
-        let cpu_infos = CpuInfos::new().expect("Failed to obtain CpuInfos.");
-        let candidates = cpu_infos.get_cpu_candidates();
+        let cpu_info = CpuInfo::new().expect("Failed to obtain CpuInfo.");
+        let candidates = cpu_info.get_cpu_candidates();
         // Instance does not have the appropriate number of cpus.
         if candidates.len() < 2 {
             return;
@@ -573,13 +500,7 @@ mod test_dev_driver {
 
             // Add memory to the enclave.
             for region in &mut mem_regions {
-                let result = enclave.add_mem_region(kvm_userspace_memory_region {
-                    slot: 0,
-                    flags: 0,
-                    userspace_addr: region.mem_addr(),
-                    guest_phys_addr: 0,
-                    memory_size: region.mem_size(),
-                });
+                let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(region));
                 assert_eq!(result.is_err(), false);
             }
 
@@ -590,7 +511,7 @@ mod test_dev_driver {
             }
 
             // Start and stop the enclave
-            let result = enclave.start(EnclaveStartMetadata::new_empty());
+            let result = enclave.start(EnclaveStartInfo::new_empty());
             assert_eq!(result.is_err(), false);
         }
     }

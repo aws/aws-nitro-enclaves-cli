@@ -134,3 +134,11 @@ def connect_console(enclave_id):
                 "--enclave-id", enclave_id]
 
         return subprocess.Popen(args, stdout = PIPE, stderr = PIPE)
+
+# Get the number of CPUs in the system, both on-line and off-line.
+def get_cpu_count():
+        run_lscpu = subprocess.Popen(["lscpu -a -p=cpu"], stdout=subprocess.PIPE, shell=True)
+        (output, _) = run_lscpu.communicate()
+        output = output.decode('UTF-8').splitlines()
+        cpu_ids = [id for id in output if not id.startswith("#")]
+        return len(cpu_ids)

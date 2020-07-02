@@ -22,7 +22,7 @@ function register_test_fail() {
 
 # Clean up and exit with the current test suite's status
 function clean_up_and_exit() {
-	rmmod nitro_enclaves || register_test_fail
+	[ "$(lsmod | grep -cw nitro_enclaves)" -eq 0 ] || rmmod nitro_enclaves || register_test_fail
 	make clean
 	rm -rf test_images
 
@@ -35,9 +35,23 @@ function test_failed() {
 	clean_up_and_exit
 }
 
+# Remove the Nitro Enclaves driver
+function remove_ne_driver() {
+	[ "$(lsmod | grep -cw nitro_enclaves)" -eq 0 ] || rmmod nitro_enclaves || test_failed
+}
+
+# Configure and insert the Nitro Enclaves driver
+function configure_ne_driver() {
+	if [ "$(lsmod | grep -cw nitro_enclaves)" -eq 0 ]
+	then
+		# Preallocate 2048 Mb, that should be enough for all the tests
+		source build/install/etc/profile.d/nitro-cli-env.sh || test_failed
+		./build/install/etc/profile.d/nitro-cli-config.sh -m 2048 -p 1,3 || test_failed
+	fi
+}
+
 # First run the instalation test, before we change the environement
-pytest-3 tests/integration/test_installation.py \
-	|| test_failed
+pytest-3 tests/integration/test_installation.py || test_failed
 
 # Clean up build artefacts
 make clean
@@ -61,9 +75,8 @@ make nitro-cli || test_failed
 make vsock-proxy || test_failed
 make install || test_failed
 
-# Preallocate 2048 Mb, that should be enough for all the tests
-echo 1024 > /proc/sys/vm/nr_hugepages || test_failed
-source build/install/etc/profile.d/nitro-cli-env.sh || test_failed
+# Ensure the Nitro Enclaves driver is inserted at the beginning.
+configure_ne_driver
 
 # Create directories for enclave process sockets and logs
 mkdir -p /var/run/nitro_enclaves || test_failed
@@ -71,20 +84,26 @@ mkdir -p /var/log/nitro_enclaves || test_failed
 
 # Build EIFS for testing
 mkdir -p test_images
-nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample --output-file test_images/vsock-sample.eif
+nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample \
+	--output-file test_images/vsock-sample.eif || test_failed
 
 # Run all unit tests
-while IFS= read -r test_exec_path
+while IFS= read -r test_line
 do
 	TEST_SUITES_TOTAL=$((TEST_SUITES_TOTAL + 1))
-	test_exec_name=$(basename "${test_exec_path}")
-	RUST_BACKTRACE=1 ./build/nitro_cli/x86_64-unknown-linux-musl/release/"${test_exec_name}" \
-		--test-threads=1 --nocapture \
-		|| test_failed
+	test_module="$(echo ${test_line} | cut -d' ' -f2)"
+	test_exec_name="$(basename $(echo ${test_line} | cut -d' ' -f1))"
+
+	configure_ne_driver
+
+	./build/nitro_cli/x86_64-unknown-linux-musl/release/"${test_exec_name}" \
+		--test-threads=1 --nocapture || test_failed
 done < <(grep -v '^ *#' < build/test_executables.txt)
 
+# Ensure the Nitro Enclaves driver is inserted for the remaining integration tests.
+configure_ne_driver
+
 # Run integration tests except the instalation test
-pytest-3 tests/integration/ --ignore tests/integration/test_installation.py \
-	|| test_failed
+pytest-3 tests/integration/ --ignore tests/integration/test_installation.py || test_failed
 
 clean_up_and_exit

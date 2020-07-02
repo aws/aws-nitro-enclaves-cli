@@ -58,6 +58,7 @@ _Noreturn void die(const char *msg);
 #define TIMEOUT 20000 // millis
 #define VSOCK_PORT 9000
 #define VSOCK_CID 3
+#define HEART_BEAT 0xB7
 
 const char *const default_envp[] = {
     DEFAULT_PATH_ENV,
@@ -353,13 +354,15 @@ void enclave_ready() {
     };
 
     char buf[1];
-    buf[0]=0xB7;
+    buf[0] = HEART_BEAT;
 
     socket_fd = socket(AF_VSOCK, SOCK_STREAM, 0);
     die_on(socket_fd < 0, "socket");
 
     die_on(connect(socket_fd, (struct sockaddr*) &sa, sizeof(sa)), "connect");
-    die_on(write(socket_fd, buf, 1) != 1, "write");
+    die_on(write(socket_fd, buf, 1) != 1, "write heartbeat");
+    die_on(read(socket_fd, buf, 1) != 1, "read heartbeat");
+    die_on(buf[0] != HEART_BEAT, "received wrong heartbeat");
     die_on(close(socket_fd), "close");
 }
 

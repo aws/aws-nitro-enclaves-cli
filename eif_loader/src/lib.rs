@@ -21,6 +21,7 @@ const MAX_VSOCK_PACKET: usize = 4096;
 const MAX_PAYLOAD: usize = MAX_VSOCK_PACKET - 8;
 
 const ACCEPT_TIMEOUT: i32 = 60000; // millis
+const HEART_BEAT: u8 = 0xB7;
 
 #[derive(Debug, PartialEq)]
 /// Internal errors while sending an Eif file
@@ -221,11 +222,16 @@ pub fn enclave_ready(cid: u32, port: u32) -> Result<(), EifLoaderError> {
         .read(&mut buf)
         .map_err(|_err| EifLoaderError::VsockReceivingError)?;
 
-    if bytes != 1 || buf[0] != 0xb7 {
-        Err(EifLoaderError::VsockReceivingError)
-    } else {
-        Ok(())
+    if bytes != 1 || buf[0] != HEART_BEAT {
+        return Err(EifLoaderError::VsockReceivingError);
     }
+
+    stream
+        .0
+        .write_all(&buf)
+        .map_err(|_err| EifLoaderError::VsockReceivingError)?;
+
+    Ok(())
 }
 
 #[cfg(test)]

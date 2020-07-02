@@ -66,11 +66,11 @@ mod tests {
             .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "6feb4a4250b8c5f653f0d3f9f7f2520c9b342e85010993936e81142a914c187d154cf0b93eba02714b916b12f2dc1bd7"
+            "8ce20239b9aba97e526368b5bec91b5a5a498eed523433c89a3c8d5d1ff9b46481c81b680f72c311b48ef2d7d0ddeed0"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "20e82cca04407f81529a1220671cab405940d9f2a4e24b5276dfd84fdd4f504ac93c296753a3f3f4d80cd55e1779c5e1"
+            "c477d4c639db6d934b6be753adac794b1105fbfc6ed0116110298eac66008328a42b983f458221f8e545096ac6507519"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
@@ -109,11 +109,11 @@ mod tests {
             .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "9dd030f3e3f422f9276a5db3d1a8d89845fbb164c93b763bd16c6e64c022417cc663856078a1de8c7a17a2c35ea4f967"
+            "936ffc827b79df871c20e1d51d4a4879aa9d4ab20918034d57b8168a0f471f86fc5bda6220cd2c202208f9410059561b"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "20e82cca04407f81529a1220671cab405940d9f2a4e24b5276dfd84fdd4f504ac93c296753a3f3f4d80cd55e1779c5e1"
+            "c477d4c639db6d934b6be753adac794b1105fbfc6ed0116110298eac66008328a42b983f458221f8e545096ac6507519"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),

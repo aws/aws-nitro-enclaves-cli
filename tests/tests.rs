@@ -45,6 +45,8 @@ mod tests {
             docker_uri: "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-devel".to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
         assert_eq!(build_enclaves(args).is_err(), true);
@@ -59,22 +61,30 @@ mod tests {
             docker_uri: SAMPLE_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
-        let measurements = build_from_docker(&args.docker_uri, &args.docker_dir, &args.output)
-            .expect("Docker build failed")
-            .1;
+        let measurements = build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed")
+        .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "122ca88d8e25db6280b39745e4a7e6e650042e1fb077eeb1f89f545158f815052b26824624924acbe18e367bc2318589"
+            "ffbb4f8def6edac5d3596892e1aa511b2c7afe99efad4de4954f77c1dd941b831f5f6d532e734d2298699faf92a3f2da"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "75ccab5c94134ea2dc938efd1b50c357c2a6111ff8c5cc27d21b92f134c30e8729af4c1ae32a606dfcfe7aaa2b68fbe3"
+            "235c9e6050abf6b993c915505f3220e2d82b51aff830ad14cbecc2eec1bf0b4ae749d311c663f464cde9f718acca5286"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "7f661d8929cfc7b5d5a87a9f2548adf4de80bda5354284ae82c34f63e04a6220c5e852503bea378224dcb58619cc62b3"
+            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
         );
     }
 
@@ -87,10 +97,18 @@ mod tests {
             docker_uri: "hello-world:latest".to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
-        build_from_docker(&args.docker_uri, &args.docker_dir, &args.output)
-            .expect("Docker build failed");
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed");
     }
 
     #[test]
@@ -102,22 +120,30 @@ mod tests {
             docker_uri: ENCLAVE_SDK_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
-        let measurements = build_from_docker(&args.docker_uri, &args.docker_dir, &args.output)
-            .expect("Docker build failed")
-            .1;
+        let measurements = build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed")
+        .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "eaed8f027626db7738b43bc22a9bc66ae67fbcddbe5b79110a19893da87de4ae1dcf41f97c392100b1b20906871c7454"
+            "e658757ec694d3a376003c18f4847ab954e600c226498bd099bdbe9f0202efe5528fbff51e761805cbae68a35efd8eef"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "75ccab5c94134ea2dc938efd1b50c357c2a6111ff8c5cc27d21b92f134c30e8729af4c1ae32a606dfcfe7aaa2b68fbe3"
+            "235c9e6050abf6b993c915505f3220e2d82b51aff830ad14cbecc2eec1bf0b4ae749d311c663f464cde9f718acca5286"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "964f18254b4168518161df05bcec57edca87ff36d19704ef258ef2a72011e5efa6d36e1cadf140e34d5cdb1886fadbb0"
+            "bd60ceba51d463a519545688123a91fd88b798405034b1dae256bfc3559d9e48b3be63b073ebcb9e0aa506235774d514"
         );
     }
 
@@ -130,12 +156,16 @@ mod tests {
             docker_uri: SAMPLE_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
             &build_args.output,
+            &build_args.signing_certificate,
+            &build_args.private_key,
         )
         .expect("Docker build failed");
 
@@ -159,12 +189,16 @@ mod tests {
             docker_uri: ENCLAVE_SDK_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
             &build_args.output,
+            &build_args.signing_certificate,
+            &build_args.private_key,
         )
         .expect("Docker build failed");
 
@@ -242,12 +276,16 @@ mod tests {
             docker_uri: SAMPLE_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
             &build_args.output,
+            &build_args.signing_certificate,
+            &build_args.private_key,
         )
         .expect("Docker build failed");
 
@@ -272,12 +310,16 @@ mod tests {
             docker_uri: SAMPLE_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
             &build_args.output,
+            &build_args.signing_certificate,
+            &build_args.private_key,
         )
         .expect("Docker build failed");
 
@@ -311,12 +353,16 @@ mod tests {
             docker_uri: SAMPLE_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
         };
 
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
             &build_args.output,
+            &build_args.signing_certificate,
+            &build_args.private_key,
         )
         .expect("Docker build failed");
 

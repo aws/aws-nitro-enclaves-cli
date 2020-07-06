@@ -31,6 +31,7 @@
 #include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
@@ -353,8 +354,9 @@ void enclave_ready() {
         .svm_port = VSOCK_PORT,
     };
 
-    char buf[1];
+    uint8_t buf[1];
     buf[0] = HEART_BEAT;
+    errno = -EINVAL;
 
     socket_fd = socket(AF_VSOCK, SOCK_STREAM, 0);
     die_on(socket_fd < 0, "socket");

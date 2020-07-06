@@ -33,6 +33,17 @@ OPT_DIR               ?= /opt
 
 CONTAINER_TAG = "nitro_cli:1.0"
 
+# Flags common to C
+C_FLAGS := -Wall -Wextra -Wconversion
+C_FLAGS += -Wno-sign-conversion -Werror -Wduplicated-cond
+C_FLAGS += -fno-omit-frame-pointer -funsigned-char -fno-common
+C_FLAGS += -Wlogical-op -Wrestrict -Wdouble-promotion
+C_FLAGS += -Wredundant-decls
+C_FLAGS += -Wformat=2 -Wnull-dereference
+C_FLAGS += -ffunction-sections -fdata-sections
+C_FLAGS += -fstack-protector-strong
+C_FLAGS += -Wno-error=deprecated-declarations
+
 ##############################
 #                            #
 #      Makefile rules        #
@@ -118,11 +129,11 @@ driver-clean: nitro_enclaves-clean nitro_cli_resource_allocator-clean
 
 .PHONY: nc-vsock
 nc-vsock: nc-vsock.c build-setup
-	$(CC) -o $(OBJ_PATH)/nc-vsock nc-vsock.c
+	$(CC) $(C_FLAGS) -o $(OBJ_PATH)/nc-vsock nc-vsock.c
 
 .PHONY: init
 init: init.c build-setup
-	$(CC) -o $(OBJ_PATH)/init $< -static -static-libgcc -flto
+	$(CC) $(C_FLAGS) -o $(OBJ_PATH)/init $< -static -static-libgcc -flto
 
 # See .build-container rule for explanation.
 .build-nitro-cli: $(shell find $(BASE_PATH)/src -name "*.rs")

@@ -35,7 +35,7 @@ static int parse_cid(const char *cid_str)
 	char *end = NULL;
 	long cid = strtol(cid_str, &end, 10);
 	if (cid_str != end && *end == '\0') {
-		return cid;
+		return (int)cid;
 	} else {
 		fprintf(stderr, "invalid cid: %s\n", cid_str);
 		return -1;
@@ -47,7 +47,7 @@ static int parse_port(const char *port_str)
 	char *end = NULL;
 	long port = strtol(port_str, &end, 10);
 	if (port_str != end && *end == '\0') {
-		return port;
+		return (int)port;
 	} else {
 		fprintf(stderr, "invalid port number: %s\n", port_str);
 		return -1;

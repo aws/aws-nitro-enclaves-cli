@@ -53,7 +53,7 @@ _Noreturn void die(const char *msg);
         } \
     } while (0)
 
-#define finit_module(fd, param_values, flags) syscall(__NR_finit_module, fd, param_values, flags)
+#define finit_module(fd, param_values, flags) (int)syscall(__NR_finit_module, fd, param_values, flags)
 #define DEFAULT_PATH_ENV "PATH=/sbin:/usr/sbin:/bin:/usr/bin"
 #define NSM_PATH "nsm.ko"
 #define TIMEOUT 20000 // millis
@@ -223,7 +223,7 @@ void init_cgroups() {
     }
     // Skip the first line.
     for (;;) {
-        char c = fgetc(f);
+        int c = fgetc(f);
         if (c == EOF || c == '\n') {
             break;
         }
@@ -374,14 +374,13 @@ void init_nsm_driver() {
 
     fd = open(NSM_PATH, O_RDONLY | O_CLOEXEC);
     die_on(fd < 0, "failed to open nsm fd");
-
     rc = finit_module(fd, "", 0);
     die_on(rc < 0, "failed to insert nsm driver");
 
     die_on(close(fd), "close nsm fd");
 }
 
-int main(int argc, char **argv) {
+int main() {
     // Block all signals in init. SIGCHLD will still cause wait() to return.
     sigset_t set;
     sigfillset(&set);

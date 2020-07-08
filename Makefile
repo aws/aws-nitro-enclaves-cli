@@ -156,6 +156,8 @@ nitro-cli-native:
 				--target=x86_64-unknown-linux-musl \
 				--target-dir=/nitro_build/command-executer  && \
 			chmod -R 777 nitro_build '
+	ln -sf ../x86_64-unknown-linux-musl/release/command-executer \
+		${OBJ_PATH}/command-executer/release/command-executer
 	touch $@
 
 command-executer: build-setup build-container .build-command-executer
@@ -233,6 +235,12 @@ vsock-proxy-native:
 		--release \
 		--manifest-path=${BASE_PATH}/vsock_proxy/Cargo.toml \
 		--target-dir=${OBJ_PATH}/vsock_proxy
+
+.PHONY: install-command-executer
+install-command-executer:
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/command-executer/release/command-executer ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/command-executer
+
 
 # Target for installing only the binaries available to the end-user
 .PHONY: install-tools

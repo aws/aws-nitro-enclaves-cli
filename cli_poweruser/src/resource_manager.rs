@@ -91,10 +91,12 @@ impl ResourceAllocator {
                 return Err("Could not allocate enclave memory".to_string());
             }
 
-            if let Ok(region) = self
-                .resource_allocator_driver
-                .alloc(self.slot_uid, chunk_size * MiB)
-            {
+            if let Ok(region) = self.resource_allocator_driver.alloc(
+                self.slot_uid,
+                chunk_size.checked_mul(MiB).ok_or_else(|| {
+                    "Error while allocating memory region (multiplication overflow)".to_string()
+                })?,
+            ) {
                 allocated += chunk_size;
                 self.mem_regions.push(region);
             } else {

@@ -27,11 +27,19 @@ and build an EIF.
 	$ export NITRO_CLI_BLOBS=$(realpath ../../blobs/)
 	$ nitro-cli build-enclave --docker-dir "./resources" --docker-uri mytag --output-file command-executer.eif
 ```
+---
+**NOTES**
 
-_NOTE: these steps can either be done on your local machine or on the EC2
-instance your going to launch the enclave._
+* In order to build an EIF as a non-root user, that user must be able to manage
+the docker daemon. Please see
+[the official Docker documentation](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+to learn how to do that.
+* These steps can either be done on your local machine or on the EC2 instance
+where you are going to launch the enclave.
 
-3. Copy __both__ the EIF __and__ the command-executer binary to the EC2
+---
+
+3. Copy __both__ the EIF __and__ the `command-executer` binary to the EC2
 instance you are about to run an enclave on.
 
 4. Launch an enclave with the EIF containing command-executer.
@@ -66,4 +74,10 @@ instance you are about to run an enclave on.
 
 ```
 	$ ./command-executer send-file --cid 16 --localpath "./stress-ng" --port 5005 --remotepath "/usr/bin/stress-ng"
+```
+
+## Help
+Further information about the semantics of each command can be obtained by running
+```
+	$ ./command-executer help [<command>]
 ```

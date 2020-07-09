@@ -334,6 +334,10 @@ uninstall:
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-config.sh
 
+.PHONY: uninstall-command-executer
+uninstall-command-executer:
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/command-executer
+
 .PHONY: clean
 clean:
 	$(DOCKER) rmi command_executer:eif 2> /dev/null || true

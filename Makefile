@@ -294,6 +294,16 @@ install-tools:
 	$(INSTALL) -D -m 0644 vsock_proxy/service/vsock-proxy.service ${NITRO_CLI_INSTALL_DIR}/${UNIT_DIR}/vsock-proxy.service
 	$(INSTALL) -D -m 0644 vsock_proxy/configs/config.yaml ${NITRO_CLI_INSTALL_DIR}/${CONF_DIR}/vsock_proxy/config.yaml
 
+export define patch_env
+patch ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh <<EOF
+***************
+*** 4,5 ****
+--- 4,6 ----
+  # SPDX-License-Identifier: Apache-2.0
++ NITRO_CLI_INSTALL_DIR=$$(readlink -f ${NITRO_CLI_INSTALL_DIR})
+EOF
+endef
+
 .PHONY: install
 install: install-tools nitro_enclaves
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli
@@ -308,8 +318,7 @@ install: install-tools nitro_enclaves
                ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves/nitro_enclaves.ko
 	$(INSTALL) -m 0644 tools/env.sh ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
 	$(INSTALL) -m 0744 tools/nitro-cli-config.sh ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-config.sh
-	sed -i "2 a NITRO_CLI_INSTALL_DIR=$$(readlink -f ${NITRO_CLI_INSTALL_DIR})" \
-		${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
+	@eval "$$patch_env"
 	echo "Installation finished"
 	echo "Please run \"source ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh\" to setup the environment or add it your local shell configuration"
 

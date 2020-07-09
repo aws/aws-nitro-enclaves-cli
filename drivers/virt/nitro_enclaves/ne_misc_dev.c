@@ -785,17 +785,6 @@ static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
 		}
 #endif
 
-		if (ne_enclave->numa_node !=
-		    page_to_nid(ne_mem_region->pages[i])) {
-			dev_err_ratelimited(ne_misc_dev.this_device,
-					    "Page isn't from NUMA node %d\n",
-					    ne_enclave->numa_node);
-
-			rc = -EINVAL;
-
-			goto unpin_pages;
-		}
-
 		/*
 		 * TODO: Update once handled non-contiguous memory regions
 		 * received from user space.

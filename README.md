@@ -1,19 +1,19 @@
-Nitro-cli
+## AWS CLI for Nitro Enclaves
 
-It contains a collection of tools and commands used for managing the lifecycle
-of Nitro Enclaves.
+This repository contains a collection of tools and commands used for managing
+the lifecycle of Nitro Enclaves.
 
-Prerequisites:
+### Prerequisites
   1. A working docker setup, follow https://docs.docker.com/install/overview/
-     for details of how to install docker on your host.
+     for details of how to install docker on your host, including how to run it
+     as non-root.
   2. Install gcc, make, git.
 
-Driver information:
-  The Nitro Enclaves device driver is currently at version 0.2. It is based on the
-  kernel tree head commit b335e6094dff (tag: v0.2, origin/ne-driver-mainline-kernel,
-  "nitro_enclaves: Add hrtimer support for polling") and supports out-of-tree driver builds.
+### Driver information
+  The Nitro Enclaves kernel driver is currently at version 0.5. Out-of-tree
+  driver build is supported.
 
-How to install:
+### How to install:
   1. Clone the repository.
   2. Set NITRO_CLI_INSTALL_DIR to the desired location, by default everything will be
      installed in build/install
@@ -22,5 +22,8 @@ How to install:
   5. [Optional] You could add ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.shenv.sh in you local shell configuration.
   6. You are now ready to go.
 
-How to use nitro-cli:
+### How to use nitro-cli
  TODO: link to official AWS documentation
+
+## License
+  This library is licensed under the Apache 2.0 License.

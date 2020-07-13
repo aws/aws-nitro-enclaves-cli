@@ -23,8 +23,20 @@ use nitro_cli::{build_enclaves, console_enclaves, create_app};
 
 /// *Nitro CLI* application entry point.
 fn main() {
+    // Custom version (possibly including build commit).
+    let commit_id = env!("COMMIT_ID");
+    let version_str: String = match commit_id.len() {
+        0 => env!("CARGO_PKG_VERSION").to_string(),
+        _ => format!(
+            "{} (build commit: {})",
+            env!("CARGO_PKG_VERSION"),
+            commit_id
+        ),
+    };
+
     // Command-line specification for the Nitro CLI.
-    let app = create_app!();
+    let mut app = create_app!();
+    app = app.version(&*version_str);
     let args = app.get_matches();
     let logger = logger::init_logger();
     let mut replies: Vec<UnixStream> = vec![];

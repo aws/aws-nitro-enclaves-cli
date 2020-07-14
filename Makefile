@@ -248,6 +248,8 @@ nitro-audit: build-setup build-container
 				--target=x86_64-unknown-linux-musl \
 				--target-dir=/nitro_build/cli_poweruser  && \
 			chmod -R 777 nitro_build '
+	ln -sf ../x86_64-unknown-linux-musl/release/nitro-cli-poweruser \
+		${OBJ_PATH}/cli_poweruser/release/nitro-cli-poweruser
 	touch $@
 
 nitro-cli-poweruser: build-setup build-container .build-nitro-cli-poweruser
@@ -283,6 +285,11 @@ install-command-executer:
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}
 	$(INSTALL) -D -m 0755 $(OBJ_PATH)/command-executer/release/command-executer ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/command-executer
 
+
+.PHONY: install-nitro-cli-poweruser
+install-nitro-cli-poweruser:
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/cli_poweruser/release/nitro-cli-poweruser ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/nitro-cli-poweruser
 
 # Target for installing only the binaries available to the end-user
 .PHONY: install-tools
@@ -337,6 +344,10 @@ uninstall:
 .PHONY: uninstall-command-executer
 uninstall-command-executer:
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/command-executer
+
+.PHONY: uninstall-nitro-cli-poweruser
+uninstall-nitro-cli-poweruser:
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/nitro-cli-poweruser
 
 .PHONY: clean
 clean:

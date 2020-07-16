@@ -14,24 +14,24 @@ INSTALL = install
 MKDIR   = mkdir
 RM      = rm
 DOCKER  = docker
-GIT	= git
+GIT     = git
 TAR     = tar
 MV      = mv
 CP      = cp
 AWS     = aws
 SHA1    = sha1sum
 
-SRC_PATH = .
-BASE_PATH ?= $(SRC_PATH)
-OBJ_PATH ?= $(BASE_PATH)/build
+SRC_PATH              = .
+BASE_PATH             ?= $(SRC_PATH)
+OBJ_PATH              ?= $(BASE_PATH)/build
 NITRO_CLI_INSTALL_DIR ?= $(OBJ_PATH)/install
-SBIN_DIR ?= /usr/sbin/
-UNIT_DIR ?= /usr/lib/systemd/system/
-CONF_DIR ?= /etc
-ENV_SETUP_DIR ?= /etc/profile.d/
-OPT_DIR ?= /opt
+SBIN_DIR              ?= /usr/sbin/
+UNIT_DIR              ?= /usr/lib/systemd/system/
+CONF_DIR              ?= /etc
+ENV_SETUP_DIR         ?= /etc/profile.d/
+OPT_DIR               ?= /opt
 
-CONTAINER_TAG="nitro_cli:1.0"
+CONTAINER_TAG = "nitro_cli:1.0"
 
 ##############################
 #                            #
@@ -160,7 +160,25 @@ nitro-cli-native:
 		${OBJ_PATH}/command-executer/release/command-executer
 	touch $@
 
-command-executer: build-setup build-container .build-command-executer
+.build-command-executer-eif: .build-nitro-cli .build-command-executer $(BASE_PATH)/blobs/* \
+	$(BASE_PATH)/samples/command_executer/resources/Dockerfile.alpine
+
+	$(MKDIR) -p $(OBJ_PATH)/command-executer/command_executer_docker_dir
+	$(CP) \
+		$(OBJ_PATH)/command-executer/x86_64-unknown-linux-musl/release/command-executer \
+		$(OBJ_PATH)/command-executer/command_executer_docker_dir
+	$(CP) \
+		$(BASE_PATH)/samples/command_executer/resources/Dockerfile.alpine \
+		$(OBJ_PATH)/command-executer/command_executer_docker_dir/Dockerfile
+	NITRO_CLI_BLOBS=$(BASE_PATH)/blobs \
+		$(OBJ_PATH)/nitro_cli/x86_64-unknown-linux-musl/release/nitro-cli \
+			build-enclave \
+			--docker-uri command_executer:eif \
+			--docker-dir $(OBJ_PATH)/command-executer/command_executer_docker_dir \
+			--output-file $(OBJ_PATH)/command-executer/command_executer.eif
+	touch $@
+
+command-executer: build-setup build-container .build-command-executer-eif
 
 # See .build-container rule for explanation.
 .build-nitro-tests: $(BASE_PATH)/tests
@@ -285,5 +303,6 @@ uninstall:
 
 .PHONY: clean
 clean:
+	$(DOCKER) rmi command_executer:eif 2> /dev/null || true
 	$(RM) -rf $(OBJ_PATH)
 	$(RM) -f .build*

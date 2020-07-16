@@ -12,6 +12,18 @@ use crate::common::NitroCliResult;
 use crate::enclave_proc::resource_manager::EnclaveManager;
 use crate::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
 
+/// Kibibytes.
+#[allow(non_upper_case_globals)]
+pub const KiB: u64 = 1024;
+
+/// Mebibytes.
+#[allow(non_upper_case_globals)]
+pub const MiB: u64 = 1024 * KiB;
+
+/// Gibibytes.
+#[allow(non_upper_case_globals)]
+pub const GiB: u64 = 1024 * MiB;
+
 /// Get a string representation of the bit-mask which holds the enclave launch flags.
 pub fn flags_to_string(flags: u64) -> String {
     if flags & NE_ENCLAVE_DEBUG_MODE == NE_ENCLAVE_DEBUG_MODE {

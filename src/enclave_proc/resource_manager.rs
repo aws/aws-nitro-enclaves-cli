@@ -26,7 +26,7 @@ use crate::enclave_proc::commands::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT}
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
-use crate::enclave_proc::utils::get_run_enclaves_info;
+use crate::enclave_proc::utils::{get_run_enclaves_info, GiB};
 
 /// CamelCase alias for the bindgen generated driver struct (ne_enclave_start_info).
 pub type EnclaveStartInfo = bindings::ne_enclave_start_info;
@@ -46,8 +46,8 @@ pub const NE_ENCLAVE_DEBUG_MODE: u64 = 0x1;
 /// The expected driver version that is synchronized to the current version of the CLI.
 const NE_API_VERSION: i32 = 1;
 
-/// The maximum allowable memory size of an enclave is 4 GB.
-const ENCLAVE_MEMORY_MAX_SIZE: u64 = 1 << 32;
+/// The maximum allowable memory size of an enclave is 8 GiB.
+const ENCLAVE_MEMORY_MAX_SIZE: u64 = 8 * GiB;
 
 /// Enclave Image Format (EIF) flag.
 const NE_EIF_IMAGE: u64 = 0x01;

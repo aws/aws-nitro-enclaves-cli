@@ -17,7 +17,16 @@ mod tests {
     use nitro_cli::{build_enclaves, build_from_docker, enclave_console};
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
     use std::convert::TryInto;
+    use std::fs::OpenOptions;
+    use std::io::Write;
     use tempfile::tempdir;
+
+    use openssl::asn1::Asn1Time;
+    use openssl::ec::{EcGroup, EcKey};
+    use openssl::hash::MessageDigest;
+    use openssl::nid::Nid;
+    use openssl::pkey::{PKey, Private};
+    use openssl::x509::{X509Name, X509};
 
     const SAMPLE_DOCKER: &str =
         "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample";
@@ -144,6 +153,88 @@ mod tests {
         assert_eq!(
             measurements.get("PCR2").unwrap(),
             "bd60ceba51d463a519545688123a91fd88b798405034b1dae256bfc3559d9e48b3be63b073ebcb9e0aa506235774d514"
+        );
+    }
+
+    fn generate_signing_cert_and_key(cert_path: &str, key_path: &str) {
+        let ec_group = EcGroup::from_curve_name(Nid::SECP384R1).unwrap();
+        let key = EcKey::generate(&ec_group).unwrap();
+        let pkey = PKey::from_ec_key(key.clone()).unwrap();
+
+        let mut name = X509Name::builder().unwrap();
+        name.append_entry_by_nid(Nid::COMMONNAME, "aws.nitro-enclaves")
+            .unwrap();
+        let name = name.build();
+
+        let before = Asn1Time::days_from_now(0).unwrap();
+        let after = Asn1Time::days_from_now(365).unwrap();
+
+        let mut builder = X509::builder().unwrap();
+        builder.set_version(2).unwrap();
+        builder.set_subject_name(&name).unwrap();
+        builder.set_issuer_name(&name).unwrap();
+        builder.set_pubkey(&pkey).unwrap();
+        builder.set_not_before(&before).unwrap();
+        builder.set_not_after(&after).unwrap();
+        builder.sign(&pkey, MessageDigest::sha384()).unwrap();
+
+        let cert = builder.build();
+
+        let mut key_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(key_path)
+            .unwrap();
+        key_file
+            .write_all(&key.private_key_to_pem().unwrap())
+            .unwrap();
+
+        let mut cert_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(cert_path)
+            .unwrap();
+        cert_file.write_all(&cert.to_pem().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn build_enclaves_signed_simple_image() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: Some(cert_path),
+            private_key: Some(key_path),
+        };
+
+        let measurements = build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed")
+        .1;
+        assert_eq!(
+            measurements.get("PCR0").unwrap(),
+            "ffbb4f8def6edac5d3596892e1aa511b2c7afe99efad4de4954f77c1dd941b831f5f6d532e734d2298699faf92a3f2da"
+        );
+        assert_eq!(
+            measurements.get("PCR1").unwrap(),
+            "235c9e6050abf6b993c915505f3220e2d82b51aff830ad14cbecc2eec1bf0b4ae749d311c663f464cde9f718acca5286"
+        );
+        assert_eq!(
+            measurements.get("PCR2").unwrap(),
+            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
         );
     }
 

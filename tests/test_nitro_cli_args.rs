@@ -150,6 +150,27 @@ mod test_nitro_cli_args {
     }
 
     #[test]
+    fn build_signed_enclave_correct_command() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--docker-dir",
+            "dir/",
+            "--output-file",
+            "image.eif",
+            "--signing-certificate",
+            "cert.pem",
+            "--private-key",
+            "key.pem",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
     fn run_enclave_correct_command_with_eif_path() {
         let app = create_app!();
         let args = vec![

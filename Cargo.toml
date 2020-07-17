@@ -21,6 +21,7 @@ serde_cbor = "0.10"
 procfs = "0.7"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
+openssl = "0.10"
 
 [build-dependencies]
 bindgen = { version=">=0.54" }

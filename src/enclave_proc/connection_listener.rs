@@ -117,7 +117,7 @@ impl ConnectionListener {
             .map_err(|e| format!("Failed to bind connection listener: {:?}", e))?;
         self.enable_credentials_passing(&listener);
         self.socket
-            .start_monitoring()
+            .start_monitoring(true)
             .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))?;
         debug!(
             "Connection listener started on socket {:?}.",

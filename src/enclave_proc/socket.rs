@@ -66,7 +66,7 @@ impl EnclaveProcSock {
     }
 
     /// Start monitoring the Unix socket's state using `inotify`.
-    pub fn start_monitoring(&mut self) -> NitroCliResult<()> {
+    pub fn start_monitoring(&mut self, exit_on_delete: bool) -> NitroCliResult<()> {
         let path_clone = self.socket_path.clone();
         let requested_remove_clone = self.requested_remove.clone();
         let mut socket_inotify = Inotify::init()
@@ -82,7 +82,12 @@ impl EnclaveProcSock {
             )
             .map_err(|e| format!("Failed to add watch to inotify: {:?}", e))?;
         self.remove_listener_thread = Some(thread::spawn(move || {
-            socket_removal_listener(path_clone, requested_remove_clone, socket_inotify)
+            socket_removal_listener(
+                path_clone,
+                requested_remove_clone,
+                socket_inotify,
+                exit_on_delete,
+            )
         }));
         Ok(())
     }
@@ -125,6 +130,7 @@ fn socket_removal_listener(
     socket_path: PathBuf,
     requested_remove: Arc<AtomicBool>,
     mut socket_inotify: Inotify,
+    exit_on_delete: bool,
 ) {
     let mut buffer = [0u8; 4096];
     let mut done = false;
@@ -155,7 +161,10 @@ fn socket_removal_listener(
                     // we exit forcefully, since there is no longer any way for a CLI instance
                     // to tell the current enclave process to terminate.
                     warn!("The enclave process socket has been deleted!");
-                    std::process::exit(1);
+                    if exit_on_delete {
+                        std::process::exit(1);
+                    }
+                    done = true;
                 }
             }
         }
@@ -173,6 +182,7 @@ mod tests {
 
     const DUMMY_ENCLAVE_ID: &str = "i-0000000000000000-enc0123456789012345";
     const THREADS_STR: &str = "Threads:";
+    const WAIT_REMOVE_MILLIS: u64 = 10;
 
     /// Inspects the content of /proc/<PID>/status in order to
     /// retrieve the number of threads running in the context of
@@ -210,7 +220,7 @@ mod tests {
         }
     }
 
-    /// Tests that after removing the socket file by means other than `close()` do not
+    /// Tests that removing the socket file by means other than `close()` does not
     /// trigger a `socket.requested_remove` change.
     #[test]
     fn test_start_monitoring() {
@@ -219,13 +229,14 @@ mod tests {
         assert!(socket.is_ok());
 
         if let Ok(mut socket) = socket {
-            let _ = UnixListener::bind(socket.get_path()).ok_or_exit("Error binding.");
-            let result = socket.start_monitoring();
+            UnixListener::bind(socket.get_path()).ok_or_exit("Error binding.");
+            let result = socket.start_monitoring(false);
 
             assert!(result.is_ok());
 
             // Remove socket file and expect `socket.requested_remove` to remain False
-            let _ = std::fs::remove_file(&socket.socket_path.as_path().to_str().unwrap());
+            std::fs::remove_file(&socket.socket_path).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(WAIT_REMOVE_MILLIS));
 
             assert!(!socket.requested_remove.load(Ordering::SeqCst));
         }
@@ -249,7 +260,7 @@ mod tests {
 
         if let Ok(mut socket) = socket {
             let _ = UnixListener::bind(socket.get_path()).ok_or_exit("Error binding.");
-            let result = socket.start_monitoring();
+            let result = socket.start_monitoring(true);
 
             assert!(result.is_ok());
 

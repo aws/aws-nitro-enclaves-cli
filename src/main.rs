@@ -24,6 +24,7 @@ use nitro_cli::{build_enclaves, console_enclaves, create_app, terminate_all_encl
 /// *Nitro CLI* application entry point.
 fn main() {
     // Custom version (possibly including build commit).
+    // Dummy code line to trigger CI tests
     let commit_id = env!("COMMIT_ID");
     let version_str: String = match commit_id.len() {
         0 => env!("CARGO_PKG_VERSION").to_string(),

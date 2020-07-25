@@ -26,7 +26,7 @@ use crate::enclave_proc::commands::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT}
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
-use crate::enclave_proc::utils::{get_run_enclaves_info, GiB};
+use crate::enclave_proc::utils::get_run_enclaves_info;
 
 /// CamelCase alias for the bindgen generated driver struct (ne_enclave_start_info).
 pub type EnclaveStartInfo = bindings::ne_enclave_start_info;
@@ -45,9 +45,6 @@ pub const NE_ENCLAVE_DEBUG_MODE: u64 = 0x1;
 
 /// The expected driver version that is synchronized to the current version of the CLI.
 const NE_API_VERSION: i32 = 1;
-
-/// The maximum allowable memory size of an enclave is 8 GiB.
-const ENCLAVE_MEMORY_MAX_SIZE: u64 = 8 * GiB;
 
 /// Enclave Image Format (EIF) flag.
 const NE_EIF_IMAGE: u64 = 0x01;
@@ -284,17 +281,11 @@ impl ResourceAllocator {
     fn new(requested_mem: u64) -> NitroCliResult<Self> {
         let mem_info = procfs::Meminfo::new()
             .map_err(|e| format!("Failed to read platform memory information: {:?}", e))?;
-        let region_size = match mem_info.hugepagesize {
-            Some(value) => value,
-            None => procfs::page_size().map_err(|e| format!("Failed to read page size: {:?}", e))?
-                as u64,
-        };
-        let mut max_regions = match mem_info.hugepages_total {
-            Some(value) => value,
-            None => 0,
-        };
+        let region_size = mem_info.hugepagesize.unwrap_or(
+            procfs::page_size().map_err(|e| format!("Failed to read page size: {:?}", e))? as u64,
+        );
+        let max_regions = mem_info.hugepages_total.unwrap_or(0);
 
-        max_regions = std::cmp::min(max_regions, 1 + (ENCLAVE_MEMORY_MAX_SIZE - 1) / region_size);
         info!(
             "Region size = {}, Maximum number of regions = {}",
             region_size, max_regions

@@ -12,9 +12,8 @@ use nitro_cli::enclave_proc::resource_manager::{
     EnclaveStartInfo, MemoryRegion, NE_CREATE_VCPU, NE_CREATE_VM, NE_SET_USER_MEMORY_REGION,
     NE_START_ENCLAVE,
 };
+use nitro_cli::enclave_proc::utils::MiB;
 
-#[allow(non_upper_case_globals)]
-pub const MiB: u64 = 1024 * 1024;
 const ENCLAVE_MEM_CHUNKS: u64 = 40;
 pub const NE_DEVICE_PATH: &str = "/dev/nitro_enclaves";
 

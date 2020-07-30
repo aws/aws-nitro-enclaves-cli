@@ -76,6 +76,7 @@ make nitro_enclaves || test_failed
 make nitro-cli || test_failed
 make vsock-proxy || test_failed
 make install || test_failed
+rmmod nitro_cli_resource_allocator
 insmod drivers/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko || test_failed
 
 # Ensure the Nitro Enclaves driver is inserted at the beginning.

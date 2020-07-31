@@ -38,4 +38,23 @@ RUN  source $HOME/.cargo/env && \
 RUN  source $HOME/.cargo/env && \
 	cargo install cargo-audit --version ^0.12
 RUN apt-get install -y jq
+
+# Install docker for nitro-cli build-enclave runs
+RUN apt-get update && \
+    apt-get -y install apt-transport-https \
+        ca-certificates \
+        curl \
+        gnupg2 \
+        software-properties-common && \
+    curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg > /tmp/dkey; apt-key add /tmp/dkey && \
+    add-apt-repository \
+        "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") \
+        $(lsb_release -cs) \
+        stable" && \
+    apt-get update && \
+    apt-get -y install docker-ce
+
+# Setup the env for nitro-cli
+RUN mkdir -p /var/log/nitro_enclaves
+
 RUN echo "Container build ready to go"

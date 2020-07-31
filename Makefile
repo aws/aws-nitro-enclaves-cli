@@ -181,12 +181,17 @@ nitro-cli-native:
 	$(CP) \
 		$(BASE_PATH)/samples/command_executer/resources/Dockerfile.alpine \
 		$(OBJ_PATH)/command-executer/command_executer_docker_dir/Dockerfile
-	NITRO_CLI_BLOBS=$(BASE_PATH)/blobs \
-		$(OBJ_PATH)/nitro_cli/x86_64-unknown-linux-musl/release/nitro-cli \
-			build-enclave \
-			--docker-uri command_executer:eif \
-			--docker-dir $(OBJ_PATH)/command-executer/command_executer_docker_dir \
-			--output-file $(OBJ_PATH)/command-executer/command_executer.eif
+	$(DOCKER) run \
+		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
+		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		$(CONTAINER_TAG) bin/bash -c \
+			'NITRO_CLI_BLOBS=/nitro_src/blobs \
+				/nitro_build/nitro_cli/x86_64-unknown-linux-musl/release/nitro-cli \
+					build-enclave \
+					--docker-uri command_executer:eif \
+					--docker-dir /nitro_build/command-executer/command_executer_docker_dir \
+					--output-file /nitro_build/command-executer/command_executer.eif'
 	touch $@
 
 command-executer: build-setup build-container .build-command-executer-eif

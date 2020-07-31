@@ -272,6 +272,44 @@ mod tests {
     }
 
     #[test]
+    fn run_describe_terminate_signed_enclave_image() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+
+        setup_env();
+        let build_args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: Some(cert_path),
+            private_key: Some(key_path),
+        };
+
+        build_from_docker(
+            &build_args.docker_uri,
+            &build_args.docker_dir,
+            &build_args.output,
+            &build_args.signing_certificate,
+            &build_args.private_key,
+        )
+        .expect("Docker build failed");
+
+        let args = RunEnclavesArgs {
+            enclave_cid: None,
+            eif_path: build_args.output,
+            cpu_ids: None,
+            cpu_count: Some(2),
+            memory_mib: 256,
+            debug_mode: Some(true),
+        };
+        run_describe_terminate(args);
+    }
+
+    #[test]
     fn run_describe_terminate_enclave_sdk_docker_image() {
         let dir = tempdir().unwrap();
         let eif_path = dir.path().join("test.eif");
@@ -500,7 +538,9 @@ mod tests {
         for _ in 0..3 {
             run_describe_terminate_enclave_sdk_docker_image();
             run_describe_terminate_simple_docker_image();
+            run_describe_terminate_signed_enclave_image();
             run_describe_terminate_enclave_sdk_docker_image();
+            run_describe_terminate_signed_enclave_image();
         }
     }
 }

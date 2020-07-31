@@ -80,8 +80,7 @@ aws-nitro-enclaves-cli.tar.gz:
 sources: aws-nitro-enclaves-cli.tar.gz crates-dependencies
 
 .PHONY: all
-all: build-setup init nc-vsock nitro-cli nitro-cli-poweruser vsock-proxy
-
+all: build-setup init nitro-cli nitro-cli-poweruser vsock-proxy
 
 .PHONY: driver-deps
 driver-deps:
@@ -126,10 +125,6 @@ nitro_enclaves-clean:
 
 .PHONY: driver-clean
 driver-clean: nitro_enclaves-clean nitro_cli_resource_allocator-clean
-
-.PHONY: nc-vsock
-nc-vsock: nc-vsock.c build-setup
-	$(CC) $(C_FLAGS) -o $(OBJ_PATH)/nc-vsock nc-vsock.c
 
 .PHONY: init
 init: init.c build-setup

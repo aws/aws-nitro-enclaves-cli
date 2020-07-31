@@ -259,9 +259,12 @@ void init_console() {
     // not the correct way to do this, although it works when compiling with
     // musl-gcc.
     const char *console_path = "/dev/console";
-    freopen(console_path, "r", stdin);
-    freopen(console_path, "w", stdout);
-    freopen(console_path, "w", stderr);
+    die_on(freopen(console_path, "r", stdin) == NULL,
+           "freopen failed for stdin");
+    die_on(freopen(console_path, "w", stdout) == NULL,
+           "freopen failed for stdout");
+    die_on(freopen(console_path, "w", stderr) == NULL,
+           "freopen failed for stderr");
 }
 
 pid_t launch(char **argv, char **envp) {
@@ -410,8 +413,8 @@ int main() {
     fclose(env_file);
     fclose(cmd_file);
 
-    chdir("/rootfs");
-    chroot("/rootfs");
+    die_on(chdir("/rootfs") != 0, "chdir /rootfs");
+    die_on(chroot("/rootfs") != 0, "chroot /rootfs");
 
     // At this point, we need to make sure the container /dev is initialized 
     // as well.

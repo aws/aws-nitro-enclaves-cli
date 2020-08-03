@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Install required packages
+pip3 install -U pytest
+
+cp -r /usr/share/nitro_enclaves/test_images/ .
+
+echo "===== Running integration tests except for the installation test ====="
+python3 -m pytest /usr/share/nitro_enclaves/tests/integration/ --ignore /usr/share/nitro_enclaves/tests/integration/test_installation.py
+
+rm -rf test_images/

@@ -275,5 +275,16 @@ macro_rules! create_app {
                             .required(true),
                     ),
             )
+            .subcommand(
+                SubCommand::with_name("console-cid")
+                    .about("Connect to the console of an enclave with a given CID")
+                    .arg(
+                        Arg::with_name("enclave-cid")
+                            .long("enclave-cid")
+                            .takes_value(true)
+                            .help("Enclave CID, used to communicate with the enclave")
+                            .required(true),
+                    ),
+            )
     };
 }

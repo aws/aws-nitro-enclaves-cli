@@ -55,12 +55,21 @@ impl DescribeEnclaveArgs {
 #[derive(Debug, Clone)]
 pub struct ConsoleArgs {
     pub enclave_id: String,
+    pub enclave_cid: u64,
 }
 
 impl ConsoleArgs {
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        let enclave_id = parse_enclave_id(args).unwrap_or(String::new());
+        let enclave_cid = parse_enclave_cid(args).unwrap_or(None).unwrap_or(0);
+
+        if enclave_id.is_empty() && enclave_cid == 0 {
+            return Err("Missing both enclave ID and CID.".to_string());
+        }
+
         Ok(ConsoleArgs {
-            enclave_id: parse_enclave_id(args)?,
+            enclave_id,
+            enclave_cid,
         })
     }
 }

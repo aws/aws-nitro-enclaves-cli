@@ -119,6 +119,40 @@ pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
                     .required(false),
             ),
     )
+    .subcommand(
+        SubCommand::with_name("write-mem")
+            .about(
+                "[Power user] Write a chunk of a file to a previously-allocated physical memory region not yet owned by an enclave",
+            )
+            .arg(
+                Arg::with_name("file-path")
+                    .short("f")
+                    .long("file-path")
+                    .takes_value(true)
+                    .required(true)
+            )
+            .arg(
+                Arg::with_name("file-offset")
+                    .short("o")
+                    .long("file-offset")
+                    .takes_value(true)
+                    .required(true)
+            )
+            .arg(
+                Arg::with_name("mem-address")
+                    .short("a")
+                    .long("mem-address")
+                    .takes_value(true)
+                    .required(true)
+            )
+            .arg(
+                Arg::with_name("mem-size")
+                    .short("s")
+                    .long("mem-size")
+                    .takes_value(true)
+                    .required(true)
+            )
+    )
 }
 
 pub fn match_cmd(args: &ArgMatches) {
@@ -137,6 +171,9 @@ pub fn match_cmd(args: &ArgMatches) {
         }
         ("alloc-mem-with-file", Some(args)) => {
             alloc_mem_with_file(args).ok_or_exit(args.usage());
+        }
+        ("write-mem", Some(args)) => {
+            write_mem(args).ok_or_exit(args.usage());
         }
         (&_, _) => {}
     }
@@ -283,35 +320,29 @@ fn fill_region_from_file(
     region: &nitro_cli_slot_mem_region,
     eif_path: String,
     eif_offset: u64,
-    _region_offset: u64,
-) -> u64 {
-    let mut eif_file = OpenOptions::new().read(true).open(eif_path).unwrap();
-
-    let mut dev_mem = OpenOptions::new().write(true).open("/dev/mem").unwrap();
-
-    let _ = eif_file.seek(SeekFrom::Start(eif_offset));
-
+) -> std::io::Result<u64> {
+    let mut eif_file = OpenOptions::new().read(true).open(eif_path)?;
+    let mut dev_mem = OpenOptions::new().write(true).open("/dev/mem")?;
     let mut buf = [0u8; 4096];
     let mut written: u64 = 0;
 
-    let _ = dev_mem.seek(SeekFrom::Start(region.mem_gpa));
+    eif_file.seek(SeekFrom::Start(eif_offset))?;
+    dev_mem.seek(SeekFrom::Start(region.mem_gpa))?;
 
     while written < region.mem_size {
         let write_size = std::cmp::min(buf.len(), (region.mem_size - written) as usize);
-
-        let write_size = eif_file.read(&mut buf[..write_size]).unwrap();
+        let write_size = eif_file.read(&mut buf[..write_size])?;
 
         if write_size == 0 {
-            return eif_file.seek(SeekFrom::Current(0)).unwrap();
+            return eif_file.seek(SeekFrom::Current(0));
         }
 
-        let _ = dev_mem.write_all(&mut buf[..write_size]);
-        let _ = dev_mem.flush();
-
+        dev_mem.write_all(&mut buf[..write_size])?;
+        dev_mem.flush()?;
         written += write_size as u64;
     }
 
-    return eif_file.seek(SeekFrom::Current(0)).unwrap();
+    eif_file.seek(SeekFrom::Current(0))
 }
 
 pub fn alloc_mem_with_file(args: &ArgMatches) -> NitroCliResult<()> {
@@ -334,12 +365,13 @@ pub fn alloc_mem_with_file(args: &ArgMatches) -> NitroCliResult<()> {
         .map_err(|_| format!("Invalid eif-offset format"))?;
 
     let mut new_offset = eif_offset;
-
     let mut resource_allocator = ResourceAllocator::new(0, mem_size, 1)?;
     let regions = resource_allocator.allocate()?;
+
     for region in regions {
         if should_write {
-            new_offset = fill_region_from_file(&region, eif_path.to_string(), eif_offset, 0);
+            new_offset = fill_region_from_file(&region, eif_path.to_string(), new_offset)
+                .map_err(|e| format!("fill_region_from_file failed: {}", e))?;
         }
         println!(
             "mem_gpa={}\nmem_size={}\nnew_eif_offset={}",
@@ -347,5 +379,35 @@ pub fn alloc_mem_with_file(args: &ArgMatches) -> NitroCliResult<()> {
         )
     }
 
+    Ok(())
+}
+
+pub fn write_mem(args: &ArgMatches) -> NitroCliResult<()> {
+    let file_path = args
+        .value_of("file-path")
+        .ok_or("file path not specified")?;
+    let file_offset = args
+        .value_of("file-offset")
+        .ok_or("file offset not specified")?
+        .parse::<u64>()
+        .map_err(|e| format!("Failed to parse file offset: {}", e))?;
+    let mem_address = args
+        .value_of("mem-address")
+        .ok_or("memory address not specified")?
+        .parse::<u64>()
+        .map_err(|e| format!("Failed to parse memory address: {}", e))?;
+    let mem_size = args
+        .value_of("mem-size")
+        .ok_or("memory size not specified")?
+        .parse::<u64>()
+        .map_err(|e| format!("Failed to parse memory size: {}", e))?;
+    let mem_region = nitro_cli_slot_mem_region {
+        slot_uid: 0,
+        mem_gpa: mem_address,
+        mem_size,
+    };
+
+    fill_region_from_file(&mem_region, file_path.to_string(), file_offset)
+        .map_err(|e| format!("fill_region_from_file failed: {}", e))?;
     Ok(())
 }

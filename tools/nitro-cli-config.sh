@@ -40,6 +40,10 @@ THIS_USER="$(whoami)"
 # visibility normally requires a log-out / log-in or reboot.
 SHELL_RESET="0"
 
+# A flag used for skipping the shell reset - only used when setting
+# up the environment for installing the integration tests RPM.
+SKIP_SHELL_RESET="0"
+
 # Trap any exit condition, including all fatal errors.
 trap 'error_handler $? $LINENO' EXIT
 error_handler() {
@@ -466,7 +470,6 @@ while getopts ":hd:cbrim:p:t:" opt; do
         p)  # Configure the CPU pool.
             configure_cpu_pool "$OPTARG"
             ;;
-
         # TODO: Update to a more appropriate option letter. getopts does not
         # support long name options.
         # TODO: Have either -p or -t provided as a script option at a time,
@@ -474,6 +477,9 @@ while getopts ":hd:cbrim:p:t:" opt; do
         t)  # Configure the CPU pool given the CPU count.
             configure_cpu_pool_by_cpu_count "$OPTARG"
             ;;
+        s) # Skip shell reset at exit.
+	    SKIP_SHELL_RESET=1
+	    ;;
 
         \?) # Invalid option(s) provided.
             fail "Invalid argument(s) provided."
@@ -482,7 +488,7 @@ while getopts ":hd:cbrim:p:t:" opt; do
 done
 
 # Reset the shell after configuring the driver.
-if [ "$SHELL_RESET" -eq 1 ]; then
+if [ "$SHELL_RESET" -eq 1 ] && [ "$SKIP_SHELL_RESET" -eq 0 ]; then
     echo "Shell will be reset."
     sudo_run "exec su -l $THIS_USER"
 fi

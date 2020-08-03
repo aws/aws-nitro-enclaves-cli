@@ -17,6 +17,8 @@ BuildRequires: openssl-devel
 BuildRequires: rust >= 1.38
 BuildRequires: cargo >= 1.38
 BuildRequires: make
+BuildRequires: llvm
+BuildRequires: clang
 BuildRequires: systemd
 
 %systemd_requires
@@ -32,6 +34,16 @@ Requires: jq
 %description
 AWS Nitro CLI a set of tools used for setting up and managing enclaves
 
+%package integration-tests
+Summary: RPM for running integration tests
+Group: NitroEnclaves
+
+Requires: python3-pip
+Requires: python3
+
+%description integration-tests
+RPM for running integration tests for the AWS Nitro Enclaves CLI.
+
 %prep
 %setup -a 1 -c %{name}
 mkdir .cargo
@@ -43,6 +55,15 @@ make vsock-proxy-native
 
 %install
 make NITRO_CLI_INSTALL_DIR=%{buildroot} SBIN_DIR=%{_sbindir} UNIT_DIR=%{_unitdir} VAR_DIR=%{_var} install-tools
+
+mkdir -p %{buildroot}/%{_sbindir}
+mkdir -p %{buildroot}/%{_datadir}/nitro_enclaves/test_images/
+mkdir -p %{buildroot}/%{_datadir}/nitro_enclaves/tests/integration/
+
+install -D -m 0755 run-nitro-cli-integration-tests %{buildroot}/%{_sbindir}/run-nitro-cli-integration-tests
+cp ./eifs/* %{buildroot}/%{_datadir}/nitro_enclaves/test_images/
+cp -r tests/integration/* %{buildroot}%{_datadir}/nitro_enclaves/tests/integration/
+
 
 %post
 systemctl --system daemon-reload
@@ -60,6 +81,13 @@ systemctl --system daemon-reload
 %config(noreplace) %{_sysconfdir}/vsock_proxy/config.yaml
 
 %attr(0644,root,root) %{_unitdir}/%{_vsock_proxy_bin}.service
+
+%files integration-tests
+%defattr(0755,root,root,0755)
+
+%{_sbindir}/run-nitro-cli-integration-tests
+%{_datadir}/nitro_enclaves/*
+
 
 %changelog
 * Wed Mar 25 2020 Alexandru Gheorghe <aggh@amazon.com> - 0.1-0

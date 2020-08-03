@@ -12,8 +12,8 @@ use nitro_cli_poweruser::commands_parser::{
 use nitro_cli_poweruser::utils::handle_signals;
 use nitro_cli_poweruser::utils::ExitGracefully;
 use nitro_cli_poweruser::{
-    console_enclaves, create_app, describe_enclaves, run_enclaves, terminate_enclaves,
-    testing_commands,
+    console_enclaves, create_app, describe_enclaves, enclave_console, run_enclaves,
+    terminate_enclaves, testing_commands,
 };
 
 fn main() {
@@ -45,6 +45,10 @@ fn main() {
         ("console", Some(args)) => {
             let console_args = ConsoleArgs::new_with(args).ok_or_exit(args.usage());
             console_enclaves(console_args).ok_or_exit(args.usage());
+        }
+        ("console-cid", Some(args)) => {
+            let console_args = ConsoleArgs::new_with(args).ok_or_exit(args.usage());
+            enclave_console(console_args.enclave_cid).ok_or_exit(args.usage());
         }
         (&_, _) => {}
     }

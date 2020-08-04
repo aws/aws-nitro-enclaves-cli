@@ -274,13 +274,19 @@ mod test_dev_driver {
         ));
         assert_eq!(result.is_err(), true);
 
+        // Create a memory region using hugetlbfs.
+        let region2 = MemoryRegion::new(2 * MiB).unwrap();
+
         // Add wrongly sized memory regions of 1 MiB.
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
             0,
-            region.mem_addr(),
-            region.mem_size() / 2,
+            region2.mem_addr(),
+            region2.mem_size() / 2,
         ));
         assert_eq!(result.is_err(), true);
+
+        // Create a memory region using hugetlbfs.
+        let region3 = MemoryRegion::new(2 * MiB).unwrap();
 
         // Note: The test is expected to fail, but the failure comes from the hypervisor
         // and not from the driver. This translates into the call succeeding to map the
@@ -289,8 +295,8 @@ mod test_dev_driver {
         // memory region remains mapped despite the ioctl() returning failure.
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
             0,
-            region.mem_addr(),
-            region.mem_size() * 2,
+            region3.mem_addr(),
+            region3.mem_size() * 2,
         ));
         assert_eq!(result.is_err(), true);
 

@@ -650,7 +650,8 @@ static int ne_sanity_check_user_mem_region(struct ne_enclave *ne_enclave,
 
 	if ((mem_region->memory_size % NE_MIN_MEM_REGION_SIZE) != 0) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
-				    "Mem size not multiple of 2 MiB\n");
+				    "Mem size %u not multiple of 2 MiB\n",
+				    mem_region->memory_size);
 
 		return -EINVAL;
 	}
@@ -659,7 +660,8 @@ static int ne_sanity_check_user_mem_region(struct ne_enclave *ne_enclave,
 	    !user_access_ok((void __user *)(unsigned long)mem_region->userspace_addr,
 		       mem_region->memory_size)) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
-				    "Invalid user space addr range\n");
+				    "Invalid user space addr range: 0x%X\n",
+				    mem_region->userspace_addr);
 
 		return -EINVAL;
 	}
@@ -698,6 +700,11 @@ static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
 	ne_mem_region = kzalloc(sizeof(*ne_mem_region), GFP_KERNEL);
 	if (!ne_mem_region)
 		return -ENOMEM;
+
+	dev_err_ratelimited(ne_misc_dev.this_device,
+			    "Received: 0x%X+0x%X",
+			    mem_region->userspace_addr,
+			    mem_region->memory_size);
 
 	/*
 	 * TODO: Update nr_pages value to handle contiguous virtual address
@@ -811,6 +818,9 @@ static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
 
 	for (i = 0; i < nr_phys_contig_mem_regions; i++) {
 		u64 phys_addr = page_to_phys(phys_contig_mem_regions[i]);
+		dev_err_ratelimited(ne_misc_dev.this_device,
+				    "phys_contig: 0x%X, phys_addr: 0x%X\n",
+				    phys_contig_mem_regions[i], phys_addr);
 
 		slot_add_mem_req.slot_uid = ne_enclave->slot_uid;
 		slot_add_mem_req.paddr = phys_addr;
@@ -821,13 +831,18 @@ static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
 		 */
 		slot_add_mem_req.size = NE_MIN_MEM_REGION_SIZE;
 
+		dev_err_ratelimited(ne_misc_dev.this_device,
+			    "Sending: 0x%X+0x%X",
+			    slot_add_mem_req.paddr,
+			    slot_add_mem_req.size);
 		rc = ne_do_request(ne_enclave->pdev, SLOT_ADD_MEM,
 				   &slot_add_mem_req, sizeof(slot_add_mem_req),
 				   &cmd_reply, sizeof(cmd_reply));
 		if (rc < 0) {
 			dev_err_ratelimited(ne_misc_dev.this_device,
-					    "Error in slot add mem [rc=%d]\n",
-					    rc);
+					    "Error in slot add mem [rc=%d]: 0x%X+0x%X\n",
+					    rc, slot_add_mem_req.paddr, 
+					    slot_add_mem_req.size);
 
 			/* TODO: Only unpin memory regions not added. */
 			goto unpin_pages;

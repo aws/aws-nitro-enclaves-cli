@@ -63,10 +63,22 @@ impl ConnectionListener {
         self.socket = EnclaveProcSock::new(enclave_id)
             .map_err(|e| format!("Failed to create enclave process socket: {:?}", e))?;
 
+        // Bind the listener to the socket and spawn the listener thread.
+        let listener = UnixListener::bind(self.socket.get_path())
+            .map_err(|e| format!("Failed to bind connection listener: {:?}", e))?;
+        self.enable_credentials_passing(&listener);
+        self.socket
+            .start_monitoring(true)
+            .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))?;
+        debug!(
+            "Connection listener started on socket {:?}.",
+            self.socket.get_path()
+        );
+
         let self_clone = self.clone();
         self.listener_thread = Some(thread::spawn(move || {
             self_clone
-                .connection_listener_run()
+                .connection_listener_run(listener)
                 .ok_or_exit("Could not start the connection_listener")
         }));
 
@@ -111,19 +123,7 @@ impl ConnectionListener {
     }
 
     /// Listen for incoming connections and handle them as they appear.
-    fn connection_listener_run(mut self) -> NitroCliResult<()> {
-        // Bind the listener to the socket and spawn the listener thread.
-        let listener = UnixListener::bind(self.socket.get_path())
-            .map_err(|e| format!("Failed to bind connection listener: {:?}", e))?;
-        self.enable_credentials_passing(&listener);
-        self.socket
-            .start_monitoring(true)
-            .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))?;
-        debug!(
-            "Connection listener started on socket {:?}.",
-            self.socket.get_path()
-        );
-
+    fn connection_listener_run(self, listener: UnixListener) -> NitroCliResult<()> {
         // Accept connections and process them (this is a blocking call).
         for stream in listener.incoming() {
             match stream {
@@ -388,7 +388,19 @@ mod tests {
                 *started = true;
                 cvar.notify_one();
             }
-            let res = connection_listener.connection_listener_run();
+
+            // Bind the listener to the socket and spawn the listener thread.
+            let listener = UnixListener::bind(connection_listener.socket.get_path())
+                .map_err(|e| format!("Failed to bind connection listener: {:?}", e))
+                .unwrap();
+            connection_listener.enable_credentials_passing(&listener);
+            connection_listener
+                .socket
+                .start_monitoring(true)
+                .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))
+                .unwrap();
+
+            let res = connection_listener.connection_listener_run(listener);
             assert!(res.is_ok());
         });
 
@@ -495,7 +507,19 @@ mod tests {
                 *started = true;
                 cvar.notify_one();
             }
-            &conn_clone.connection_listener_run();
+
+            // Bind the listener to the socket and spawn the listener thread.
+            let listener = UnixListener::bind(connection_listener.socket.get_path())
+                .map_err(|e| format!("Failed to bind connection listener: {:?}", e))
+                .unwrap();
+            connection_listener.enable_credentials_passing(&listener);
+            connection_listener
+                .socket
+                .start_monitoring(true)
+                .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))
+                .unwrap();
+
+            &conn_clone.connection_listener_run(listener);
         });
 
         // Allow thread to finish spawning

@@ -85,10 +85,10 @@ all: build-setup init nc-vsock nitro-cli nitro-cli-poweruser vsock-proxy
 .PHONY: driver-deps
 driver-deps:
 	((cat /etc/os-release | grep -qni  "Ubuntu"  \
-		&& sudo apt-get install linux-headers-$$(uname -r)) || \
+		&& sudo apt-get install -y linux-headers-$$(uname -r)) || \
 	(cat /etc/os-release | grep -qni  "Amazon Linux\|CentOS\|RedHat" \
-		&& sudo yum install kernel-headers-$$(uname -r) \
-		&& sudo yum install kernel-devel-$$(uname -r)) || \
+		&& sudo yum install -y kernel-headers-$$(uname -r) \
+		&& sudo yum install -y kernel-devel-$$(uname -r)) || \
 	echo "Warning: kernel-header were not installed") \
 	&& echo "Successfully installed the nitro_cli_resource_allocator deps"
 

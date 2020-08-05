@@ -6,20 +6,22 @@ use command_parser::{CommandOutput, FileArgs, ListenArgs, RunArgs};
 use protocol_helpers::{recv_loop, recv_u64, send_loop, send_u64};
 
 use nix::sys::socket::listen as listen_vsock;
-use nix::sys::socket::{accept, bind, connect, socket};
-use nix::sys::socket::{AddressFamily, SockAddr, SockFlag, SockType};
+use nix::sys::socket::{accept, bind, connect, shutdown, socket};
+use nix::sys::socket::{AddressFamily, Shutdown, SockAddr, SockFlag, SockType};
+use nix::unistd::close;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::cmp::min;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::Command;
 
 pub const VMADDR_CID_ANY: u32 = 0xFFFFFFFF;
 pub const BUF_MAX_LEN: usize = 8192;
 pub const BACKLOG: usize = 128;
+const MAX_CONNECTION_ATTEMPTS: usize = 5;
 
 #[derive(Debug, Clone, FromPrimitive)]
 enum CmdId {
@@ -27,6 +29,55 @@ enum CmdId {
     RecvFile,
     SendFile,
     RunCmdNoWait,
+}
+
+struct VsockSocket {
+    socket_fd: RawFd,
+}
+
+impl VsockSocket {
+    fn new(socket_fd: RawFd) -> Self {
+        VsockSocket { socket_fd }
+    }
+}
+
+impl Drop for VsockSocket {
+    fn drop(&mut self) {
+        shutdown(self.socket_fd, Shutdown::Both)
+            .unwrap_or_else(|e| eprintln!("Failed to shut socket down: {:?}", e));
+        close(self.socket_fd).unwrap_or_else(|e| eprintln!("Failed to close socket: {:?}", e));
+    }
+}
+
+impl AsRawFd for VsockSocket {
+    fn as_raw_fd(&self) -> RawFd {
+        self.socket_fd
+    }
+}
+
+fn vsock_connect(cid: u32, port: u32) -> Result<VsockSocket, String> {
+    let sockaddr = SockAddr::new_vsock(cid, port);
+    let mut err_msg = String::new();
+
+    for i in 0..MAX_CONNECTION_ATTEMPTS {
+        let vsocket = VsockSocket::new(
+            socket(
+                AddressFamily::Vsock,
+                SockType::Stream,
+                SockFlag::empty(),
+                None,
+            )
+            .map_err(|err| format!("Failed to create the socket: {:?}", err))?,
+        );
+        match connect(vsocket.as_raw_fd(), &sockaddr) {
+            Ok(_) => return Ok(vsocket),
+            Err(e) => err_msg = format!("Failed to connect: {}", e),
+        }
+
+        std::thread::sleep(std::time::Duration::from_secs(1 << i));
+    }
+
+    Err(err_msg)
 }
 
 fn run_server(fd: RawFd, no_wait: bool) -> Result<(), String> {
@@ -196,17 +247,8 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
 }
 
 pub fn run(args: RunArgs) -> Result<i32, String> {
-    let socket_fd = socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::empty(),
-        None,
-    )
-    .map_err(|err| format!("Failed to create the socket: {:?}", err))?;
-
-    let sockaddr = SockAddr::new_vsock(args.cid, args.port);
-
-    connect(socket_fd, &sockaddr).map_err(|err| format!("Connect failed: {}", err))?;
+    let vsocket = vsock_connect(args.cid, args.port)?;
+    let socket_fd = vsocket.as_raw_fd();
 
     // Send command id
     if args.no_wait {
@@ -252,18 +294,8 @@ pub fn run(args: RunArgs) -> Result<i32, String> {
 pub fn recv_file(args: FileArgs) -> Result<(), String> {
     let mut file = File::create(&args.localfile)
         .map_err(|err| format!("Could not open localfile {:?}", err))?;
-
-    let socket_fd = socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::empty(),
-        None,
-    )
-    .map_err(|err| format!("Failed to create the socket: {:?}", err))?;
-
-    let sockaddr = SockAddr::new_vsock(args.cid, args.port);
-
-    connect(socket_fd, &sockaddr).map_err(|err| format!("Connect failed: {}", err))?;
+    let vsocket = vsock_connect(args.cid, args.port)?;
+    let socket_fd = vsocket.as_raw_fd();
 
     // Send command id
     send_u64(socket_fd, CmdId::RecvFile as u64)?;
@@ -302,18 +334,8 @@ pub fn recv_file(args: FileArgs) -> Result<(), String> {
 pub fn send_file(args: FileArgs) -> Result<(), String> {
     let mut file =
         File::open(&args.localfile).map_err(|err| format!("Could not open localfile {:?}", err))?;
-
-    let socket_fd = socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::empty(),
-        None,
-    )
-    .map_err(|err| format!("Failed to create the socket: {:?}", err))?;
-
-    let sockaddr = SockAddr::new_vsock(args.cid, args.port);
-
-    connect(socket_fd, &sockaddr).map_err(|err| format!("Connect failed: {}", err))?;
+    let vsocket = vsock_connect(args.cid, args.port)?;
+    let socket_fd = vsocket.as_raw_fd();
 
     // Send command id
     send_u64(socket_fd, CmdId::SendFile as u64)?;

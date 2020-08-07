@@ -5,8 +5,9 @@
 
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 
-use crate::common::NitroCliResult;
+use crate::common::{ExitGracefully, NitroCliResult};
 
 /// The arguments used by the `run-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,14 +29,34 @@ pub struct RunEnclavesArgs {
 impl RunEnclavesArgs {
     /// Construct a new `RunEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        Ok(RunEnclavesArgs {
-            cpu_count: parse_cpu_count(args)?,
-            eif_path: parse_eif_path(args)?,
-            enclave_cid: parse_enclave_cid(args)?,
-            memory_mib: parse_memory(args)?,
-            cpu_ids: parse_cpu_ids(args)?,
-            debug_mode: debug_mode(args),
-        })
+        if let Some(config_file) = args.value_of("config") {
+            let file = File::open(config_file).ok_or_exit("Invalid file path");
+
+            let json: RunEnclavesArgs =
+                serde_json::from_reader(file).ok_or_exit("Invalid json format for file");
+            if json.cpu_count == None && json.cpu_ids == None {
+                let error: NitroCliResult<()> =
+                    Err(String::from("missing field `cpu_count` or `cpu_ids`"));
+                error.ok_or_exit("Invalid json format for file");
+            }
+            if json.cpu_count.is_some() && json.cpu_ids.is_some() {
+                let error: NitroCliResult<()> = Err(String::from(
+                    "`cpu_count` and `cpu_ids` cannot be used together",
+                ));
+                error.ok_or_exit("Invalid json format for file");
+            }
+
+            Ok(json)
+        } else {
+            Ok(RunEnclavesArgs {
+                cpu_count: parse_cpu_count(args)?,
+                eif_path: parse_eif_path(args)?,
+                enclave_cid: parse_enclave_cid(args)?,
+                memory_mib: parse_memory(args)?,
+                cpu_ids: parse_cpu_ids(args)?,
+                debug_mode: debug_mode(args),
+            })
+        }
     }
 }
 

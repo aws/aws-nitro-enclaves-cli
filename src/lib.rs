@@ -276,7 +276,9 @@ macro_rules! create_app {
                             .multiple(true)
                             .min_values(1)
                             .required_unless("cpu-count")
-                            .conflicts_with("cpu-count"),
+                            .required_unless("config")
+                            .conflicts_with("cpu-count")
+                            .conflicts_with("config"),
                     )
                     .arg(
                         Arg::with_name("cpu-count")
@@ -284,27 +286,32 @@ macro_rules! create_app {
                             .help("Number of cpus")
                             .takes_value(true)
                             .required_unless("cpu-ids")
-                            .conflicts_with("cpu-ids"),
+                            .required_unless("config")
+                            .conflicts_with("cpu-ids")
+                            .conflicts_with("config"),
                     )
                     .arg(
                         Arg::with_name("memory")
                             .long("memory")
                             .help("Memory to allocate for the enclave in MB")
-                            .required(true)
-                            .takes_value(true),
+                            .required_unless("config")
+                            .takes_value(true)
+                            .conflicts_with("config"),
                     )
                     .arg(
                         Arg::with_name("eif-path")
                             .long("eif-path")
                             .help("Path pointing to a prebuilt Eif image")
-                            .required(true)
-                            .takes_value(true),
+                            .required_unless("config")
+                            .takes_value(true)
+                            .conflicts_with("config"),
                     )
                     .arg(
                         Arg::with_name("enclave-cid")
                             .long("enclave-cid")
                             .takes_value(true)
-                            .help("CID to be used for the newly started enclave"),
+                            .help("CID to be used for the newly started enclave")
+                            .conflicts_with("config"),
                     )
                     .arg(
                         Arg::with_name("debug-mode")
@@ -315,7 +322,15 @@ macro_rules! create_app {
                                 available over vsock at CID: VMADDR_CID_HYPERVISOR (0), port: \
                                 enclave_cid + 10000. \n The stream could be accessed with the console \
                                 sub-command" ,
-                            ),
+                            )
+                            .conflicts_with("config"),
+                    )
+                    .arg(
+                        Arg::with_name("config")
+                            .long("config")
+                            .takes_value(true)
+                            .value_name("json-config")
+                            .help("Config is used to read enclave settings from JSON file"),
                     ),
             )
             .subcommand(

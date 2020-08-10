@@ -24,6 +24,7 @@ SHA1    = sha1sum
 SRC_PATH              = .
 BASE_PATH             ?= $(SRC_PATH)
 OBJ_PATH              ?= $(BASE_PATH)/build
+NITRO_CLI_TOOLS_DIR   ?= $(BASE_PATH)/tools
 NITRO_CLI_INSTALL_DIR ?= $(OBJ_PATH)/install
 SBIN_DIR              ?= /usr/sbin/
 UNIT_DIR              ?= /usr/lib/systemd/system/

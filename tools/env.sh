@@ -12,5 +12,5 @@ fi
 lsmod | grep -q nitro_enclaves || \
     sudo insmod ${NITRO_CLI_INSTALL_DIR}/lib/modules/extra/nitro_enclaves/nitro_enclaves.ko
 
-export PATH=${PATH}:${NITRO_CLI_INSTALL_DIR}/usr/sbin/
+export PATH=${PATH}:${NITRO_CLI_INSTALL_DIR}/usr/sbin/:${NITRO_CLI_TOOLS_DIR}
 export NITRO_CLI_BLOBS=${NITRO_CLI_INSTALL_DIR}/opt/nitro_cli

@@ -281,4 +281,24 @@ mod test_pci_device {
             "Enclaves did not close after device shutdown"
         );
     }
+
+    #[test]
+    pub fn test_poststart_resource() {
+        let mut enclave_allocator = NitroEnclaveAllocator::new().unwrap();
+
+        enclave_allocator
+            .start_enclave(enclave_allocator.default_mem, NUM_CPUS)
+            .unwrap();
+
+        // Check adding one chunk of memory after enclave start
+        let reply = enclave_allocator.alloc_and_add_mem(MEM_CHUNK);
+        assert_eq!(reply.is_err(), true);
+
+        // Check adding NUM_CPUS cpus after enclave start
+        let cmd = NitroEnclavesSlotAddBulkVcpu::new(enclave_allocator.slot_uid, NUM_CPUS);
+        let result = cmd.submit(&mut enclave_allocator.cli_dev);
+        assert_eq!(result.is_err(), true);
+
+        enclave_allocator.stop_enclave().unwrap();
+    }
 }

@@ -21,6 +21,7 @@ serde_cbor = "0.10"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
 openssl = "0.10"
+nitro-cli-poweruser = { path = "./cli_poweruser" }
 
 [build-dependencies]
 bindgen = { version=">=0.54" }

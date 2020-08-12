@@ -99,7 +99,7 @@ do
 	test_module="$(echo ${test_line} | cut -d' ' -f2)"
 	test_exec_name="$(basename $(echo ${test_line} | cut -d' ' -f1))"
 
-	if [[ $test_module == *"nitro-cli-poweruser"* ]]
+	if [[ $test_module == *"nitro-cli-poweruser"* ]] || [[ $test_exec_name == *"test_pci_device"* ]]
 	then
 		remove_ne_driver
 	else

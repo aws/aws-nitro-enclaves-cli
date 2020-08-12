@@ -328,11 +328,23 @@ impl CliDev {
         Ok(dev_enable & DEV_ENABLE_MASK == 0x1)
     }
 
+    /// Function that disables the CliDev and waits for disable confirmation 10 seconds.
     pub fn disable(&mut self) -> NitroCliResult<bool> {
+        let reply = self.read_u8(NITRO_ENCLAVES_DEV_ENABLE)?;
+        // Check if already disabled
+        if reply & DEV_ENABLE_MASK == 0x0 {
+            return Ok(true);
+        }
+
         self.write_u8(NITRO_ENCLAVES_DEV_ENABLE, 0x0)?;
 
-        let dev_enable = self.read_u8(NITRO_ENCLAVES_DEV_ENABLE)?;
-        Ok(dev_enable & DEV_ENABLE_MASK == 0x0)
+        let mut num_trys = 6000;
+        while (self.read_u8(NITRO_ENCLAVES_DEV_ENABLE)? & DEV_ENABLE_MASK) != 0x0 && num_trys > 0 {
+            sleep(time::Duration::from_millis(10));
+            num_trys -= 1;
+        }
+
+        Ok(num_trys != 0)
     }
 
     pub fn read_u8(&mut self, offset: usize) -> NitroCliResult<u8> {

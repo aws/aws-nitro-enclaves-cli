@@ -3,6 +3,7 @@
 #![deny(warnings)]
 
 use nitro_cli_poweruser::cli_dev::*;
+use nitro_cli_poweruser::cpu_info::CpuInfos;
 use nitro_cli_poweruser::json_output::{get_enclave_describe_info, EnclaveDescribeInfo};
 use nitro_cli_poweruser::resource_allocator_driver::ResourceAllocatorDriver;
 use nitro_cli_poweruser::NitroCliResult;
@@ -133,5 +134,63 @@ impl Drop for NitroEnclaveAllocator {
         if reply.is_err() || !reply.unwrap() {
             panic!("Failed to disable Cli Device.")
         }
+    }
+}
+
+#[cfg(test)]
+mod test_pci_device {
+    use super::*;
+
+    #[test]
+    pub fn test_add_same_resources() {
+        let mut enclave_allocator = NitroEnclaveAllocator::new().unwrap();
+        let cpu_infos = CpuInfos::new().expect("Cpu info failed!");
+
+        let cmd: NitroEnclavesSlotAlloc = NitroEnclavesSlotAlloc::new();
+        let reply = cmd.submit(&mut enclave_allocator.cli_dev).unwrap();
+        enclave_allocator.slot_uid = reply.slot_uid;
+
+        for _i in 0..enclave_allocator.default_mem / MEM_CHUNK {
+            let reply = enclave_allocator
+                .resource_allocator
+                .alloc(enclave_allocator.slot_uid, MEM_CHUNK * MiB)
+                .expect("Alloc memory failed!");
+            let cmd = NitroEnclavesSlotAddMem::new(reply.slot_uid, reply.mem_gpa, reply.mem_size);
+            cmd.submit(&mut enclave_allocator.cli_dev)
+                .expect("Add memory failed!");
+
+            // Check command fails if same memory is added twice
+            let error = cmd.submit(&mut enclave_allocator.cli_dev);
+            assert_eq!(error.is_err(), true);
+        }
+
+        let cpu_ids = cpu_infos
+            .get_cpu_ids(NUM_CPUS as u32)
+            .expect("Cpu info failed!");
+        for id in cpu_ids {
+            let cmd = NitroEnclavesSlotAddVcpu::new(enclave_allocator.slot_uid, id);
+            cmd.submit(&mut enclave_allocator.cli_dev)
+                .expect("Add vcpu failed!");
+
+            // Check command fails if same cpus are added twice
+            let error = cmd.submit(&mut enclave_allocator.cli_dev);
+            assert_eq!(error.is_err(), true);
+        }
+
+        let cmd =
+            NitroEnclavesEnclaveStart::new(enclave_allocator.slot_uid, DEFAULT_ENCLAVE_CID, false);
+        cmd.submit(&mut enclave_allocator.cli_dev)
+            .expect("Submit start failed!");
+
+        // Check that resources were given just once to the enclave
+        let cmd = NitroEnclavesSlotInfo::new(enclave_allocator.slot_uid);
+        let reply = cmd
+            .submit(&mut enclave_allocator.cli_dev)
+            .expect("Slot info failed!");
+        let nr_cpus = reply.nr_cpus;
+        assert_eq!(nr_cpus, NUM_CPUS);
+        assert_eq!(reply.mem_size / MiB, enclave_allocator.default_mem);
+
+        enclave_allocator.stop_enclave().unwrap();
     }
 }

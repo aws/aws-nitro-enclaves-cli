@@ -301,4 +301,32 @@ mod test_pci_device {
 
         enclave_allocator.stop_enclave().unwrap();
     }
+
+    #[test]
+    pub fn test_unavailable_resource() {
+        let mut enclave_allocator = NitroEnclaveAllocator::new().unwrap();
+
+        let cmd: NitroEnclavesSlotAlloc = NitroEnclavesSlotAlloc::new();
+        let reply = cmd.submit(&mut enclave_allocator.cli_dev).unwrap();
+        enclave_allocator.slot_uid = reply.slot_uid;
+
+        // Check invalid paddr
+        let cmd = NitroEnclavesSlotAddMem::new(enclave_allocator.slot_uid, 43537623, 4 * MiB);
+        let result = cmd.submit(&mut enclave_allocator.cli_dev);
+        assert_eq!(result.is_err(), true);
+
+        // Check more cpus than available
+        let cmd = NitroEnclavesSlotAddBulkVcpu::new(enclave_allocator.slot_uid, std::u64::MAX);
+        let result = cmd.submit(&mut enclave_allocator.cli_dev);
+        assert_eq!(result.is_err(), true);
+
+        // Check starting without any resources given
+        let cmd =
+            NitroEnclavesEnclaveStart::new(enclave_allocator.slot_uid, DEFAULT_ENCLAVE_CID, false);
+        let result = cmd.submit(&mut enclave_allocator.cli_dev);
+        assert_eq!(result.is_err(), true);
+
+        let cmd = NitroEnclavesSlotFree::new(enclave_allocator.slot_uid);
+        cmd.submit(&mut enclave_allocator.cli_dev).unwrap();
+    }
 }

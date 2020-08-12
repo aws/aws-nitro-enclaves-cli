@@ -246,4 +246,39 @@ mod test_pci_device {
 
         enclave_allocator.stop_enclave().unwrap();
     }
+
+    #[test]
+    pub fn test_pci_shutdown() {
+        let mut enclave_allocator = NitroEnclaveAllocator::new().unwrap();
+
+        enclave_allocator
+            .start_enclave(enclave_allocator.default_mem, NUM_CPUS)
+            .unwrap();
+
+        // Check only one enclave has started
+        let info = enclave_allocator
+            .describe_enclaves()
+            .expect("Describe enclaves failed!");
+        assert_eq!(info.len(), 1, "Number of enclaves opened is not 1");
+
+        let reply = enclave_allocator.cli_dev.disable();
+        if reply.is_err() || !reply.unwrap() {
+            panic!("Failed to disable Cli Device.");
+        }
+
+        let reply = enclave_allocator.cli_dev.enable();
+        if reply.is_err() || !reply.unwrap() {
+            panic!("Failed to enable Cli Device.");
+        }
+
+        // Check that the enclave was closed when CliDev was disabled
+        let info = enclave_allocator
+            .describe_enclaves()
+            .expect("Describe enclaves failed!");
+        assert_eq!(
+            info.len(),
+            0,
+            "Enclaves did not close after device shutdown"
+        );
+    }
 }

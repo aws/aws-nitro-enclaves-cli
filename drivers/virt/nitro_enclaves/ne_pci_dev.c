@@ -3,7 +3,9 @@
  * Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  */
 
-/* Nitro Enclaves (NE) PCI device driver. */
+/**
+ * DOC: Nitro Enclaves (NE) PCI device driver.
+ */
 
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -18,7 +20,11 @@
 #include "ne_misc_dev.h"
 #include "ne_pci_dev.h"
 
-#define NE_DEFAULT_TIMEOUT_MSECS (120000) /* 120 sec */
+/**
+ * NE_DEFAULT_TIMEOUT_MSECS - Default timeout to wait for a reply from
+ *			      the NE PCI device.
+ */
+#define NE_DEFAULT_TIMEOUT_MSECS	(120000) /* 120 sec */
 
 static const struct pci_device_id ne_pci_ids[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_AMAZON, PCI_DEVICE_ID_NE) },
@@ -28,26 +34,24 @@ static const struct pci_device_id ne_pci_ids[] = {
 MODULE_DEVICE_TABLE(pci, ne_pci_ids);
 
 /**
- * ne_submit_request - Submit command request to the PCI device based on the
- * command type.
+ * ne_submit_request() - Submit command request to the PCI device based on the
+ *			 command type.
+ * @pdev:		PCI device to send the command to.
+ * @cmd_type:		Command type of the request sent to the PCI device.
+ * @cmd_request:	Command request payload.
+ * @cmd_request_size:	Size of the command request payload.
  *
- * This function gets called with the ne_pci_dev mutex held.
- *
- * @pdev: PCI device to send the command to.
- * @cmd_type: command type of the request sent to the PCI device.
- * @cmd_request: command request payload.
- * @cmd_request_size: size of the command request payload.
- *
- * @returns: 0 on success, negative return value on failure.
+ * Context: Process context. This function is called with the ne_pci_dev mutex held.
+ * Return:
+ * * 0 on success.
+ * * Negative return value on failure.
  */
-static int ne_submit_request(struct pci_dev *pdev,
-			     enum ne_pci_dev_cmd_type cmd_type,
+static int ne_submit_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 			     void *cmd_request, size_t cmd_request_size)
 {
 	struct ne_pci_dev *ne_pci_dev = pci_get_drvdata(pdev);
 
-	memcpy_toio(ne_pci_dev->iomem_base + NE_SEND_DATA, cmd_request,
-		    cmd_request_size);
+	memcpy_toio(ne_pci_dev->iomem_base + NE_SEND_DATA, cmd_request, cmd_request_size);
 
 	iowrite32(cmd_type, ne_pci_dev->iomem_base + NE_COMMAND);
 
@@ -55,36 +59,34 @@ static int ne_submit_request(struct pci_dev *pdev,
 }
 
 /**
- * ne_retrieve_reply - Retrieve reply from the PCI device.
+ * ne_retrieve_reply() - Retrieve reply from the PCI device.
+ * @pdev:		PCI device to receive the reply from.
+ * @cmd_reply:		Command reply payload.
+ * @cmd_reply_size:	Size of the command reply payload.
  *
- * This function gets called with the ne_pci_dev mutex held.
- *
- * @pdev: PCI device to receive the reply from.
- * @cmd_reply: command reply payload.
- * @cmd_reply_size: size of the command reply payload.
- *
- * @returns: 0 on success, negative return value on failure.
+ * Context: Process context. This function is called with the ne_pci_dev mutex held.
+ * Return:
+ * * 0 on success.
+ * * Negative return value on failure.
  */
-static int ne_retrieve_reply(struct pci_dev *pdev,
-			     struct ne_pci_dev_cmd_reply *cmd_reply,
+static int ne_retrieve_reply(struct pci_dev *pdev, struct ne_pci_dev_cmd_reply *cmd_reply,
 			     size_t cmd_reply_size)
 {
 	struct ne_pci_dev *ne_pci_dev = pci_get_drvdata(pdev);
 
-	memcpy_fromio(cmd_reply, ne_pci_dev->iomem_base + NE_RECV_DATA,
-		      cmd_reply_size);
+	memcpy_fromio(cmd_reply, ne_pci_dev->iomem_base + NE_RECV_DATA, cmd_reply_size);
 
 	return 0;
 }
 
 /**
- * ne_wait_for_reply - Wait for a reply of a PCI command.
+ * ne_wait_for_reply() - Wait for a reply of a PCI device command.
+ * @pdev:	PCI device for which a reply is waited.
  *
- * This function gets called with the ne_pci_dev mutex held.
- *
- * @pdev: PCI device for which a reply is waited.
- *
- * @returns: 0 on success, negative return value on failure.
+ * Context: Process context. This function is called with the ne_pci_dev mutex held.
+ * Return:
+ * * 0 on success.
+ * * Negative return value on failure.
  */
 static int ne_wait_for_reply(struct pci_dev *pdev)
 {
@@ -93,7 +95,7 @@ static int ne_wait_for_reply(struct pci_dev *pdev)
 
 	/*
 	 * TODO: Update to _interruptible and handle interrupted wait event
-	 * e.g. -ERESTARTSYS, incoming signals + add / update timeout.
+	 * e.g. -ERESTARTSYS, incoming signals + update timeout, if needed.
 	 */
 	rc = wait_event_timeout(ne_pci_dev->cmd_reply_wait_q,
 				atomic_read(&ne_pci_dev->cmd_reply_avail) != 0,
@@ -112,8 +114,7 @@ int ne_do_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 	int rc = -EINVAL;
 
 	if (cmd_type <= INVALID_CMD || cmd_type >= MAX_CMD) {
-		dev_err_ratelimited(&pdev->dev, "Invalid cmd type=%u\n",
-				    cmd_type);
+		dev_err_ratelimited(&pdev->dev, "Invalid cmd type=%u\n", cmd_type);
 
 		return -EINVAL;
 	}
@@ -125,8 +126,7 @@ int ne_do_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 	}
 
 	if (cmd_request_size > NE_SEND_DATA_SIZE) {
-		dev_err_ratelimited(&pdev->dev,
-				    "Invalid req size=%zu for cmd type=%u\n",
+		dev_err_ratelimited(&pdev->dev, "Invalid req size=%zu for cmd type=%u\n",
 				    cmd_request_size, cmd_type);
 
 		return -EINVAL;
@@ -139,8 +139,7 @@ int ne_do_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 	}
 
 	if (cmd_reply_size > NE_RECV_DATA_SIZE) {
-		dev_err_ratelimited(&pdev->dev, "Invalid reply size=%zu\n",
-				    cmd_reply_size);
+		dev_err_ratelimited(&pdev->dev, "Invalid reply size=%zu\n", cmd_reply_size);
 
 		return -EINVAL;
 	}
@@ -155,24 +154,21 @@ int ne_do_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 
 	rc = ne_submit_request(pdev, cmd_type, cmd_request, cmd_request_size);
 	if (rc < 0) {
-		dev_err_ratelimited(&pdev->dev,
-				    "Error in submit request [rc=%d]\n", rc);
+		dev_err_ratelimited(&pdev->dev, "Error in submit request [rc=%d]\n", rc);
 
 		goto unlock_mutex;
 	}
 
 	rc = ne_wait_for_reply(pdev);
 	if (rc < 0) {
-		dev_err_ratelimited(&pdev->dev,
-				    "Error in wait for reply [rc=%d]\n", rc);
+		dev_err_ratelimited(&pdev->dev, "Error in wait for reply [rc=%d]\n", rc);
 
 		goto unlock_mutex;
 	}
 
 	rc = ne_retrieve_reply(pdev, cmd_reply, cmd_reply_size);
 	if (rc < 0) {
-		dev_err_ratelimited(&pdev->dev,
-				    "Error in retrieve reply [rc=%d]\n", rc);
+		dev_err_ratelimited(&pdev->dev, "Error in retrieve reply [rc=%d]\n", rc);
 
 		goto unlock_mutex;
 	}
@@ -180,11 +176,9 @@ int ne_do_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 	atomic_set(&ne_pci_dev->cmd_reply_avail, 0);
 
 	if (cmd_reply->rc < 0) {
-		dev_err_ratelimited(&pdev->dev,
-				    "Error in cmd process logic [rc=%d]\n",
-				    cmd_reply->rc);
-
 		rc = cmd_reply->rc;
+
+		dev_err_ratelimited(&pdev->dev, "Error in cmd process logic [rc=%d]\n", rc);
 
 		goto unlock_mutex;
 	}
@@ -198,13 +192,15 @@ unlock_mutex:
 }
 
 /**
- * ne_reply_handler - Interrupt handler for retrieving a reply matching
- * a request sent to the PCI device for enclave lifetime management.
+ * ne_reply_handler() - Interrupt handler for retrieving a reply matching a
+ *			request sent to the PCI device for enclave lifetime
+ *			management.
+ * @irq:	Received interrupt for a reply sent by the PCI device.
+ * @args:	PCI device private data structure.
  *
- * @irq: received interrupt for a reply sent by the PCI device.
- * @args: PCI device private data structure.
- *
- * @returns: IRQ_HANDLED on handled interrupt, IRQ_NONE otherwise.
+ * Context: Interrupt context.
+ * Return:
+ * * IRQ_HANDLED on handled interrupt.
  */
 static irqreturn_t ne_reply_handler(int irq, void *args)
 {
@@ -219,14 +215,16 @@ static irqreturn_t ne_reply_handler(int irq, void *args)
 }
 
 /**
- * ne_event_work_handler - Work queue handler for notifying enclaves on
- * a state change received by the event interrupt handler.
+ * ne_event_work_handler() - Work queue handler for notifying enclaves on a
+ *			     state change received by the event interrupt
+ *			     handler.
+ * @work:	Item containing the NE PCI device for which an out-of-band event
+ *		was issued.
  *
  * An out-of-band event is being issued by the Nitro Hypervisor when at least
  * one enclave is changing state without client interaction.
  *
- * @work: item containing the Nitro Enclaves PCI device for which an
- *	  out-of-band event was issued.
+ * Context: Work queue context.
  */
 static void ne_event_work_handler(struct work_struct *work)
 {
@@ -244,8 +242,7 @@ static void ne_event_work_handler(struct work_struct *work)
 	 * PCI device and determine for which enclave(s) the out-of-band event
 	 * is corresponding to.
 	 */
-	list_for_each_entry(ne_enclave, &ne_pci_dev->enclaves_list,
-			    enclave_list_entry) {
+	list_for_each_entry(ne_enclave, &ne_pci_dev->enclaves_list, enclave_list_entry) {
 		mutex_lock(&ne_enclave->enclave_info_mutex);
 
 		/*
@@ -258,11 +255,9 @@ static void ne_event_work_handler(struct work_struct *work)
 		slot_info_req.slot_uid = ne_enclave->slot_uid;
 
 		rc = ne_do_request(ne_enclave->pdev, SLOT_INFO, &slot_info_req,
-				   sizeof(slot_info_req), &cmd_reply,
-				   sizeof(cmd_reply));
+				   sizeof(slot_info_req), &cmd_reply, sizeof(cmd_reply));
 		if (rc < 0)
-			dev_err(&ne_enclave->pdev->dev,
-				"Error in slot info [rc=%d]\n", rc);
+			dev_err(&ne_enclave->pdev->dev, "Error in slot info [rc=%d]\n", rc);
 
 		/* Notify enclave process that the enclave state changed. */
 		if (ne_enclave->state != cmd_reply.state) {
@@ -281,14 +276,16 @@ unlock:
 }
 
 /**
- * ne_event_handler - Interrupt handler for PCI device out-of-band
- * events. This interrupt does not supply any data in the MMIO region.
- * It notifies a change in the state of any of the launched enclaves.
+ * ne_event_handler() - Interrupt handler for PCI device out-of-band events.
+ *			This interrupt does not supply any data in the MMIO
+ *			region. It notifies a change in the state of any of
+ *			the launched enclaves.
+ * @irq:	Received interrupt for an out-of-band event.
+ * @args:	PCI device private data structure.
  *
- * @irq: received interrupt for an out-of-band event.
- * @args: PCI device private data structure.
- *
- * @returns: IRQ_HANDLED on handled interrupt, IRQ_NONE otherwise.
+ * Context: Interrupt context.
+ * Return:
+ * * IRQ_HANDLED on handled interrupt.
  */
 static irqreturn_t ne_event_handler(int irq, void *args)
 {
@@ -300,11 +297,13 @@ static irqreturn_t ne_event_handler(int irq, void *args)
 }
 
 /**
- * ne_setup_msix - Setup MSI-X vectors for the PCI device.
+ * ne_setup_msix() - Setup MSI-X vectors for the PCI device.
+ * @pdev:	PCI device to setup the MSI-X for.
  *
- * @pdev: PCI device to setup the MSI-X for.
- *
- * @returns: 0 on success, negative return value on failure.
+ * Context: Process context.
+ * Return:
+ * * 0 on success.
+ * * Negative return value on failure.
  */
 static int ne_setup_msix(struct pci_dev *pdev)
 {
@@ -333,8 +332,8 @@ static int ne_setup_msix(struct pci_dev *pdev)
 	 * command request. The reply is then retrieved, reading from the MMIO
 	 * space of the PCI device.
 	 */
-	rc = request_irq(pci_irq_vector(pdev, NE_VEC_REPLY),
-			 ne_reply_handler, 0, "enclave_cmd", ne_pci_dev);
+	rc = request_irq(pci_irq_vector(pdev, NE_VEC_REPLY), ne_reply_handler,
+			 0, "enclave_cmd", ne_pci_dev);
 	if (rc < 0) {
 		dev_err(&pdev->dev, "Error in request irq reply [rc=%d]\n", rc);
 
@@ -345,8 +344,7 @@ static int ne_setup_msix(struct pci_dev *pdev)
 	if (!ne_pci_dev->event_wq) {
 		rc = -ENOMEM;
 
-		dev_err(&pdev->dev, "Cannot get wq for dev events [rc=%d]\n",
-			rc);
+		dev_err(&pdev->dev, "Cannot get wq for dev events [rc=%d]\n", rc);
 
 		goto free_reply_irq_vec;
 	}
@@ -358,8 +356,8 @@ static int ne_setup_msix(struct pci_dev *pdev)
 	 * handler then scans for the changes and propagates them to the user
 	 * space.
 	 */
-	rc = request_irq(pci_irq_vector(pdev, NE_VEC_EVENT),
-			 ne_event_handler, 0, "enclave_evt", ne_pci_dev);
+	rc = request_irq(pci_irq_vector(pdev, NE_VEC_EVENT), ne_event_handler,
+			 0, "enclave_evt", ne_pci_dev);
 	if (rc < 0) {
 		dev_err(&pdev->dev, "Error in request irq event [rc=%d]\n", rc);
 
@@ -379,9 +377,10 @@ free_irq_vectors:
 }
 
 /**
- * ne_teardown_msix - Teardown MSI-X vectors for the PCI device.
+ * ne_teardown_msix() - Teardown MSI-X vectors for the PCI device.
+ * @pdev:	PCI device to teardown the MSI-X for.
  *
- * @pdev: PCI device to teardown the MSI-X for.
+ * Context: Process context.
  */
 static void ne_teardown_msix(struct pci_dev *pdev)
 {
@@ -399,11 +398,13 @@ static void ne_teardown_msix(struct pci_dev *pdev)
 }
 
 /**
- * ne_pci_dev_enable - Select PCI device version and enable it.
+ * ne_pci_dev_enable() - Select the PCI device version and enable it.
+ * @pdev:	PCI device to select version for and then enable.
  *
- * @pdev: PCI device to select version for and then enable.
- *
- * @returns: 0 on success, negative return value on failure.
+ * Context: Process context.
+ * Return:
+ * * 0 on success.
+ * * Negative return value on failure.
  */
 static int ne_pci_dev_enable(struct pci_dev *pdev)
 {
@@ -433,9 +434,10 @@ static int ne_pci_dev_enable(struct pci_dev *pdev)
 }
 
 /**
- * ne_pci_dev_disable - Disable PCI device.
+ * ne_pci_dev_disable() - Disable the PCI device.
+ * @pdev:	PCI device to disable.
  *
- * @pdev: PCI device to disable.
+ * Context: Process context.
  */
 static void ne_pci_dev_disable(struct pci_dev *pdev)
 {
@@ -465,6 +467,16 @@ static void ne_pci_dev_disable(struct pci_dev *pdev)
 		dev_err(&pdev->dev, "Error in pci dev disable cmd\n");
 }
 
+/**
+ * ne_pci_probe() - Probe function for the NE PCI device.
+ * @pdev:	PCI device to match with the NE PCI driver.
+ * @id :	PCI device id table associated with the NE PCI driver.
+ *
+ * Context: Process context.
+ * Return:
+ * * 0 on success.
+ * * Negative return value on failure.
+ */
 static int ne_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	struct ne_pci_dev *ne_pci_dev = NULL;
@@ -483,8 +495,7 @@ static int ne_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	rc = pci_request_regions_exclusive(pdev, "nitro_enclaves");
 	if (rc < 0) {
-		dev_err(&pdev->dev, "Error in pci request regions [rc=%d]\n",
-			rc);
+		dev_err(&pdev->dev, "Error in pci request regions [rc=%d]\n", rc);
 
 		goto disable_pci_dev;
 	}
@@ -502,8 +513,7 @@ static int ne_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	rc = ne_setup_msix(pdev);
 	if (rc < 0) {
-		dev_err(&pdev->dev, "Error in pci dev msix setup [rc=%d]\n",
-			rc);
+		dev_err(&pdev->dev, "Error in pci dev msix setup [rc=%d]\n", rc);
 
 		goto iounmap_pci_bar;
 	}
@@ -512,8 +522,7 @@ static int ne_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	rc = ne_pci_dev_enable(pdev);
 	if (rc < 0) {
-		dev_err(&pdev->dev, "Error in ne_pci_dev enable [rc=%d]\n",
-			rc);
+		dev_err(&pdev->dev, "Error in ne_pci_dev enable [rc=%d]\n", rc);
 
 		goto teardown_msix;
 	}
@@ -551,6 +560,12 @@ free_ne_pci_dev:
 	return rc;
 }
 
+/**
+ * ne_pci_remove() - Remove function for the NE PCI device.
+ * @pdev:	PCI device associated with the NE PCI driver.
+ *
+ * Context: Process context.
+ */
 static void ne_pci_remove(struct pci_dev *pdev)
 {
 	struct ne_pci_dev *ne_pci_dev = pci_get_drvdata(pdev);
@@ -576,6 +591,7 @@ static void ne_pci_remove(struct pci_dev *pdev)
  * TODO: Add suspend / resume functions for power management w/ CONFIG_PM, if
  * needed.
  */
+/* NE PCI device driver. */
 struct pci_driver ne_pci_driver = {
 	.name		= "nitro_enclaves",
 	.id_table	= ne_pci_ids,

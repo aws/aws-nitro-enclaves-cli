@@ -193,4 +193,57 @@ mod test_pci_device {
 
         enclave_allocator.stop_enclave().unwrap();
     }
+
+    #[test]
+    pub fn test_invalid_cmd() {
+        let mut enclave_allocator = NitroEnclaveAllocator::new().unwrap();
+
+        enclave_allocator
+            .start_enclave(enclave_allocator.default_mem, NUM_CPUS)
+            .unwrap();
+
+        // Check get slot is working properly
+        let cmd = NitroEnclavesGetSlot::new(DEFAULT_ENCLAVE_CID);
+        let result = cmd.submit(&mut enclave_allocator.cli_dev);
+        assert_eq!(result.is_err(), false);
+        let slot_uid = result.unwrap().slot_uid;
+        assert_eq!(slot_uid, enclave_allocator.slot_uid);
+
+        // Check get slot fails when given invalid cid
+        let cmd = NitroEnclavesGetSlot::new(INVALID_CID);
+        let result = cmd.submit(&mut enclave_allocator.cli_dev);
+        assert_eq!(result.is_err(), true);
+
+        // Check slot count is working properly
+        let cmd = NitroEnclavesSlotCount::new();
+        let result = cmd
+            .submit(&mut enclave_allocator.cli_dev)
+            .expect("Slot count failed!");
+        let slot_count = result.slot_count;
+        assert_eq!(slot_count, 1);
+
+        // Check next slot is working properly
+        let cmd = NitroEnclavesNextSlot::new(0);
+        let result = cmd
+            .submit(&mut enclave_allocator.cli_dev)
+            .expect("Next slot failed!");
+        let slot_uid = result.slot_uid;
+        assert_eq!(slot_uid, enclave_allocator.slot_uid);
+
+        // Check slot info is working properly
+        let cmd = NitroEnclavesSlotInfo::new(enclave_allocator.slot_uid);
+        let result = cmd
+            .submit(&mut enclave_allocator.cli_dev)
+            .expect("Slot info failed!");
+        let nr_cpus = result.nr_cpus;
+        assert_eq!(nr_cpus, NUM_CPUS);
+        assert_eq!(result.mem_size / MiB, enclave_allocator.default_mem);
+
+        // Check slot info fails when given invalid cid
+        let cmd = NitroEnclavesSlotInfo::new(INVALID_CID);
+        let result = cmd.submit(&mut enclave_allocator.cli_dev);
+        assert_eq!(result.is_err(), true);
+
+        enclave_allocator.stop_enclave().unwrap();
+    }
 }

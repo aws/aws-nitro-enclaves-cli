@@ -124,7 +124,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         result[0] = self.kernel_offset();
         result[1] = self.cmdline_offset();
 
-        for i in { 0..self.ramdisks.len() } {
+        for i in 0..self.ramdisks.len() {
             result[i + DEFAULT_SECTIONS_COUNT as usize] = self.ramdisk_offset(i);
         }
 
@@ -141,7 +141,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         result[0] = self.kernel_size();
         result[1] = self.cmdline_size();
 
-        for i in { 0..self.ramdisks.len() } {
+        for i in 0..self.ramdisks.len() {
             result[i + DEFAULT_SECTIONS_COUNT as usize] = self.ramdisk_size(&self.ramdisks[i]);
         }
 

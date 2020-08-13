@@ -67,7 +67,7 @@ pub fn run_enclaves(args: RunEnclavesArgs) -> NitroCliResult<u64> {
         args.memory_mib,
         cpu_ids.unwrap(),
         eif_file,
-        args.debug_mode.unwrap_or(false),
+        args.debug_mode,
     )
     .map_err(|err| format!("Could not create enclave: {:?}", err))?;
     let (enclave_cid, slot_id) = resource_manager.create_enclave()?;

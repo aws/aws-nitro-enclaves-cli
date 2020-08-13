@@ -98,7 +98,7 @@ impl ResourceAllocator {
                 allocated += chunk_size;
                 self.mem_regions.push(region);
             } else {
-                chunk_size = chunk_size / 2;
+                chunk_size /= 2;
             }
 
             if allocated >= self.memory {
@@ -350,7 +350,7 @@ fn write_eif_region(
         }
 
         dev_mem
-            .write_all(&mut buf[..write_size])
+            .write_all(&buf[..write_size])
             .map_err(|err| format!("Failed to write to mem: {}", err))?;
         dev_mem
             .flush()
@@ -389,7 +389,7 @@ pub fn offline_cpu(cpu_id: u32) {
         .write(true)
         .open(offline_path.clone())
     {
-        if let Err(_) = file.write_all("0".as_bytes()) {
+        if file.write_all(b"0").is_err() {
             error!("WARNING: Could not offline cpu {}", cpu_id);
         }
     } else {
@@ -406,11 +406,9 @@ pub fn online_cpu(cpu_id: u32) {
     if let Ok(ref mut file) = OpenOptions::new()
         .read(true)
         .write(true)
-        .write(true)
-        .write(true)
         .open(online_path.clone())
     {
-        if let Err(_) = file.write_all("1".as_bytes()) {
+        if file.write_all(b"1").is_err() {
             error!("WARNING: Could not online cpu {}", cpu_id);
         }
     } else {
@@ -431,7 +429,7 @@ pub fn between_packets_delay() -> Option<Duration> {
         }
     }
 
-    return None;
+    None
 }
 
 #[cfg(test)]

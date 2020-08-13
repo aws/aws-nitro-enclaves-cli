@@ -125,7 +125,7 @@ impl Proxy {
         // It results in a vector of IPs (V4 and V6)
         let ips = lookup_host(&addr).map_err(|_err| ProxyError::RemoteAddressError)?;
 
-        if ips.len() == 0 {
+        if ips.is_empty() {
             return Err(ProxyError::NoValidIPError);
         }
 
@@ -137,12 +137,12 @@ impl Proxy {
         // Split the IPs in v4 and v6
         let (ips_v4, ips_v6): (Vec<_>, Vec<_>) = ips.into_iter().partition(IpAddr::is_ipv4);
 
-        if only_4 && ips_v4.len() != 0 {
-            return Ok(ips_v4.into_iter().collect());
-        } else if only_6 && ips_v6.len() != 0 {
-            return Ok(ips_v6.into_iter().collect());
+        if only_4 && !ips_v4.is_empty() {
+            Ok(ips_v4.into_iter().collect())
+        } else if only_6 && !ips_v6.is_empty() {
+            Ok(ips_v6.into_iter().collect())
         } else {
-            return Err(ProxyError::NoValidIPError);
+            Err(ProxyError::NoValidIPError)
         }
     }
 
@@ -216,11 +216,7 @@ fn transfer(src: &mut dyn Read, dst: &mut dyn Write) -> bool {
         return true;
     }
 
-    if let Err(_) = dst.write_all(&buffer[..nbytes]) {
-        return true;
-    }
-
-    false
+    dst.write_all(&buffer[..nbytes]).is_err()
 }
 
 #[cfg(test)]

@@ -280,7 +280,7 @@ mod tests {
         let slice = iter.as_str();
 
         let new_str = slice.to_string();
-        let end_idx = new_str.find("\n"); // skip after the first '\n'
+        let end_idx = new_str.find('\n'); // skip after the first '\n'
         let substr = &slice[..end_idx.unwrap()];
 
         substr.parse().unwrap()
@@ -519,7 +519,7 @@ mod tests {
                 .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))
                 .unwrap();
 
-            &conn_clone.connection_listener_run(listener);
+            conn_clone.connection_listener_run(listener).unwrap();
         });
 
         // Allow thread to finish spawning

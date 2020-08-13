@@ -222,7 +222,7 @@ mod tests {
         let cpu_info = CpuInfo::new().unwrap();
         let candidate_cpus = cpu_info.get_cpu_candidates();
 
-        assert!(candidate_cpus.len() > 0);
+        assert!(!candidate_cpus.is_empty());
     }
 
     #[test]

@@ -171,7 +171,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
     let mut build = EifBuilder::new(
         &Path::new(kernel_path),
         cmdline.to_string(),
-        sign_info.clone(),
+        sign_info,
         hasher.clone(),
     );
     for ramdisk in ramdisks {

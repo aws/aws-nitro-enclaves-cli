@@ -194,7 +194,7 @@ mod tests {
         let slice = iter.as_str();
 
         let new_str = slice.to_string();
-        let end_idx = new_str.find("\n"); // skip after the first '\n'
+        let end_idx = new_str.find('\n'); // skip after the first '\n'
         let substr = &slice[..end_idx.unwrap()];
 
         substr.parse().unwrap()

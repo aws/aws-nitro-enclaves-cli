@@ -104,14 +104,14 @@ mod tests {
         let enc_id = generate_enclave_id(slot_id);
         let file_path = "/sys/devices/virtual/dmi/id/board_asset_tag";
 
-        if !metadata(file_path).is_ok() {
+        if metadata(file_path).is_err() {
             assert!(enc_id
                 .unwrap()
                 .eq(&format!("i-0000000000000000-enc{:?}", slot_id)));
         } else {
             assert!(!enc_id
                 .unwrap()
-                .split("-")
+                .split('-')
                 .collect::<Vec<&str>>()
                 .get(1)
                 .unwrap()

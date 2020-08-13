@@ -11,7 +11,7 @@ pub struct RunEnclavesArgs {
     pub enclave_cid: Option<u64>,
     pub memory_mib: u64,
     pub cpu_ids: Option<Vec<u32>>,
-    pub debug_mode: Option<bool>,
+    pub debug_mode: bool,
     pub cpu_count: Option<u32>,
 }
 
@@ -60,7 +60,7 @@ pub struct ConsoleArgs {
 
 impl ConsoleArgs {
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        let enclave_id = parse_enclave_id(args).unwrap_or(String::new());
+        let enclave_id = parse_enclave_id(args).unwrap_or_default();
         let enclave_cid = parse_enclave_cid(args).unwrap_or(None).unwrap_or(0);
 
         if enclave_id.is_empty() && enclave_cid == 0 {
@@ -135,7 +135,6 @@ fn parse_cpu_count(args: &ArgMatches) -> NitroCliResult<Option<u32>> {
     Ok(cpu_count)
 }
 
-fn debug_mode(args: &ArgMatches) -> Option<bool> {
-    let val = args.is_present("debug-mode");
-    return if val { Some(val) } else { None };
+fn debug_mode(args: &ArgMatches) -> bool {
+    args.is_present("debug-mode")
 }

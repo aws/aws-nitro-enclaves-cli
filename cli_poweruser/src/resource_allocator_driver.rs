@@ -1,9 +1,11 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
+// Without this, the ioctly_read/readwrite fail to pass clippy due to unsafe generated code.
+// TODO: Should no longer be required in 1.45 (see https://github.com/rust-lang/rust-clippy/pull/4993/)
+#![allow(clippy::missing_safety_doc)]
 
 use crate::NitroCliResult;
-use nix;
 use nix::ioctl_read;
 use nix::ioctl_readwrite;
 use std::fs::File;
@@ -11,6 +13,7 @@ use std::mem::size_of_val;
 use std::os::unix::io::AsRawFd;
 
 pub const RESOURCE_ALLOCATOR_PATH: &str = "/dev/nitro_cli_resource_allocator";
+
 /// Structure to communicate with the resource allocator driver.
 ///
 /// The definition is duplicated from nitro_cli_resource_allocator.h
@@ -41,12 +44,14 @@ ioctl_readwrite!(
     0x4,
     nitro_cli_slot_mem_region
 );
+
 ioctl_readwrite!(
     nitro_cli_slot_set_cpu_mapping,
     b'B',
     0x5,
     nitro_cli_slot_cpu_mapping
 );
+
 ioctl_read!(nitro_cli_slot_free_resources, b'B', 0x6, u64);
 
 /// Helper class to comunicate with /dev/nitro_cli_resource_allocator

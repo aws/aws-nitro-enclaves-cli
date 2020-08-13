@@ -456,8 +456,8 @@ impl CliDev {
     fn read_reply(&mut self) -> NitroCliResult<NitroEnclavesCmdReply> {
         let mut reply_bytes = [0u8; size_of::<NitroEnclavesCmdReply>()];
 
-        for index in 0..reply_bytes.len() {
-            reply_bytes[index] = self.read_u8(NITRO_ENCLAVES_RECV_DATA + index)?;
+        for (index, reply_byte) in reply_bytes.iter_mut().enumerate() {
+            *reply_byte = self.read_u8(NITRO_ENCLAVES_RECV_DATA + index)?;
         }
 
         let reply_ptr = reply_bytes.as_ptr() as *const NitroEnclavesCmdReply;
@@ -480,7 +480,7 @@ pub const CLI_END_COLUMN: usize = 1;
 /// TODO: NPE-421: Mechanism of getting this based on just the device PCI id.
 fn get_bar_size() -> IoResult<usize> {
     let sysfs_content = read_to_string(ENCLAVE_SYS_PATH)?;
-    let lines: Vec<&str> = sysfs_content.split("\n").collect();
+    let lines: Vec<&str> = sysfs_content.split('\n').collect();
     if lines.len() <= CLI_RESOURCES_LINE {
         return Err(Error::new(
             ErrorKind::Other,
@@ -488,7 +488,7 @@ fn get_bar_size() -> IoResult<usize> {
         ));
     }
 
-    let tokens: Vec<&str> = lines[CLI_RESOURCES_LINE].split(" ").collect();
+    let tokens: Vec<&str> = lines[CLI_RESOURCES_LINE].split(' ').collect();
     if CLI_BASE_LINE_COLUMN < tokens.len() && CLI_END_COLUMN < tokens.len() {
         let base_without_prefix = tokens[CLI_BASE_LINE_COLUMN].trim_start_matches("0x");
         let end_without_prefix = tokens[CLI_END_COLUMN].trim_start_matches("0x");

@@ -180,13 +180,15 @@ pub fn match_cmd(args: &ArgMatches) {
 }
 
 pub fn execute_command(args: &ArgMatches) -> NitroCliResult<()> {
-    let cmd_id = args.value_of("cmd-id").expect(args.usage());
+    let cmd_id = args
+        .value_of("cmd-id")
+        .unwrap_or_else(|| panic!("{}", args.usage()));
     let cmd_id: u32 = cmd_id.parse().unwrap();
     let cmd_id = NitroEnclavesCmdType::from_u32(cmd_id)
-        .expect(&format!("Invalid cmd_id \n{}\n", args.usage()));
+        .unwrap_or_else(|| panic!("Invalid cmd_id \n{}\n", args.usage()));
     let cmd_body = args
         .value_of("cmd-body")
-        .ok_or("Invalid cmd-body".to_string())?;
+        .ok_or_else(|| "Invalid cmd-body".to_string())?;
     let mut cli = CliDev::new()?;
     cli.enable()?;
     let reply = match cmd_id {
@@ -270,13 +272,17 @@ pub fn wait_ready_signal(args: &ArgMatches) -> NitroCliResult<()> {
         .ok_or("vsock-ready-port not specified")?;
     let enclave_cid: u32 = enclave_cid
         .parse()
-        .map_err(|_| format!("Invalid enclave-cid format"))?;
+        .map_err(|err| format!("Invalid enclave-cid format: {}", err))?;
     let vsock_ready_port: u32 = vsock_ready_port
         .parse()
-        .map_err(|_| format!("Invalid vsock-ready-port specified"))?;
+        .map_err(|err| format!("Invalid vsock-ready-port specified: {}", err))?;
 
-    let _ = eif_loader::enclave_ready(enclave_cid, vsock_ready_port)
-        .map_err(|_| format!("Failed to receive 'ready' signal from the enclave"));
+    let _ = eif_loader::enclave_ready(enclave_cid, vsock_ready_port).map_err(|err| {
+        format!(
+            "Failed to receive 'ready' signal from the enclave: {:?}",
+            err
+        )
+    });
 
     Ok(())
 }
@@ -286,7 +292,7 @@ pub fn free_slot(args: &ArgMatches) -> NitroCliResult<()> {
 
     let slot_id: u64 = slot_id
         .parse()
-        .map_err(|_| format!("Invalid slot-uid format"))?;
+        .map_err(|err| format!("Invalid slot-uid format: {}", err))?;
 
     let mut cli_dev = CliDev::new()?;
 
@@ -305,7 +311,7 @@ pub fn alloc_mem(args: &ArgMatches) -> NitroCliResult<()> {
 
     let mem_size: u64 = mem_size
         .parse()
-        .map_err(|_| format!("Invalid mem-size format"))?;
+        .map_err(|err| format!("Invalid mem-size format: {}", err))?;
 
     let mut resource_allocator = ResourceAllocator::new(0, mem_size, 1)?;
     let regions = resource_allocator.allocate()?;
@@ -337,7 +343,7 @@ fn fill_region_from_file(
             return eif_file.seek(SeekFrom::Current(0));
         }
 
-        dev_mem.write_all(&mut buf[..write_size])?;
+        dev_mem.write_all(&buf[..write_size])?;
         dev_mem.flush()?;
         written += write_size as u64;
     }
@@ -359,10 +365,10 @@ pub fn alloc_mem_with_file(args: &ArgMatches) -> NitroCliResult<()> {
 
     let mem_size: u64 = mem_size
         .parse()
-        .map_err(|_| format!("Invalid mem-size format"))?;
+        .map_err(|err| format!("Invalid mem-size format: {}", err))?;
     let eif_offset: u64 = eif_offset
         .parse()
-        .map_err(|_| format!("Invalid eif-offset format"))?;
+        .map_err(|err| format!("Invalid eif-offset format: {}", err))?;
 
     let mut new_offset = eif_offset;
     let mut resource_allocator = ResourceAllocator::new(0, mem_size, 1)?;

@@ -99,8 +99,7 @@ driver-deps:
 # change is required in order to capture the timestamp
 # of the rule.
 .build-container: tools/Dockerfile1804
-	docker image build -t $(CONTAINER_TAG) -f tools/Dockerfile1804 tools/ \
-		> $(OBJ_PATH)/build_container_output.log
+	docker image build -t $(CONTAINER_TAG) -f tools/Dockerfile1804 tools/
 	touch $@
 
 build-container: .build-container
@@ -227,7 +226,7 @@ nitro-format: build-setup build-container
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			cargo fmt --manifest-path=/nitro_src/Cargo.toml -q -- --check'
+			cargo fmt --manifest-path=/nitro_src/Cargo.toml -q --all -- --check'
 
 nitro-clippy: build-setup build-container
 	$(DOCKER) run \
@@ -235,7 +234,7 @@ nitro-clippy: build-setup build-container
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			cargo clippy --manifest-path=/nitro_src/Cargo.toml'
+			cargo clippy --manifest-path=/nitro_src/Cargo.toml --all'
 
 nitro-audit: build-setup build-container
 	$(DOCKER) run \

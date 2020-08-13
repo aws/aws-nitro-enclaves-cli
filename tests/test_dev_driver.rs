@@ -9,7 +9,7 @@ use std::process::Command;
 use nitro_cli::common::NitroCliResult;
 use nitro_cli::enclave_proc::cpu_info::CpuInfo;
 use nitro_cli::enclave_proc::resource_manager::{
-    EnclaveStartInfo, MemoryRegion, NE_CREATE_VCPU, NE_CREATE_VM, NE_SET_USER_MEMORY_REGION,
+    EnclaveStartInfo, MemoryRegion, NE_ADD_VCPU, NE_CREATE_VM, NE_SET_USER_MEMORY_REGION,
     NE_START_ENCLAVE,
 };
 use nitro_cli::enclave_proc::utils::MiB;
@@ -80,35 +80,6 @@ impl NitroEnclavesDeviceDriver {
     }
 }
 
-/// Class for managing a Nitro Enclave Vcpu file descriptor.
-#[derive(Debug)]
-pub struct EnclaveVcpu {
-    vcpu_fd: RawFd,
-}
-
-impl EnclaveVcpu {
-    pub fn new(vcpu_fd: RawFd) -> NitroCliResult<Self> {
-        Ok(EnclaveVcpu { vcpu_fd })
-    }
-
-    fn release(&mut self) {
-        // Close enclave vcpu descriptor.
-        let rc = unsafe { libc::close(self.vcpu_fd) };
-        if rc < 0 {
-            panic!(format!("Could not close vcpu descriptor: {}.", rc))
-        }
-    }
-}
-
-impl Drop for EnclaveVcpu {
-    fn drop(&mut self) {
-        if self.vcpu_fd < 0 {
-            return;
-        }
-        self.release();
-    }
-}
-
 /// Class for managing a Nitro Enclave provided by NitroEnclavesDeviceDriver.
 pub struct NitroEnclave {
     enc_fd: RawFd,
@@ -136,14 +107,14 @@ impl NitroEnclave {
         Ok(())
     }
 
-    pub fn add_cpu(&mut self, cpu_id: u32) -> NitroCliResult<EnclaveVcpu> {
+    pub fn add_cpu(&mut self, cpu_id: u32) -> NitroCliResult<()> {
         let mut actual_cpu_id: u32 = cpu_id;
-        let vcpu_fd = unsafe { libc::ioctl(self.enc_fd, NE_CREATE_VCPU as _, &mut actual_cpu_id) };
-        if vcpu_fd < 0 {
-            return Err(format!("Could not add vcpu: {}.", vcpu_fd));
+        let rc = unsafe { libc::ioctl(self.enc_fd, NE_ADD_VCPU as _, &mut actual_cpu_id) };
+        if rc < 0 {
+            return Err(format!("Could not add vcpu: {}.", rc));
         }
 
-        Ok(EnclaveVcpu::new(vcpu_fd).unwrap())
+        Ok(())
     }
 
     pub fn start(&mut self, start_info: EnclaveStartInfo) -> NitroCliResult<()> {
@@ -318,7 +289,7 @@ mod test_dev_driver {
             region.mem_size(),
         ));
         // Kernel Driver does not use the flags.
-        assert_eq!(result.is_err(), false);
+        assert_eq!(result.is_err(), true);
     }
 
     #[test]

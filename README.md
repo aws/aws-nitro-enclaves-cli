@@ -10,7 +10,7 @@ the lifecycle of Nitro Enclaves.
   2. Install gcc, make, git.
 
 ### Driver information
-  The Nitro Enclaves kernel driver is currently at version 0.5. Out-of-tree
+  The Nitro Enclaves kernel driver is currently at version 0.6. Out-of-tree
   driver build is supported.
 
 ### How to install:

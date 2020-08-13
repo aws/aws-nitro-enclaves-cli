@@ -31,9 +31,8 @@ fn main() {
 
     let bindings = bindgen::Builder::default()
         .header(HEADER_PATH)
-        .whitelist_type("ne_image_load_info")
-        .whitelist_type("ne_user_memory_region")
-        .whitelist_type("ne_enclave_start_info")
+        .whitelist_type("ne_.*")
+        .whitelist_var("NE_ERR_.*")
         .clang_arg(r"-fretain-comments-from-system-headers")
         .clang_arg(r"-fparse-all-comments")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))

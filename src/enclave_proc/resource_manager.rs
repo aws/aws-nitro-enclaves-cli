@@ -10,11 +10,12 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/driver_structs.rs"));
 }
 
+use bindings::*;
 use log::{debug, error, info};
 use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
-use std::io::SeekFrom;
+use std::io::{Error, SeekFrom};
 use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::{Arc, Mutex};
@@ -29,22 +30,19 @@ use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
 use crate::enclave_proc::utils::get_run_enclaves_info;
 
 /// CamelCase alias for the bindgen generated driver struct (ne_enclave_start_info).
-pub type EnclaveStartInfo = bindings::ne_enclave_start_info;
+pub type EnclaveStartInfo = ne_enclave_start_info;
 
 /// CamelCase alias for the bindgen generated driver struct (ne_user_memory_region).
-pub type UserMemoryRegion = bindings::ne_user_memory_region;
+pub type UserMemoryRegion = ne_user_memory_region;
 
 /// CamelCase alias for the bindgen generate struct (ne_image_load_info).
-pub type ImageLoadInfo = bindings::ne_image_load_info;
+pub type ImageLoadInfo = ne_image_load_info;
 
 /// The internal data type needed for describing an enclave.
 type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u64, EnclaveState);
 
 /// The bit indicating if an enclave has been launched in debug mode.
 pub const NE_ENCLAVE_DEBUG_MODE: u64 = 0x1;
-
-/// The expected driver version that is synchronized to the current version of the CLI.
-const NE_API_VERSION: i32 = 1;
 
 /// Enclave Image Format (EIF) flag.
 const NE_EIF_IMAGE: u64 = 0x01;
@@ -55,26 +53,23 @@ const NE_DEFAULT_MEMORY_REGION: u64 = 0;
 /// Magic number for Nitro Enclave IOCTL codes.
 const NE_MAGIC: u64 = 0xAE;
 
-/// IOCTL code for `NE_GET_API_VERSION`.
-const NE_GET_API_VERSION: u64 = nix::request_code_none!(NE_MAGIC, 0x20) as _;
-
 /// IOCTL code for `NE_CREATE_VM`.
-pub const NE_CREATE_VM: u64 = nix::request_code_read!(NE_MAGIC, 0x21, size_of::<u64>()) as _;
+pub const NE_CREATE_VM: u64 = nix::request_code_read!(NE_MAGIC, 0x20, size_of::<u64>()) as _;
 
-/// IOCTL code for `NE_CREATE_VCPU`.
-pub const NE_CREATE_VCPU: u64 = nix::request_code_readwrite!(NE_MAGIC, 0x22, size_of::<u32>()) as _;
+/// IOCTL code for `NE_ADD_VCPU`.
+pub const NE_ADD_VCPU: u64 = nix::request_code_readwrite!(NE_MAGIC, 0x21, size_of::<u32>()) as _;
 
 /// IOCTL code for `NE_GET_IMAGE_LOAD_INFO`.
 pub const NE_GET_IMAGE_LOAD_INFO: u64 =
-    nix::request_code_readwrite!(NE_MAGIC, 0x23, size_of::<ImageLoadInfo>()) as _;
+    nix::request_code_readwrite!(NE_MAGIC, 0x22, size_of::<ImageLoadInfo>()) as _;
 
 /// IOCTL code for `NE_SET_USER_MEMORY_REGION`.
 pub const NE_SET_USER_MEMORY_REGION: u64 =
-    nix::request_code_write!(NE_MAGIC, 0x24, size_of::<MemoryRegion>()) as _;
+    nix::request_code_write!(NE_MAGIC, 0x23, size_of::<MemoryRegion>()) as _;
 
 /// IOCTL code for `NE_START_ENCLAVE`.
 pub const NE_START_ENCLAVE: u64 =
-    nix::request_code_readwrite!(NE_MAGIC, 0x25, size_of::<EnclaveStartInfo>()) as _;
+    nix::request_code_readwrite!(NE_MAGIC, 0x24, size_of::<EnclaveStartInfo>()) as _;
 
 /// A memory region used by the enclave memory allocator.
 #[derive(Clone)]
@@ -119,8 +114,6 @@ struct EnclaveHandle {
     cpu_config: EnclaveCpuConfig,
     /// List of CPU IDs provided to the enclave.
     cpu_ids: Vec<u32>,
-    /// List of corresponding CPU descriptors provided by the driver.
-    cpu_fds: Vec<i32>,
     /// Amount of memory allocated for the enclave, in MB.
     allocated_memory_mib: u64,
     /// The enclave slot ID.
@@ -357,7 +350,7 @@ impl Drop for ResourceAllocator {
 }
 
 impl EnclaveHandle {
-    /// Create a new enclave resource manager instance.
+    /// Create a new enclave handle instance.
     fn new(
         enclave_cid: Option<u64>,
         memory_mib: u64,
@@ -381,17 +374,8 @@ impl EnclaveHandle {
             .open("/dev/nitro_enclaves")
             .map_err(|e| format!("Failed to open device file: {:?}", e))?;
 
-        // Check that the driver's version is the expected one.
-        let driver_version = unsafe { libc::ioctl(dev_file.as_raw_fd(), NE_GET_API_VERSION as _) };
-        if driver_version != NE_API_VERSION {
-            return Err(format!(
-                "Driver version mismatch: expected {}, found {}",
-                NE_API_VERSION, driver_version
-            ));
-        }
-
         let mut slot_uid: u64 = 0;
-        let enc_fd = unsafe { libc::ioctl(dev_file.as_raw_fd(), NE_CREATE_VM as _, &mut slot_uid) };
+        let enc_fd = EnclaveHandle::do_ioctl(dev_file.as_raw_fd(), NE_CREATE_VM, &mut slot_uid)?;
         let flags: u64 = if debug_mode { NE_ENCLAVE_DEBUG_MODE } else { 0 };
 
         if enc_fd < 0 {
@@ -401,7 +385,6 @@ impl EnclaveHandle {
         Ok(EnclaveHandle {
             cpu_config,
             cpu_ids: vec![],
-            cpu_fds: vec![],
             allocated_memory_mib: 0,
             slot_uid,
             enclave_cid,
@@ -463,33 +446,17 @@ impl EnclaveHandle {
             flags: NE_EIF_IMAGE,
             memory_offset: 0,
         };
-        let rc = unsafe {
-            libc::ioctl(
-                self.enc_fd,
-                NE_GET_IMAGE_LOAD_INFO as _,
-                &mut image_load_info,
-            )
-        };
-        if rc < 0 {
-            return Err(format!("Failed to get image load information: {}", rc));
-        }
+        EnclaveHandle::do_ioctl(self.enc_fd, NE_GET_IMAGE_LOAD_INFO, &mut image_load_info)
+            .map_err(|e| format!("Failed to get image load information: {}", e))?;
 
         debug!("Memory load information: {:?}", image_load_info);
         write_eif_to_regions(eif_file, regions, image_load_info.memory_offset as usize)?;
 
         // Provide the regions to the driver for ownership change.
         for region in regions {
-            let user_mem_region: UserMemoryRegion = region.into();
-            let rc = unsafe {
-                libc::ioctl(
-                    self.enc_fd,
-                    NE_SET_USER_MEMORY_REGION as _,
-                    &user_mem_region,
-                )
-            };
-            if rc < 0 {
-                return Err(format!("Failed to set enclave memory region: {}", rc));
-            }
+            let mut user_mem_region: UserMemoryRegion = region.into();
+            EnclaveHandle::do_ioctl(self.enc_fd, NE_SET_USER_MEMORY_REGION, &mut user_mem_region)
+                .map_err(|e| format!("Failed to set enclave memory region: {}", e))?;
         }
 
         info!("Finished initializing memory.");
@@ -499,22 +466,11 @@ impl EnclaveHandle {
 
     /// Initialize a single vCPU from a given ID.
     fn init_single_cpu(&mut self, mut cpu_id: u32) -> NitroCliResult<()> {
-        let cpu_fd = unsafe { libc::ioctl(self.enc_fd, NE_CREATE_VCPU as _, &mut cpu_id) };
-
-        if cpu_fd < 0 {
-            return Err(format!(
-                "Failed to create vCPU {}: {}",
-                cpu_id,
-                std::io::Error::last_os_error()
-            ));
-        }
+        EnclaveHandle::do_ioctl(self.enc_fd, NE_ADD_VCPU, &mut cpu_id)
+            .map_err(|e| format!("Failed to add CPU {}: {}", cpu_id, e))?;
 
         self.cpu_ids.push(cpu_id);
-        self.cpu_fds.push(cpu_fd);
-        debug!(
-            "Created vCPU descriptor {} for CPU with ID {}.",
-            cpu_fd, cpu_id
-        );
+        debug!("Added CPU with ID {}.", cpu_id);
 
         Ok(())
     }
@@ -542,11 +498,9 @@ impl EnclaveHandle {
     /// Start an enclave after providing it with its necessary resources.
     fn start(&mut self, connection: Option<&Connection>) -> NitroCliResult<EnclaveStartInfo> {
         let mut start = EnclaveStartInfo::new(&self);
-        let rc = unsafe { libc::ioctl(self.enc_fd, NE_START_ENCLAVE as _, &mut start) };
 
-        if rc < 0 {
-            return Err(format!("Failed to start enclave: {}", rc));
-        }
+        EnclaveHandle::do_ioctl(self.enc_fd, NE_START_ENCLAVE, &mut start)
+            .map_err(|e| format!("Failed to start enclave: {}", e))?;
 
         safe_conn_eprintln(
             connection,
@@ -565,7 +519,7 @@ impl EnclaveHandle {
     /// Terminate an enclave.
     fn terminate_enclave(&mut self) -> NitroCliResult<()> {
         if self.enclave_cid.unwrap_or(0) != 0 {
-            release_enclave_descriptors(self.enc_fd, &self.cpu_fds)?;
+            release_enclave_descriptor(self.enc_fd)?;
 
             // Release used memory.
             self.resource_allocator.free()?;
@@ -597,7 +551,6 @@ impl EnclaveHandle {
 
     /// Clear handle resources after terminating an enclave.
     fn clear(&mut self) {
-        self.cpu_fds.clear();
         self.cpu_ids.clear();
         self.allocated_memory_mib = 0;
         self.enclave_cid = Some(0);
@@ -612,6 +565,66 @@ impl EnclaveHandle {
         // Notify the user and the logger of the error, then terminate the enclave.
         notify_error(&err_msg);
         self.terminate_enclave_and_notify();
+    }
+
+    /// Wrapper over an `ioctl()` operation
+    fn do_ioctl<T>(fd: RawFd, ioctl_code: u64, arg: &mut T) -> NitroCliResult<i32> {
+        let rc = unsafe { libc::ioctl(fd, ioctl_code as _, arg) };
+        if rc >= 0 {
+            return Ok(rc);
+        }
+
+        let err_msg = match Error::last_os_error().raw_os_error().unwrap_or(0) as u32 {
+            NE_ERR_VCPU_ALREADY_USED => "The provided vCPU is already used".to_string(),
+            NE_ERR_VCPU_NOT_IN_CPU_POOL => {
+                "The provided vCPU is not available in the CPU pool".to_string()
+            }
+            NE_ERR_VCPU_INVALID_CPU_CORE => {
+                "The vCPU core ID is invalid for the CPU pool".to_string()
+            }
+            NE_ERR_INVALID_MEM_REGION_SIZE => {
+                "The memory region's size is not a multiple of 2 MiB".to_string()
+            }
+            NE_ERR_INVALID_MEM_REGION_ADDR => "The memory region's address is invalid".to_string(),
+            NE_ERR_UNALIGNED_MEM_REGION_ADDR => {
+                "The memory region's address is not aligned".to_string()
+            }
+            NE_ERR_MEM_REGION_ALREADY_USED => "The memory region is already used".to_string(),
+            NE_ERR_MEM_NOT_HUGE_PAGE => {
+                "The memory region is not backed by contiguous physical huge page(s)".to_string()
+            }
+            NE_ERR_MEM_DIFFERENT_NUMA_NODE => {
+                "The memory region's pages and the CPUs belong to different NUMA nodes".to_string()
+            }
+            NE_ERR_MEM_MAX_REGIONS => {
+                "The maximum number of memory regions per enclave has been reached".to_string()
+            }
+            NE_ERR_NO_MEM_REGIONS_ADDED => {
+                "The enclave cannot start because no memory regions have been added".to_string()
+            }
+            NE_ERR_NO_VCPUS_ADDED => {
+                "The enclave cannot start because no vCPUs have been added".to_string()
+            }
+            NE_ERR_ENCLAVE_MEM_MIN_SIZE => {
+                "The enclave's memory size is lower than the minimum supported".to_string()
+            }
+            NE_ERR_FULL_CORES_NOT_USED => {
+                "The enclave cannot start because full CPU cores have not been set".to_string()
+            }
+            NE_ERR_NOT_IN_INIT_STATE => {
+                "The enclave is in an incorrect state to set resources or start".to_string()
+            }
+            NE_ERR_INVALID_VCPU => {
+                "The provided vCPU is out of range of the available CPUs".to_string()
+            }
+            NE_ERR_NO_CPUS_AVAIL_IN_POOL => {
+                "The enclave cannot be created because no CPUs are available in the pool"
+                    .to_string()
+            }
+            e => format!("An error has occurred: {} (rc: {})", e, rc),
+        };
+
+        Err(err_msg)
     }
 }
 
@@ -703,11 +716,10 @@ impl EnclaveManager {
     /// Get the resources needed for enclave termination.
     ///
     /// The enclave handle is locked during this operation.
-    fn get_termination_resources(&self) -> NitroCliResult<(RawFd, Vec<RawFd>, ResourceAllocator)> {
+    fn get_termination_resources(&self) -> NitroCliResult<(RawFd, ResourceAllocator)> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
         Ok((
             locked_handle.enc_fd,
-            locked_handle.cpu_fds.clone(),
             locked_handle.resource_allocator.clone(),
         ))
     }
@@ -735,8 +747,8 @@ impl EnclaveManager {
     /// This will allow the enclave process to execute other commands while termination
     /// is taking place.
     pub fn terminate_enclave(&mut self) -> NitroCliResult<()> {
-        let (enc_fd, cpu_fds, mut resource_allocator) = self.get_termination_resources()?;
-        release_enclave_descriptors(enc_fd, &cpu_fds)?;
+        let (enc_fd, mut resource_allocator) = self.get_termination_resources()?;
+        release_enclave_descriptor(enc_fd)?;
         resource_allocator.free()?;
         self.enclave_handle
             .lock()
@@ -794,16 +806,8 @@ fn write_eif_to_regions(
     Ok(())
 }
 
-/// Release the enclave and vCPU descriptors.
-fn release_enclave_descriptors(enc_fd: RawFd, cpu_fds: &[RawFd]) -> NitroCliResult<()> {
-    // Close vCPU descriptors.
-    for cpu_fd in cpu_fds.iter() {
-        let rc = unsafe { libc::close(*cpu_fd) };
-        if rc < 0 {
-            return Err("Failed to close CPU descriptor.".to_string());
-        }
-    }
-
+/// Release the enclave descriptor.
+fn release_enclave_descriptor(enc_fd: RawFd) -> NitroCliResult<()> {
     // Close enclave descriptor.
     let rc = unsafe { libc::close(enc_fd) };
     if rc < 0 {

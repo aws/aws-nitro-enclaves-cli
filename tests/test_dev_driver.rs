@@ -333,7 +333,7 @@ mod test_dev_driver {
 
         let mut candidates = cpu_info.get_cpu_candidates();
         // Instance does not have the appropriate number of cpus.
-        if candidates.len() == 0 {
+        if candidates.is_empty() {
             return;
         }
 

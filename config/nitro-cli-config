@@ -23,9 +23,6 @@ DRIVER_NAME="nitro_enclaves"
 # The name of the Nitro Enclaves resource directories.
 RES_DIR_NAME="nitro_enclaves"
 
-# The maximum percentage of free memory available.
-FREE_MEM_MAX_PERCENTAGE=50
-
 # The name of the NE group that will own the device file.
 NE_GROUP_NAME="ne"
 
@@ -47,18 +44,80 @@ SHELL_RESET="0"
 # up the environment for installing the integration tests RPM.
 SKIP_SHELL_RESET="0"
 
+# The NUMA node which holds the CPU and memory configuration.
+NUMA_NODE=""
+
+# The file which holds the CPU pool.
+CPU_POOL_FILE="/sys/module/nitro_enclaves/parameters/ne_cpus"
+
+# Error codes.
+ERR_EMPTY_CPU_POOL=200
+ERR_MISSING_NODE=201
+ERR_INVALID_NODE=202
+ERR_CLEAR_PAGE=203
+ERR_SET_PAGE=204
+ERR_ROLLBACK_PAGE=205
+ERR_INSUFFICIENT_MEMORY=206
+
 # Trap any exit condition, including all fatal errors.
 trap 'error_handler $? $LINENO' EXIT
 error_handler() {
     if [ "$1" -ne 0 ]; then
-        # error handling goes here
+        # Error handling goes here.
         echo "Error on line $2 with status: $1"
     fi
 }
 
-# Print an error message and fail.
+function print {
+    if [ "$VERBOSE" -eq 1 ]; then
+        echo "$@"
+    fi
+}
+
+# Print an error message and fail. The argument may be:
+# - A string, which is printed as-is.
+# - An error code, which indicates a specific error message.
 function fail {
-    echo "Error: $1"
+    local rc
+
+    # Check if the argument is a numeric error code or a message string.
+    set +e
+    check_if_number "$1"
+    rc=$?
+    set +e
+
+    if [ "$rc" -eq 0 ]; then
+        echo -n "Error: "
+        case "$1" in
+            "$ERR_EMPTY_CPU_POOL")
+                echo "No CPUs are off-line. Please configure the CPU pool first."
+                ;;
+            "$ERR_MISSING_NODE")
+                echo "Failed to find NUMA node for a CPU. This indicates an invalid SysFS configuration."
+                ;;
+            "$ERR_INVALID_NODE")
+                echo "Invalid NUMA node for a CPU. This indicates an invalid CPU ID."
+                ;;
+            "$ERR_CLEAR_PAGE")
+                echo "Failed to clear huge page(s). Some pages may be in use."
+                ;;
+            "$ERR_SET_PAGE")
+                echo "Failed to set a number of huge pages. This may indicate insufficient system resources."
+                ;;
+            "$ERR_ROLLBACK_PAGE")
+                echo "Failed to roll back a number of huge pages. Some pages may be in use."
+                ;;
+            "$ERR_INSUFFICIENT_MEMORY")
+                echo "Failed to configure entire amount of requested memory. This indicates insufficient system resources."
+                ;;
+            \?)
+                echo "An unknown error has occurred: $1"
+                ;;
+        esac
+    else
+        echo "Error: $1"
+    fi
+
     exit 1
 }
 
@@ -79,57 +138,241 @@ function sudo_run {
     return $?
 }
 
-# Configure the needed number of huge pages.
-function configure_huge_pages {
-    local needed_mem
-    local free_mem
-    local huge_page_size
+# Identify all CPU IDs that have been off-lined for enclave use.
+function get_enclave_cpus {
+    [ -f "$CPU_POOL_FILE" ] || return
 
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Configuring the huge page memory..."
+    # Split the CPU configuration into CPU groups.
+    IFS=',' read -r -a cpu_groups <<< "$(cat "$CPU_POOL_FILE")"
+
+    for cpu_group in "${cpu_groups[@]}"
+    do
+        # Print each individual CPU from each group.
+        cpu_start=$(echo "$cpu_group" | cut -d'-' -f1)
+        cpu_end=$(echo "$cpu_group" | cut -d'-' -f2)
+        for cpu_id in $(seq "$cpu_start" "$cpu_end")
+        do
+            echo "$cpu_id"
+        done
+    done
+
+}
+
+# Determine the NUMA node which contains the enclave-available CPUs. If no arguments are given,
+# the CPU pool is taken from the pool file, which must have been configurated earlier.
+function get_numa_node_from_cpus {
+    local offline_cpus="$*"
+    local numa_node=""
+
+    set +u
+    [ -n "$offline_cpus" ] || offline_cpus="$(get_enclave_cpus)"
+    set -u
+
+    [ -n "$offline_cpus" ] || return $ERR_EMPTY_CPU_POOL
+
+    # Next, check the NUMA node for each CPU.
+    for cpu_id in $offline_cpus
+    do
+        node=$(basename "$(file /sys/devices/system/cpu/cpu"$cpu_id"/node* | cut -d':' -f1)")
+        [ -n "$node" ] || return $ERR_MISSING_NODE
+
+        # Ensure the NUMA node is the same for all off-line CPUs.
+        if [ -z "$numa_node" ]
+        then
+            numa_node="$node"
+        else
+            [ "$numa_node" == "$node" ] || return $ERR_INVALID_NODE
+        fi
+    done
+
+    # Set and validate the target NUMA node.
+    NUMA_NODE="$numa_node"
+    [ -n "$NUMA_NODE" ] || return $ERR_MISSING_NODE
+}
+
+# Obtain a list of supported hugepage sizes, normalized to byte values.
+function get_hugepage_sizes {
+    # Make sure the NUMA node is set.
+    [ -n "$NUMA_NODE" ] || return
+
+    hugepage_sizes=$(file /sys/devices/system/node/"$NUMA_NODE"/hugepages/hugepages-* | cut -d':' -f1)
+
+    for hugepage in $hugepage_sizes
+    do
+        # Retain only the dimension of the hugepage.
+        hugepage=$(basename "$hugepage" | cut -d'-' -f2)
+
+        # Get the size of the huge page.
+        page_size=$(echo "$hugepage" | tr -dc '0-9')
+
+        # Get the multiplier (kB, mB etc.) in upper-case
+        page_multiplier=$(echo "$hugepage" | tr -d '0-9')
+        page_multiplier="${page_multiplier^}"
+
+        case "$page_multiplier" in
+            "KB")
+            page_size=$((page_size * (1 << 10)))
+            ;;
+            "MB")
+            page_size=$((page_size * (1 << 20)))
+            ;;
+            "GB")
+            page_size=$((page_size * (1 << 30)))
+            ;;
+        esac
+
+        # Export a "key:value" pair. The key is needed for later indexing.
+        echo "$hugepage:$page_size"
+    done
+}
+
+# Set all previous hugepage numbers to 0. This is needed in order to guarantee allocation starts
+# from a clean state. We also need to avoid the following scenario: assume a previous allocation of
+# 1 x 1 GB page and an incoming allocation request of only 300 MB in 150 x 2 MB pages. If we don't
+# clear the 1 GB page first and only attempt to set the 2 MB page count, we may either run out of
+# memory or end up reserving (far) more than we need (in this case, 1.3 GB instead of 300 MB).
+function clear_previous_hugepage_reservations {
+    local hugepage_sizes="$1"
+
+    for hugepage_entry in $hugepage_sizes
+    do
+        page_key=$(echo "$hugepage_entry" | cut -d':' -f1)
+        sudo_run "echo 0 > /sys/devices/system/node/$NUMA_NODE/hugepages/hugepages-$page_key/nr_hugepages" || return $ERR_CLEAR_PAGE
+    done
+}
+
+# Partition the requested memory size among the supported hugepages.
+# The algorithm always picks the largest hugepage size first, selecting as many pages as possible
+# without exceeding the requested memory. Only the smallest hugepage size is used if it is
+# necessary to exceed the requested memory. Depending on available resources, it may not always be
+# possible to actually allocate a desired number of a specific hugepage size; in this case, the
+# algorithm allocates as may as possible then proceeds to the next smaller size and tries again.
+function set_required_hugepages {
+    declare -A rollback_sizes
+    local remaining_memory=$(($1 * (1 << 20)))
+    local hugepage_sizes
+    local rc
+    shift 1
+
+    # Sort the hugepage sizes in descending order.
+    hugepage_sizes=$(echo "$@" | tr ' ' '\n' | sort -n -r)
+
+    # Ensure the requested memory is always a multiple of the smallest hugepage size.
+    smallest_hugepage_size=$(echo "$hugepage_sizes" | tr ' ' '\n' | tail -n1 | cut -d':' -f2)
+    remaining_memory=$(((1 + (remaining_memory - 1) / smallest_hugepage_size) * smallest_hugepage_size))
+
+    # Store the existing number of hugepages for the given size, in case roll-back is necessary.
+    for hugepage_entry in $hugepage_sizes
+    do
+        page_key=$(echo "$hugepage_entry" | cut -d':' -f1)
+        rollback_size="$(cat /sys/devices/system/node/"$NUMA_NODE"/hugepages/hugepages-"$page_key"/nr_hugepages)"
+        rollback_sizes["$page_key"]="$rollback_size"
+    done
+
+    # Clear the previous page reservations.
+    clear_previous_hugepage_reservations "$hugepage_sizes"
+    rc=$?
+    [ "$rc" -eq 0 ] || return $rc
+
+    # Attempt to reserve the necessary hugepages.
+    for hugepage_entry in $hugepage_sizes
+    do
+        page_key=$(echo "$hugepage_entry" | cut -d':' -f1)
+        page_size=$(echo "$hugepage_entry" | cut -d':' -f2)
+        if [ "$page_size" -le 0 ]; then
+            print "Invalid page size found ($page_size bytes). Skipping pages of type: $page_key."
+            continue
+        fi
+
+        needed_num_pages=$((remaining_memory / page_size))
+
+        # Attempt to set the required number of hugepages of the current size.
+        sudo_run "echo $needed_num_pages > /sys/devices/system/node/$NUMA_NODE/hugepages/hugepages-$page_key/nr_hugepages" || return $ERR_SET_PAGE
+
+        # Read the actual number of pages that have been set (this is dependent on the available system resources).
+        actual_num_pages=$(cat /sys/devices/system/node/"$NUMA_NODE"/hugepages/hugepages-"$page_key"/nr_hugepages)
+
+        [ "$actual_num_pages" -eq 0 ] || print "- Reserved $actual_num_pages pages of type: $page_key."
+
+        # Calculate the remaining memory that needs to be handled by smaller hugepage sizes.
+        remaining_memory=$((remaining_memory - page_size * actual_num_pages))
+
+        # Break early if there's no remaining memory to configure.
+        [ "$remaining_memory" -ne 0 ] || break
+    done
+
+    # At this point, we fail if we have allocated too much or too little memory. The latter case indicates that we have ran out of resources.
+    if [ "$remaining_memory" -ne 0 ]
+    then
+        print "Memory configuration failed, rolling back memory reservations..."
+
+        # Again, clear the previous reservations in order to perform the roll-back.
+        clear_previous_hugepage_reservations "$hugepage_sizes"
+        rc=$?
+        [ "$rc" -eq 0 ] || return $rc
+
+        # Roll back memory reservations in case of failure.
+        for page_key in "${!rollback_sizes[@]}"
+        do
+            # Set the previous number of hugepages for the current size.
+            sudo_run "echo ${rollback_sizes[$page_key]} > /sys/devices/system/node/$NUMA_NODE/hugepages/hugepages-$page_key/nr_hugepages" || return $ERR_SET_PAGE
+        done
+
+        # Verify that the number of hugepages has actually been set.
+        for page_key in "${!rollback_sizes[@]}"
+        do
+            crt_num_pages=$(cat /sys/devices/system/node/"$NUMA_NODE"/hugepages/hugepages-"$page_key"/nr_hugepages)
+            [ "${rollback_sizes[$page_key]}" -eq "$crt_num_pages" ] || return $ERR_ROLLBACK_PAGE
+        done
     fi
+
+    [ "$remaining_memory" -eq 0 ] || return $ERR_INSUFFICIENT_MEMORY
+}
+
+# Configure the needed number of huge pages.
+function try_configure_huge_pages {
+    local needed_mem
+    local rc
+
+    print "Configuring the huge page memory..."
 
     # Get the requested memory, trimming starting and ending whitespace.
     needed_mem="$1"
-
-    # Fetch the total free memory and size of a huge page.
-    free_mem=$(grep -i "memfree" /proc/meminfo | tr -s ' ' | cut -d' ' -f2)
-    huge_page_size=$(grep -i "hugepagesize" /proc/meminfo | tr -s ' ' | cut -d' ' -f2)
-
-    # Check if the required parameters have been obtained.
+    shift 1
     check_if_number "$needed_mem" || fail "The needed memory amount ($needed_mem) is invalid."
-    check_if_number "$free_mem" || fail "The free memory amount ($free_mem) is invalid."
-    check_if_number "$huge_page_size" || fail "The huge page size ($huge_page_size) is invalid."
 
-    # The available memory and huge page size are given in kB. Convert the needed memory to kB as well.
-    [ "$needed_mem" -gt 0 ] || fail "Requested memory must be greater than 0."
-    needed_mem=$((needed_mem * 1024))
+    # Get the NUMA node which contains the CPUs.
+    get_numa_node_from_cpus "$@"
+    rc=$?
+    [ "$rc" -eq 0 ] || return $rc
 
-    # Obtain and set the corresponding number of huge pages.
-    num_pages=$((1 + (needed_mem - 1) / huge_page_size))
-    actual_mem=$((num_pages * huge_page_size))
+    # Get the available huge page sizes in bytes.
+    set_required_hugepages "$needed_mem" "$(get_hugepage_sizes)"
+    rc=$?
+    [ "$rc" -eq 0 ] || return $rc
 
-    # The maximum amount of free memory available for use as huge pages.
-    free_mem=$((free_mem * FREE_MEM_MAX_PERCENTAGE / 100))
+    print "Done."
+}
 
-    # Fail if the requested memory is larger than what's available.
-    [ "$actual_mem" -le "$free_mem" ] || fail "The actual memory amount ($actual_mem kB) is greater than the memory limit ($free_mem kB)."
+# Configure the needed number of huge pages on the same NUMA node as the provided CPU list.
+# $1 - The amount of requested memory, in MB.
+# $2 - The list of CPUs needed to determine the target NUMA node (optional).
+function configure_huge_pages {
+    local rc
 
-    # Configure the number of huge pages.
-    sudo_run "echo $num_pages > /proc/sys/vm/nr_hugepages" || fail "Failed to configure the number of huge pages."
+    # The "-e" flag is temporarily disabled since we don't always want the entire script to fail
+    # if the memory hasn't been successfully configured.
+    set +e
+    try_configure_huge_pages "$@"
+    rc=$?
+    set -e
 
-    # Verify that the exact value was written (value may be smaller if the instance has too little available memory).
-    actual_num_pages="$(cat /proc/sys/vm/nr_hugepages)"
-    [ "$num_pages" -eq "$actual_num_pages" ] || fail "Insufficient huge pages available ($actual_num_pages instead of the $num_pages needed)."
-
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Done."
-    fi
+    return $rc
 }
 
 # Print the script's usage instructions.
 function print_usage {
-    echo "Usage: $0 [-d <driver-directory>] [-b] [-c] [-i] [-r] [-h] [-m <memory_mb_needed>] [-p <cpu_pool>] [-t <cpu_count_cpu_pool>]"
+    echo "Usage: $0 [-d <driver-directory>] [-b] [-c] [-i] [-r] [-h] [-m <memory_mb_needed>] [-p <cpu_pool>] [-t <cpu_count_cpu_pool>] [-v]"
     echo -e "\t-d: The path to the directory containing the driver source code, including headers."
     echo -e "\t-b: Build the driver."
     echo -e "\t-c: Clean up the driver build."
@@ -140,6 +383,7 @@ function print_usage {
     echo -e "\t-p: The CPU pool that is taken from the parent instance and made available for enclaves. The pool format"
     echo -e "\t    is given in: https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html#cpu-lists"
     echo -e "\t-t: The CPU count of the NE CPU pool to be auto-generated by this script and then configured."
+    echo -e "\t-v: Enable verbose output."
 }
 
 # Verify that the provided driver directory is correct.
@@ -154,20 +398,14 @@ function verify_driver_directory {
 
 # Clean the driver.
 function driver_clean {
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Cleaning the driver... "
-    fi
+    print "Cleaning the driver... "
     make clean &> /dev/null || fail "Failed to clean driver."
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Done."
-    fi
+    print "Done."
 }
 
 # Remove the driver.
 function driver_remove {
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Removing the driver..."
-    fi
+    print "Removing the driver..."
 
     # Attempt to remove the driver.
     sudo_run "rmmod $DRIVER_NAME &> /dev/null" || fail "Failed to remove driver."
@@ -175,20 +413,14 @@ function driver_remove {
     # Verify that the driver has indeed been removed.
     [ "$(lsmod | grep -cw $DRIVER_NAME)" -eq 0 ] || fail "The driver is still visible."
 
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Done."
-    fi
+    print "Done."
 }
 
 # Build the driver.
 function driver_build {
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Building the driver..."
-    fi
+    print "Building the driver..."
     make &> /dev/null || fail "Failed to build driver."
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Done."
-    fi
+    print "Done."
 }
 
 # Configure a given directory for root:$NE_GROUP_NAME ownership and 775 permissions.
@@ -222,9 +454,7 @@ function driver_insert {
         driver_remove
     fi
 
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Inserting the driver..."
-    fi
+    print "Inserting the driver..."
 
     # Insert the new driver.
     sudo_run "insmod $DRIVER_NAME.ko" || fail "Failed to insert driver."
@@ -232,9 +462,7 @@ function driver_insert {
     # Verify that the new driver has been inserted.
     [ "$(lsmod | grep -cw $DRIVER_NAME)" -eq 1 ] || fail "The driver is not visible."
 
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Configuring the device file..."
-    fi
+    print "Configuring the device file..."
 
     # Create the NE group if it doesn't already exist.
     if [ "$(grep -cw $NE_GROUP_NAME /etc/group)" -eq 0 ]; then
@@ -265,22 +493,14 @@ function driver_insert {
     [ "660" == "$(stat -c '%a' /dev/$DRIVER_NAME)" ] || fail "Device file has incorrect permissions."
 
     # We also need to add the non-root user to the NE group.
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Adding user '$THIS_USER' to the group '$NE_GROUP_NAME'..."
-    fi
+    print "Adding user '$THIS_USER' to the group '$NE_GROUP_NAME'..."
     sudo_run "usermod -a -G $NE_GROUP_NAME $THIS_USER" || fail "Could not add user to the NE group."
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Done."
-    fi
+    print "Done."
 
     # We configure the relevant resource directories.
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Configuring the resource directories..."
-    fi
+    print "Configuring the resource directories..."
     configure_resource_directories
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Done."
-    fi
+    print "Done."
 
     # Lastly, we touch the log file so that any user may start a CLI instance at any time.
     # Otherwise, users outside of the group won't be able to start a CLI instance (since they won't have
@@ -312,13 +532,11 @@ function run_in_driver_dir {
 
 # Configure the CPU pool.
 function configure_cpu_pool {
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Configuring the enclave CPU pool..."
-    fi
-    sudo_run "echo $1 > /sys/module/nitro_enclaves/parameters/ne_cpus" || fail "Failed to configure the CPU pool."
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Done."
-    fi
+    [ -f "$CPU_POOL_FILE" ] || fail "The CPU pool file is missing. Please make sure the Nitro Enclaves driver is inserted."
+
+    print "Configuring the enclave CPU pool..."
+    sudo_run "echo $1 > $CPU_POOL_FILE" || fail "Failed to configure the CPU pool."
+    print "Done."
 }
 
 # Configure the CPU pool using the provided CPU count.
@@ -339,10 +557,12 @@ function configure_cpu_pool_by_cpu_count {
     local nr_threads_per_core=""
     local threads_per_core=""
     local threads_per_core_count=""
+    local memory_request="$2"
 
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Auto-generating the enclave CPU pool by using the CPU count..."
-    fi
+    # Ensure the CPU pool file is present.
+    [ -f "$CPU_POOL_FILE" ] || fail "The CPU pool file is missing. Please make sure the Nitro Enclaves driver is inserted."
+
+    print "Auto-generating the enclave CPU pool by using the CPU count..."
 
     # Get the number of available CPUs, CPU threads (siblings) per core and the NUMA nodes count.
     nr_cpus="$(lscpu | grep "^CPU(s):" | cut -d ":" -f 2 | tr -d " \t")"
@@ -375,6 +595,7 @@ function configure_cpu_pool_by_cpu_count {
         fail "The CPU count is not multiple of $nr_threads_per_core (threads per core)."
 
     # Iterate through each NUMA node and try to get a CPU pool that matches all requirements.
+    # This also includes the amount of memory that has been requested, if any.
     for (( numa_node=0; numa_node<"$nr_numa_nodes"; numa_node++ ))
     do
         cpu_pool_array=()
@@ -442,18 +663,25 @@ function configure_cpu_pool_by_cpu_count {
                 cpu_pool_array=("${cpu_pool_array[@]}" "$cpu_thread")
             done < <(echo "$threads_per_core")
 
-            # TODO: Setup also memory to check if enough in the NUMA node of the
-            # auto-generated CPU pool. Otherwise, check the next availble NUMA node.
-            # Found a CPU pool that matches all the necessary conditions, early exit.
-            if [ "${#cpu_pool_array[@]}" -eq "$cpu_pool_count" ] ; then
-                break 2
+            # Found a CPU pool that matches all the necessary conditions.
+            # Exit early only if the memory requirements are also satisfied. If not, continue
+            # and try with the next NUMA node.
+            if [ "${#cpu_pool_array[@]}" -eq "$cpu_pool_count" ]; then
+                [ -n "$memory_request" ] || break 2
+
+                print "Will try to reserve $memory_request MB of memory on node $numa_node."
+                if configure_huge_pages "$memory_request" "${cpu_pool_array[@]}"; then
+                    break 2
+                fi
+
+                break 1
             fi
         done < <(echo "$cpus_per_numa_node")
     done
 
     # Not enough CPUs found to be added in the NE CPU pool.
     [ "${#cpu_pool_array[@]}" -ne "$cpu_pool_count" ] && \
-        fail "Failed to find available CPUs for the NE CPU pool, iterated through all NUMA nodes."
+        fail "Failed to find suitable CPUs for the Nitro Enclaves CPU pool after checking all NUMA nodes."
 
     for cpu in "${cpu_pool_array[@]}"
     do
@@ -465,15 +693,16 @@ function configure_cpu_pool_by_cpu_count {
         cpu_pool="$cpu_pool,$cpu"
     done
 
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Auto-generated the enclave CPU pool - $cpu_pool."
-    fi
-
+    print "Auto-generated the enclave CPU pool: $cpu_pool."
     configure_cpu_pool "$cpu_pool"
 }
 
 # Script entry point.
 [ "$#" -gt 0 ] || fail "No arguments given."
+
+cpu_count_request=
+cpu_id_request=
+memory_request=
 
 while getopts ":hd:cbrim:p:t:v" opt; do
     case ${opt} in
@@ -482,9 +711,8 @@ while getopts ":hd:cbrim:p:t:v" opt; do
             exit 0
             ;;
 
-        v)  # Set the verbosity flag. Use this
-            # option first in order to print any
-            # messages.
+        v)  # Set the verbosity flag. Use this option
+            # first in order to print any messages.
             VERBOSE="1"
             ;;
 
@@ -509,22 +737,22 @@ while getopts ":hd:cbrim:p:t:v" opt; do
             ;;
 
         m)  # Configure the huge page memory.
-            configure_huge_pages "$OPTARG"
+            memory_request="$OPTARG"
             ;;
 
         p)  # Configure the CPU pool.
-            configure_cpu_pool "$OPTARG"
+            cpu_id_request="$OPTARG"
             ;;
-        # TODO: Update to a more appropriate option letter. getopts does not
-        # support long name options.
-        # TODO: Have either -p or -t provided as a script option at a time,
-        # make them mutually exclusive.
-        t)  # Configure the CPU pool given the CPU count.
-            configure_cpu_pool_by_cpu_count "$OPTARG"
+
+        t)  # TODO: Update to a more appropriate option letter. getopts does not
+            # support long name options.
+            # Configure the CPU pool given the CPU count.
+            cpu_count_request="$OPTARG"
             ;;
-        s) # Skip shell reset at exit.
-	    SKIP_SHELL_RESET=1
-	    ;;
+
+        s)  # Skip shell reset at exit.
+            SKIP_SHELL_RESET=1
+            ;;
 
         \?) # Invalid option(s) provided.
             fail "Invalid argument(s) provided."
@@ -532,11 +760,24 @@ while getopts ":hd:cbrim:p:t:v" opt; do
     esac
 done
 
+# Make sure that CPU ID and CPU count requests are mutually exclusive.
+[ -z "$cpu_count_request" ] || [ -z "$cpu_id_request" ] || \
+    fail "Cannot request both CPU IDs and CPU count. Please provide only one option."
+
+# If CPU IDs are requested, memory can only be reserved on the same NUMA node as the CPUs. If a CPU count
+# is requested, we need to iterate over all available NUMA nodes to find one which supports both the CPU
+# and the memory requirements.
+[ -z "$cpu_id_request" ] || configure_cpu_pool "$cpu_id_request"
+
+if [ -z "$cpu_count_request" ]; then
+    [ -z "$memory_request" ] || configure_huge_pages "$memory_request" || fail $?
+else
+    configure_cpu_pool_by_cpu_count "$cpu_count_request" "$memory_request"
+fi
+
 # Reset the shell after configuring the driver.
 if [ "$SHELL_RESET" -eq 1 ] && [ "$SKIP_SHELL_RESET" -eq 0 ]; then
-    if [ "$VERBOSE" = "1" ]; then
-        echo "Shell will be reset."
-    fi
+    print "Shell will be reset."
     sudo_run "exec su -l $THIS_USER"
 fi
 

@@ -244,6 +244,14 @@ mod tests {
 
     use clap::{App, AppSettings, Arg, SubCommand};
 
+    /// Parse the path of the JSON config file
+    fn parse_config_file(args: &ArgMatches) -> NitroCliResult<String> {
+        let config_file = args
+            .value_of("config")
+            .ok_or("Could not find config argument")?;
+        Ok(config_file.to_string())
+    }
+
     #[test]
     fn test_parse_memory() {
         let app = create_app!();
@@ -688,5 +696,28 @@ mod tests {
                 .unwrap(),
         );
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_json_config() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--config",
+            "non_existing_config.json",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_config_file(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "non_existing_config.json");
     }
 }

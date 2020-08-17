@@ -11,7 +11,8 @@ mod bindings {
 }
 
 use bindings::*;
-use log::{debug, error, info};
+use log::{debug, info};
+use std::collections::BTreeMap;
 use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
@@ -28,6 +29,7 @@ use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
 use crate::enclave_proc::utils::get_run_enclaves_info;
+use crate::enclave_proc::utils::{GiB, MiB};
 
 /// CamelCase alias for the bindgen generated driver struct (ne_enclave_start_info).
 pub type EnclaveStartInfo = ne_enclave_start_info;
@@ -71,8 +73,21 @@ pub const NE_SET_USER_MEMORY_REGION: u64 =
 pub const NE_START_ENCLAVE: u64 =
     nix::request_code_readwrite!(NE_MAGIC, 0x24, size_of::<EnclaveStartInfo>()) as _;
 
+/// Mapping between hugepage size and allocation flag, in descending order of size.
+const HUGE_PAGE_MAP: [(libc::c_int, u64); 9] = [
+    (libc::MAP_HUGE_16GB, 16 * GiB),
+    (libc::MAP_HUGE_2GB, 2 * GiB),
+    (libc::MAP_HUGE_1GB, GiB),
+    (libc::MAP_HUGE_512MB, 512 * MiB),
+    (libc::MAP_HUGE_256MB, 256 * MiB),
+    (libc::MAP_HUGE_32MB, 32 * MiB),
+    (libc::MAP_HUGE_16MB, 16 * MiB),
+    (libc::MAP_HUGE_8MB, 8 * MiB),
+    (libc::MAP_HUGE_2MB, 2 * MiB),
+];
+
 /// A memory region used by the enclave memory allocator.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MemoryRegion {
     /// Flags to determine the usage for the memory region.
     flags: u64,
@@ -98,10 +113,6 @@ pub enum EnclaveState {
 struct ResourceAllocator {
     /// The requested memory size in bytes.
     requested_mem: u64,
-    /// The size of single memory region.
-    region_size: u64,
-    /// The maximum number of available memory regions.
-    max_regions: u64,
     /// The memory regions that have actually been allocated.
     mem_regions: Vec<MemoryRegion>,
 }
@@ -173,13 +184,22 @@ impl From<&MemoryRegion> for UserMemoryRegion {
 
 impl MemoryRegion {
     /// Create a new `MemoryRegion` instance with the specified size (in bytes).
-    pub fn new(region_size: u64) -> NitroCliResult<Self> {
+    pub fn new(hugepage_flag: libc::c_int) -> NitroCliResult<Self> {
+        let region_index = HUGE_PAGE_MAP
+            .iter()
+            .position(|&page_info| page_info.0 == hugepage_flag)
+            .ok_or(format!(
+                "Failed to find huge page entry for flag {:X?}",
+                hugepage_flag
+            ))?;
+        let region_size = HUGE_PAGE_MAP[region_index].1;
+
         let addr = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
                 region_size as usize,
                 libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_HUGETLB,
+                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_HUGETLB | hugepage_flag,
                 -1,
                 0,
             )
@@ -247,7 +267,7 @@ impl MemoryRegion {
         };
 
         file.read_exact(&mut bytes[region_offset..region_offset + size])
-            .map_err(|err| format!("Error while reading from enclave image: %{:?}", err))?;
+            .map_err(|err| format!("Error while reading from enclave image: {:?}", err))?;
 
         Ok(())
     }
@@ -272,26 +292,12 @@ impl Drop for MemoryRegion {
 impl ResourceAllocator {
     /// Create a new `ResourceAllocator` instance which must cover at least the requested amount of memory (in bytes).
     fn new(requested_mem: u64) -> NitroCliResult<Self> {
-        let mem_info = procfs::Meminfo::new()
-            .map_err(|e| format!("Failed to read platform memory information: {:?}", e))?;
-        let region_size = mem_info.hugepagesize.unwrap_or(
-            procfs::page_size().map_err(|e| format!("Failed to read page size: {:?}", e))? as u64,
-        );
-        let max_regions = mem_info.hugepages_total.unwrap_or(0);
-
-        info!(
-            "Region size = {}, Maximum number of regions = {}",
-            region_size, max_regions
-        );
-
-        if max_regions == 0 {
-            return Err("Maximum number of memory regions cannot be 0.".to_string());
+        if requested_mem == 0 {
+            return Err("Cannot start an enclave with no memory.".to_string());
         }
 
         Ok(ResourceAllocator {
             requested_mem,
-            region_size,
-            max_regions,
             mem_regions: Vec::new(),
         })
     }
@@ -300,35 +306,98 @@ impl ResourceAllocator {
     /// memory regions which contain at least `self.requested_mem` bytes. Each region
     /// is equivalent to a huge-page and is allocated using memory mapping.
     fn allocate(&mut self) -> NitroCliResult<&Vec<MemoryRegion>> {
-        let requested_regions = 1 + (self.requested_mem - 1) / self.region_size;
-        let mut allocated_mem: u64 = 0;
-
-        if requested_regions > self.max_regions {
-            let err_msg = format!(
-                "Requested number of memory regions ({}) is too high.",
-                requested_regions
-            );
-            error!("{}", err_msg);
-            return Err(err_msg);
-        }
+        let mut allocated_pages = BTreeMap::<u64, u32>::new();
+        let mut needed_mem = self.requested_mem as i64;
+        let mut split_index = 0;
 
         info!(
-            "Allocating {} regions to hold {} bytes.",
-            requested_regions, self.requested_mem
+            "Allocating memory regions to hold {} bytes.",
+            self.requested_mem
         );
 
-        loop {
-            // Map an individual region.
-            let region = MemoryRegion::new(self.region_size)?;
-            allocated_mem += region.mem_size;
-            self.mem_regions.push(region);
-
-            if allocated_mem >= self.requested_mem {
-                break;
+        // Always allocate larger pages first, to reduce fragmentation and page count.
+        // Once an allocation of a given page size fails, proceed to the next smaller
+        // page size and retry.
+        for (_, page_info) in HUGE_PAGE_MAP.iter().enumerate() {
+            while needed_mem >= page_info.1 as i64 {
+                match MemoryRegion::new(page_info.0) {
+                    Ok(value) => {
+                        needed_mem -= value.mem_size as i64;
+                        self.mem_regions.push(value);
+                    }
+                    Err(_) => break,
+                }
             }
         }
 
-        info!("Allocated {} regions.", self.mem_regions.len());
+        // If the user requested exactly the amount of memory that was reserved earlier,
+        // we should be left with no more memory that needs allocation. But if the user
+        // requests a smaller amount, we must then aim to reduce waster memory from
+        // larger-page allocations (Ex: if we have 1 x 1 GB page and 1 x 2 MB page, but
+        // we want to allocate only 512 MB, the above algorithm will have allocated only
+        // the 2 MB page, since the 1 GB page was too large for what was needed; we now
+        // need to allocate in increasing order of page size in order to reduce westage).
+
+        if needed_mem > 0 {
+            for (_, page_info) in HUGE_PAGE_MAP.iter().rev().enumerate() {
+                while needed_mem > 0 {
+                    match MemoryRegion::new(page_info.0) {
+                        Ok(value) => {
+                            needed_mem -= value.mem_size as i64;
+                            self.mem_regions.push(value);
+                        }
+                        Err(_) => break,
+                    }
+                }
+            }
+        }
+
+        // If we still have memory to alocate, it means we have insufficient resources.
+        if needed_mem > 0 {
+            return Err(format!(
+                "Failed to allocate entire memory ({} MB remained).",
+                needed_mem >> 20,
+            ));
+        }
+
+        // At this point, we may have allocated more than we need, so we release all
+        // regions we no longer need, starting with the smallest ones.
+        self.mem_regions
+            .sort_by(|reg1, reg2| reg2.mem_size.cmp(&reg1.mem_size));
+
+        needed_mem = self.requested_mem as i64;
+        for (_, region) in self.mem_regions.iter().enumerate() {
+            if needed_mem <= 0 {
+                break;
+            }
+
+            needed_mem -= region.mem_size as i64;
+            split_index += 1
+        }
+
+        // The regions that we no longer need are freed automatically on draining, since
+        // MemRegion implements Drop.
+        self.mem_regions.drain(split_index..);
+
+        // Generate a summary of the allocated memory.
+        for (_, region) in self.mem_regions.iter().enumerate() {
+            if let Some(page_count) = allocated_pages.get_mut(&region.mem_size) {
+                *page_count += 1;
+            } else {
+                allocated_pages.insert(region.mem_size, 1);
+            }
+        }
+
+        info!(
+            "Allocated {} region(s): {}",
+            self.mem_regions.len(),
+            allocated_pages
+                .iter()
+                .map(|(size, count)| format!("{} page(s) of {} MB", count, size >> 20))
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+
         Ok(&self.mem_regions)
     }
 
@@ -431,11 +500,20 @@ impl EnclaveHandle {
         // Allocate the memory regions needed by the enclave.
         safe_conn_eprintln(connection, "Start allocating memory...")?;
 
+        let requested_mem_mib = self.resource_allocator.requested_mem >> 20;
         let regions = self.resource_allocator.allocate()?;
+
         self.allocated_memory_mib = regions.iter().fold(0, |mut acc, val| {
             acc += val.mem_size;
             acc
         }) >> 20;
+
+        if self.allocated_memory_mib < requested_mem_mib {
+            return Err(format!(
+                "Failed to allocate sufficient memory (requested {} MB, but got {} MB).",
+                requested_mem_mib, self.allocated_memory_mib
+            ));
+        }
 
         let eif_file = self
             .eif_file

@@ -353,4 +353,45 @@ mod test_nitro_cli_args {
 
         assert_eq!(app.get_matches_from_safe(args).is_err(), true)
     }
+
+    #[test]
+    fn run_enclave_config_does_not_take_value() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "run-enclave", "--config"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_config_takes_multiple_values() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--config",
+            "config1.json",
+            "config2.json",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_try_to_overwrite_config() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--config",
+            "config.json",
+            "--cpu-count",
+            "2",
+            "--memory",
+            "1024",
+            "--eif-path",
+            "dir/image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
 }

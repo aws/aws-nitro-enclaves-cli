@@ -13,12 +13,11 @@ memmap = "0.7"
 serde_json = "1.0"
 nix = "0.15"
 log = "0.4"
-libc = "0.2"
+libc = { version = ">=0.2.69" }
 flexi_logger = "0.15"
 page_size = "0.4"
 signal-hook = "0.1"
 serde_cbor = "0.10"
-procfs = "0.7"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
 openssl = "0.10"

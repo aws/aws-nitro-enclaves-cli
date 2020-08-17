@@ -239,7 +239,7 @@ mod test_dev_driver {
         assert_eq!(result.is_err(), true);
 
         // Create a memory region using hugetlbfs.
-        let region = MemoryRegion::new(2 * MiB).unwrap();
+        let region = MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap();
 
         // Add unaligned memory region.
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
@@ -271,7 +271,7 @@ mod test_dev_driver {
             .expect("Failed to record current line");
 
         // Correctly add the memory region.
-        let region = MemoryRegion::new(2 * MiB).unwrap();
+        let region = MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap();
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(&region));
         assert_eq!(result.is_err(), false);
 
@@ -282,25 +282,13 @@ mod test_dev_driver {
         assert_eq!(result.is_err(), true);
 
         // Add a memory region with invalid flags.
-        let region = MemoryRegion::new(2 * MiB).unwrap();
+        let region = MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap();
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
             1024,
             region.mem_addr(),
             region.mem_size(),
         ));
         assert_eq!(result.is_err(), true);
-
-        let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
-        check_dmesg
-            .record_current_line()
-            .expect("Failed to record current line");
-
-        // Correctly add a memory region of 10 MiB backed by 2 MiB huge pages.
-        let region = MemoryRegion::new(10 * MiB).unwrap();
-        let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(&region));
-        assert_eq!(result.is_err(), false);
-
-        check_dmesg.expect_no_changes().unwrap();
     }
 
     #[test]
@@ -361,7 +349,7 @@ mod test_dev_driver {
 
         // Allocate memory for the enclave.
         for _i in 0..ENCLAVE_MEM_CHUNKS {
-            mem_regions.push(MemoryRegion::new(2 * MiB).unwrap());
+            mem_regions.push(MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap());
         }
 
         // Add memory to the enclave.
@@ -445,7 +433,7 @@ mod test_dev_driver {
 
         // Try adding a new memory region after the enclave start.
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(
-            &MemoryRegion::new(2 * MiB).unwrap(),
+            &MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap(),
         ));
         assert_eq!(result.is_err(), true);
 
@@ -467,7 +455,7 @@ mod test_dev_driver {
 
         // Allocate memory for the enclave.
         for _i in 0..ENCLAVE_MEM_CHUNKS {
-            mem_regions.push(MemoryRegion::new(2 * MiB).unwrap());
+            mem_regions.push(MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap());
         }
 
         let cpu_info = CpuInfo::new().expect("Failed to obtain CpuInfo.");

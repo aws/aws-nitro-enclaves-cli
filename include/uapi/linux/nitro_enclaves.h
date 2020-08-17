@@ -34,10 +34,12 @@
  * * Enclave file descriptor		- Enclave file descriptor used with
  *					  ioctl calls to set vCPUs and memory
  *					  regions, then start the enclave.
- * * -EFAULT				- copy_to_user() failure.
- * * -ENOMEM				- Memory allocation failure for internal
+ * *  -1				- There was a failure in the ioctl logic.
+ * On failure, errno is set to:
+ * * EFAULT				- copy_to_user() failure.
+ * * ENOMEM				- Memory allocation failure for internal
  *					  bookkeeping variables.
- * * -NE_ERR_NO_CPUS_AVAIL_IN_POOL	- No NE CPU pool set / no CPUs available
+ * * NE_ERR_NO_CPUS_AVAIL_IN_POOL	- No NE CPU pool set / no CPUs available
  *					  in the pool.
  * * Error codes from get_unused_fd_flags() and anon_inode_getfile().
  * * Error codes from the NE PCI device request.
@@ -59,20 +61,22 @@
  * Context: Process context.
  * Return:
  * * 0					- Logic succesfully completed.
- * * -EFAULT				- copy_from_user() / copy_to_user() failure.
- * * -ENOMEM				- Memory allocation failure for internal
+ * *  -1				- There was a failure in the ioctl logic.
+ * On failure, errno is set to:
+ * * EFAULT				- copy_from_user() / copy_to_user() failure.
+ * * ENOMEM				- Memory allocation failure for internal
  *					  bookkeeping variables.
- * * -EIO				- Current task mm is not the same as the one
+ * * EIO				- Current task mm is not the same as the one
  *					  that created the enclave.
- * * -NE_ERR_NO_CPUS_AVAIL_IN_POOL	- No CPUs available in the NE CPU pool.
- * * -NE_ERR_VCPU_ALREADY_USED		- The provided vCPU is already used.
- * * -NE_ERR_VCPU_NOT_IN_CPU_POOL	- The provided vCPU is not available in the
+ * * NE_ERR_NO_CPUS_AVAIL_IN_POOL	- No CPUs available in the NE CPU pool.
+ * * NE_ERR_VCPU_ALREADY_USED		- The provided vCPU is already used.
+ * * NE_ERR_VCPU_NOT_IN_CPU_POOL	- The provided vCPU is not available in the
  *					  NE CPU pool.
- * * -NE_ERR_VCPU_INVALID_CPU_CORE	- The core id of the provided vCPU is invalid
+ * * NE_ERR_VCPU_INVALID_CPU_CORE	- The core id of the provided vCPU is invalid
  *					  or out of range.
- * * -NE_ERR_NOT_IN_INIT_STATE		- The enclave is not in init state
+ * * NE_ERR_NOT_IN_INIT_STATE		- The enclave is not in init state
  *					  (init = before being started).
- * * -NE_ERR_INVALID_VCPU		- The provided vCPU is not in the available
+ * * NE_ERR_INVALID_VCPU		- The provided vCPU is not in the available
  *					  CPUs range.
  * * Error codes from the NE PCI device request.
  */
@@ -92,9 +96,11 @@
  * Context: Process context.
  * Return:
  * * 0				- Logic succesfully completed.
- * * -EFAULT			- copy_from_user() / copy_to_user() failure.
- * * -EINVAL			- Invalid flag value.
- * * -NE_ERR_NOT_IN_INIT_STATE	- The enclave is not in init state (init =
+ * *  -1			- There was a failure in the ioctl logic.
+ * On failure, errno is set to:
+ * * EFAULT			- copy_from_user() / copy_to_user() failure.
+ * * EINVAL			- Invalid flag value.
+ * * NE_ERR_NOT_IN_INIT_STATE	- The enclave is not in init state (init =
  *				  before being started).
  */
 #define NE_GET_IMAGE_LOAD_INFO		_IOWR(0xAE, 0x22, struct ne_image_load_info)
@@ -113,24 +119,26 @@
  * Context: Process context.
  * Return:
  * * 0					- Logic succesfully completed.
- * * -EFAULT				- copy_from_user() failure.
- * * -EINVAL				- Invalid flag value.
- * * -EIO				- Current task mm is not the same as
+ * *  -1				- There was a failure in the ioctl logic.
+ * On failure, errno is set to:
+ * * EFAULT				- copy_from_user() failure.
+ * * EINVAL				- Invalid flag value.
+ * * EIO				- Current task mm is not the same as
  *					  the one that created the enclave.
- * * -ENOMEM				- Memory allocation failure for internal
+ * * ENOMEM				- Memory allocation failure for internal
  *					  bookkeeping variables.
- * * -NE_ERR_NOT_IN_INIT_STATE		- The enclave is not in init state
+ * * NE_ERR_NOT_IN_INIT_STATE		- The enclave is not in init state
  *					  (init = before being started).
- * * -NE_ERR_INVALID_MEM_REGION_SIZE	- The memory size of the region is not
+ * * NE_ERR_INVALID_MEM_REGION_SIZE	- The memory size of the region is not
  *					  multiple of 2 MiB.
- * * -NE_ERR_INVALID_MEM_REGION_ADDR	- Invalid user space address given.
- * * -NE_ERR_UNALIGNED_MEM_REGION_ADDR	- Unaligned user space address given.
- * * -NE_ERR_MEM_REGION_ALREADY_USED	- The memory region is already used.
- * * -NE_ERR_MEM_NOT_HUGE_PAGE		- The memory regions is not backed by
+ * * NE_ERR_INVALID_MEM_REGION_ADDR	- Invalid user space address given.
+ * * NE_ERR_UNALIGNED_MEM_REGION_ADDR	- Unaligned user space address given.
+ * * NE_ERR_MEM_REGION_ALREADY_USED	- The memory region is already used.
+ * * NE_ERR_MEM_NOT_HUGE_PAGE		- The memory regions is not backed by
  *					  huge pages.
- * * -NE_ERR_MEM_DIFFERENT_NUMA_NODE	- The memory region is not from the same
+ * * NE_ERR_MEM_DIFFERENT_NUMA_NODE	- The memory region is not from the same
  *					  NUMA node as the CPUs.
- * * -NE_ERR_MEM_MAX_REGIONS		- The number of memory regions set for
+ * * NE_ERR_MEM_MAX_REGIONS		- The number of memory regions set for
  *					  the enclave reached maximum.
  * * Error codes from get_user_pages().
  * * Error codes from the NE PCI device request.
@@ -150,14 +158,16 @@
  * Context: Process context.
  * Return:
  * * 0					- Logic succesfully completed.
- * * -EFAULT				- copy_from_user() / copy_to_user() failure.
- * * -EINVAL				- Invalid flag value.
- * * -NE_ERR_NOT_IN_INIT_STATE		- The enclave is not in init state
+ * *  -1				- There was a failure in the ioctl logic.
+ * On failure, errno is set to:
+ * * EFAULT				- copy_from_user() / copy_to_user() failure.
+ * * EINVAL				- Invalid flag value.
+ * * NE_ERR_NOT_IN_INIT_STATE		- The enclave is not in init state
  *					  (init = before being started).
- * * -NE_ERR_NO_MEM_REGIONS_ADDED	- No memory regions are set.
- * * -NE_ERR_NO_VCPUS_ADDED		- No vCPUs are set.
- * * -NE_ERR_FULL_CORES_NOT_USED	- Full core(s) not set for the enclave.
- * * -NE_ERR_ENCLAVE_MEM_MIN_SIZE	- Enclave memory is less than minimum
+ * * NE_ERR_NO_MEM_REGIONS_ADDED	- No memory regions are set.
+ * * NE_ERR_NO_VCPUS_ADDED		- No vCPUs are set.
+ * *  NE_ERR_FULL_CORES_NOT_USED	- Full core(s) not set for the enclave.
+ * * NE_ERR_ENCLAVE_MEM_MIN_SIZE	- Enclave memory is less than minimum
  *					  memory size (64 MiB).
  * * Error codes from the NE PCI device request.
  */
@@ -170,85 +180,85 @@
 /**
  * NE_ERR_VCPU_ALREADY_USED - The provided vCPU is already used.
  */
-#define NE_ERR_VCPU_ALREADY_USED		(512)
+#define NE_ERR_VCPU_ALREADY_USED		(256)
 /**
  * NE_ERR_VCPU_NOT_IN_CPU_POOL - The provided vCPU is not available in the
  *				 NE CPU pool.
  */
-#define NE_ERR_VCPU_NOT_IN_CPU_POOL		(513)
+#define NE_ERR_VCPU_NOT_IN_CPU_POOL		(257)
 /**
  * NE_ERR_VCPU_INVALID_CPU_CORE - The core id of the provided vCPU is invalid
  *				  or out of range of the NE CPU pool.
  */
-#define NE_ERR_VCPU_INVALID_CPU_CORE		(514)
+#define NE_ERR_VCPU_INVALID_CPU_CORE		(258)
 /**
  * NE_ERR_INVALID_MEM_REGION_SIZE - The user space memory region size is not
  *				    multiple of 2 MiB.
  */
-#define NE_ERR_INVALID_MEM_REGION_SIZE		(515)
+#define NE_ERR_INVALID_MEM_REGION_SIZE		(259)
 /**
  * NE_ERR_INVALID_MEM_REGION_ADDR - The user space memory region address range
  *				    is invalid.
  */
-#define NE_ERR_INVALID_MEM_REGION_ADDR		(516)
+#define NE_ERR_INVALID_MEM_REGION_ADDR		(260)
 /**
  * NE_ERR_UNALIGNED_MEM_REGION_ADDR - The user space memory region address is
  *				      not aligned.
  */
-#define NE_ERR_UNALIGNED_MEM_REGION_ADDR	(517)
+#define NE_ERR_UNALIGNED_MEM_REGION_ADDR	(261)
 /**
  * NE_ERR_MEM_REGION_ALREADY_USED - The user space memory region is already used.
  */
-#define NE_ERR_MEM_REGION_ALREADY_USED		(518)
+#define NE_ERR_MEM_REGION_ALREADY_USED		(262)
 /**
  * NE_ERR_MEM_NOT_HUGE_PAGE - The user space memory region is not backed by
  *			      contiguous physical huge page(s).
  */
-#define NE_ERR_MEM_NOT_HUGE_PAGE		(519)
+#define NE_ERR_MEM_NOT_HUGE_PAGE		(263)
 /**
  * NE_ERR_MEM_DIFFERENT_NUMA_NODE - The user space memory region is backed by
  *				    pages from different NUMA nodes than the CPUs.
  */
-#define NE_ERR_MEM_DIFFERENT_NUMA_NODE		(520)
+#define NE_ERR_MEM_DIFFERENT_NUMA_NODE		(264)
 /**
  * NE_ERR_MEM_MAX_REGIONS - The supported max memory regions per enclaves has
  *			    been reached.
  */
-#define NE_ERR_MEM_MAX_REGIONS			(521)
+#define NE_ERR_MEM_MAX_REGIONS			(265)
 /**
  * NE_ERR_NO_MEM_REGIONS_ADDED - The command to start an enclave is triggered
  *				 and no memory regions are added.
  */
-#define NE_ERR_NO_MEM_REGIONS_ADDED		(522)
+#define NE_ERR_NO_MEM_REGIONS_ADDED		(266)
 /**
  * NE_ERR_NO_VCPUS_ADDED - The command to start an enclave is triggered and no
  *			   vCPUs are added.
  */
-#define NE_ERR_NO_VCPUS_ADDED			(523)
+#define NE_ERR_NO_VCPUS_ADDED			(267)
 /**
  * NE_ERR_ENCLAVE_MEM_MIN_SIZE - The enclave memory size is lower than the
  *				 minimum supported.
  */
-#define NE_ERR_ENCLAVE_MEM_MIN_SIZE		(524)
+#define NE_ERR_ENCLAVE_MEM_MIN_SIZE		(268)
 /**
  * NE_ERR_FULL_CORES_NOT_USED - The command to start an enclave is triggered and
  *				full CPU cores are not set.
  */
-#define NE_ERR_FULL_CORES_NOT_USED		(525)
+#define NE_ERR_FULL_CORES_NOT_USED		(269)
 /**
  * NE_ERR_NOT_IN_INIT_STATE - The enclave is not in init state when setting
  *			      resources or triggering start.
  */
-#define NE_ERR_NOT_IN_INIT_STATE		(526)
+#define NE_ERR_NOT_IN_INIT_STATE		(270)
 /**
  * NE_ERR_INVALID_VCPU - The provided vCPU is out of range of the available CPUs.
  */
-#define NE_ERR_INVALID_VCPU			(527)
+#define NE_ERR_INVALID_VCPU			(271)
 /**
  * NE_ERR_NO_CPUS_AVAIL_IN_POOL - The command to create an enclave is triggered
  *				  and no CPUs are available in the pool.
  */
-#define NE_ERR_NO_CPUS_AVAIL_IN_POOL		(528)
+#define NE_ERR_NO_CPUS_AVAIL_IN_POOL		(272)
 
 /**
  * DOC: Image load info flags

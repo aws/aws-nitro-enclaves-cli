@@ -15,7 +15,7 @@
 #include <linux/version.h>
 #include <linux/wait.h>
 
-/**
+/*
  * The type '__poll_t' is not available in kernels older than 4.16.0
  * so for these we define it here.
  */
@@ -41,8 +41,6 @@ struct ne_mem_region {
 
 /**
  * struct ne_enclave - Per-enclave data used for enclave lifetime management.
- * @avail_cpu_cores:		Available CPU cores for the enclave.
- * @avail_cpu_cores_size:	The size of the available cores array.
  * @enclave_info_mutex :	Mutex for accessing this internal state.
  * @enclave_list_entry :	Entry in the list of created enclaves.
  * @eventq:			Wait queue used for out-of-band event notifications
@@ -56,16 +54,22 @@ struct ne_mem_region {
  * @mem_size:			Enclave memory size.
  * @mm :			Enclave process abstraction mm data struct.
  * @nr_mem_regions:		Number of memory regions associated with the enclave.
+ * @nr_parent_vm_cores :	The size of the threads per core array. The
+ *				total number of CPU cores available on the
+ *				parent / primary VM.
+ * @nr_threads_per_core:	The number of threads that a full CPU core has.
  * @nr_vcpus:			Number of vcpus associated with the enclave.
  * @numa_node:			NUMA node of the enclave memory and CPUs.
  * @pdev:			PCI device used for enclave lifetime management.
  * @slot_uid:			Slot unique id mapped to the enclave.
  * @state:			Enclave state, updated during enclave lifetime.
- * @vcpu_ids:			Enclave vCPUs.
+ * @threads_per_core:		Enclave full CPU cores array, indexed by core id,
+ *				consisting of cpumasks with all their threads.
+ *				Full CPU cores are taken from the NE CPU pool
+ *				and are available to the enclave.
+ * @vcpu_ids:			Cpumask of the vCPUs that are set for the enclave.
  */
 struct ne_enclave {
-	cpumask_var_t		*avail_cpu_cores;
-	unsigned int		avail_cpu_cores_size;
 	struct mutex		enclave_info_mutex;
 	struct list_head	enclave_list_entry;
 	wait_queue_head_t	eventq;
@@ -74,12 +78,15 @@ struct ne_enclave {
 	struct list_head	mem_regions_list;
 	u64			mem_size;
 	struct mm_struct	*mm;
-	u64			nr_mem_regions;
-	u64			nr_vcpus;
+	unsigned int		nr_mem_regions;
+	unsigned int		nr_parent_vm_cores;
+	unsigned int		nr_threads_per_core;
+	unsigned int		nr_vcpus;
 	int			numa_node;
 	struct pci_dev		*pdev;
 	u64			slot_uid;
 	u16			state;
+	cpumask_var_t		*threads_per_core;
 	cpumask_var_t		vcpu_ids;
 };
 

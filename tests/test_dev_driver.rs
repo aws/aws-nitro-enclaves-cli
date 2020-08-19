@@ -164,22 +164,26 @@ impl CheckDmesg {
 
     /// Verify if dmesg number of lines changed from the last recorded line.
     pub fn expect_no_changes(&mut self) -> NitroCliResult<()> {
-        let checks = vec!["WARNING", "BUG", "ERROR", "FAILURE"];
+        let checks = vec![
+            "WARNING",
+            "BUG",
+            "ERROR",
+            "FAILURE",
+            "nitro_enclaves",
+            // NE PCI device identifier
+            "pci 0000:00:02.0",
+        ];
         let lines = self.get_dmesg_lines().unwrap();
 
         for i in self.recorded_line..lines.len() {
-            // TODO: Enable when logs are modified.
-            // if !lines[i].contains("nitro_enclaves") {
-            //     continue;
-            // }
-
             let upper_line = lines[i].to_uppercase();
             for word in checks.iter() {
-                if upper_line.contains(word) {
+                if upper_line.contains(&word.to_uppercase()) {
                     return Err(format!("Dmesg line: {} contains: {}", lines[i], word));
                 }
             }
         }
+
         Ok(())
     }
 }
@@ -245,7 +249,7 @@ mod test_dev_driver {
         ));
         assert_eq!(result.is_err(), true);
 
-        // Add wrongly sized memory regions of 1 MiB.
+        // Add wrongly sized memory region of 1 MiB.
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
             0,
             region.mem_addr(),
@@ -253,11 +257,7 @@ mod test_dev_driver {
         ));
         assert_eq!(result.is_err(), true);
 
-        // Note: The test is expected to fail, but the failure comes from the hypervisor
-        // and not from the driver. This translates into the call succeeding to map the
-        // first 2 MB (i.e. the region actually gets mapped) but failing on the next 2 MB
-        // since there is no second region available. This does mean that the original
-        // memory region remains mapped despite the ioctl() returning failure.
+        // Add wrongly sized memory region of double the memory size.
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
             0,
             region.mem_addr(),
@@ -288,8 +288,19 @@ mod test_dev_driver {
             region.mem_addr(),
             region.mem_size(),
         ));
-        // Kernel Driver does not use the flags.
         assert_eq!(result.is_err(), true);
+
+        let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
+        check_dmesg
+            .record_current_line()
+            .expect("Failed to record current line");
+
+        // Correctly add a memory region of 10 MiB backed by 2 MiB huge pages.
+        let region = MemoryRegion::new(10 * MiB).unwrap();
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(&region));
+        assert_eq!(result.is_err(), false);
+
+        check_dmesg.expect_no_changes().unwrap();
     }
 
     #[test]
@@ -309,6 +320,7 @@ mod test_dev_driver {
         }
 
         let cpu_id = candidates.pop().unwrap();
+
         let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
         check_dmesg
             .record_current_line()
@@ -317,6 +329,7 @@ mod test_dev_driver {
         // Insert the first valid cpu id.
         let result = enclave.add_cpu(cpu_id);
         assert_eq!(result.is_err(), false);
+
         check_dmesg.expect_no_changes().unwrap();
 
         // Try inserting the cpu twice.
@@ -403,6 +416,12 @@ mod test_dev_driver {
         // Add the first cpu pair.
         let result = enclave.add_cpu(candidates[1]);
         assert_eq!(result.is_err(), false);
+
+        // Start with an invalid flag.
+        let mut enclave_start_info = EnclaveStartInfo::new_empty();
+        enclave_start_info.flags = 1234;
+        let result = enclave.start(enclave_start_info);
+        assert_eq!(result.is_err(), true);
 
         let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
         check_dmesg

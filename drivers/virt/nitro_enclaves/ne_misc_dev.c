@@ -76,26 +76,36 @@ MODULE_PARM_DESC(ne_cpus, "<cpu-list> - CPU pool used for Nitro Enclaves");
 
 /**
  * struct ne_cpu_pool - CPU pool used for Nitro Enclaves.
- * @avail_cores:	Available CPU cores in the pool.
- * @avail_cores_size:	The size of the available cores array.
- * @mutex:		Mutex for the access to the NE CPU pool.
- * @numa_node:		NUMA node of the CPUs in the pool.
+ * @avail_threads_per_core:	Available full CPU cores to be dedicated to
+ *				enclave(s). The cpumasks from the array, indexed
+ *				by core id, contain all the threads from the
+ *				available cores, that are not set for created
+ *				enclave(s). The full CPU cores are part of the
+ *				NE CPU pool.
+ * @mutex:			Mutex for the access to the NE CPU pool.
+ * @nr_parent_vm_cores :	The size of the available threads per core array.
+ *				The total number of CPU cores available on the
+ *				parent / primary VM.
+ * @nr_threads_per_core:	The number of threads that a full CPU core has.
+ * @numa_node:			NUMA node of the CPUs in the pool.
  */
 struct ne_cpu_pool {
-	cpumask_var_t	*avail_cores;
-	unsigned int	avail_cores_size;
+	cpumask_var_t	*avail_threads_per_core;
 	struct mutex	mutex;
+	unsigned int	nr_parent_vm_cores;
+	unsigned int	nr_threads_per_core;
 	int		numa_node;
 };
 
 static struct ne_cpu_pool ne_cpu_pool;
 
-/**
+/*
  * For pre-5.0.0 kernels, the "access_ok" macro takes 3 arguments.
  * The first argument is the verification type, with VERIFY_WRITE
  * being the most comprehensive.
  */
-static int user_access_ok(void __user *addr, unsigned long size) {
+static int user_access_ok(void __user *addr, unsigned long size)
+{
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
 	return access_ok(VERIFY_WRITE, addr, size);
 #else
@@ -179,19 +189,19 @@ static inline unsigned long page_size(struct page *page)
 static bool ne_check_enclaves_created(void)
 {
 	struct ne_pci_dev *ne_pci_dev = NULL;
-	/* TODO: Find another way to get the NE PCI device reference. */
-	struct pci_dev *pdev = pci_get_device(PCI_VENDOR_ID_AMAZON, PCI_DEVICE_ID_NE, NULL);
+	struct pci_dev *pdev = NULL;
 	bool ret = false;
 
+	if (!ne_misc_dev.parent)
+		return ret;
+
+	pdev = to_pci_dev(ne_misc_dev.parent);
 	if (!pdev)
 		return ret;
 
 	ne_pci_dev = pci_get_drvdata(pdev);
-	if (!ne_pci_dev) {
-		pci_dev_put(pdev);
-
+	if (!ne_pci_dev)
 		return ret;
-	}
 
 	mutex_lock(&ne_pci_dev->enclaves_list_mutex);
 
@@ -199,8 +209,6 @@ static bool ne_check_enclaves_created(void)
 		ret = true;
 
 	mutex_unlock(&ne_pci_dev->enclaves_list_mutex);
-
-	pci_dev_put(pdev);
 
 	return ret;
 }
@@ -222,14 +230,11 @@ static int ne_setup_cpu_pool(const char *ne_cpu_list)
 {
 	int core_id = -1;
 	unsigned int cpu = 0;
-	cpumask_var_t cpu_pool = NULL;
+	cpumask_var_t cpu_pool;
 	unsigned int cpu_sibling = 0;
 	unsigned int i = 0;
 	int numa_node = -1;
 	int rc = -EINVAL;
-
-	if (!ne_cpu_list)
-		return 0;
 
 	if (!zalloc_cpumask_var(&cpu_pool, GFP_KERNEL))
 		return -ENOMEM;
@@ -253,9 +258,23 @@ static int ne_setup_cpu_pool(const char *ne_cpu_list)
 	}
 
 	/*
+	 * Check if the CPUs are online, to further get info about them
+	 * e.g. numa node, core id, siblings.
+	 */
+	for_each_cpu(cpu, cpu_pool)
+		if (cpu_is_offline(cpu)) {
+			pr_err("%s: CPU %d is offline, has to be online to get its metadata\n",
+			       ne_misc_dev.name, cpu);
+
+			rc = -EINVAL;
+
+			goto free_pool_cpumask;
+		}
+
+	/*
 	 * Check if the CPUs from the NE CPU pool are from the same NUMA node.
 	 */
-	for_each_cpu(cpu, cpu_pool) {
+	for_each_cpu(cpu, cpu_pool)
 		if (numa_node < 0) {
 			numa_node = cpu_to_node(cpu);
 			if (numa_node < 0) {
@@ -276,7 +295,6 @@ static int ne_setup_cpu_pool(const char *ne_cpu_list)
 				goto free_pool_cpumask;
 			}
 		}
-	}
 
 	/*
 	 * Check if CPU 0 and its siblings are included in the provided CPU pool
@@ -303,8 +321,8 @@ static int ne_setup_cpu_pool(const char *ne_cpu_list)
 
 	/*
 	 * Check if CPU siblings are included in the provided CPU pool. The
-	 * expectation is that CPU cores are made available in the CPU pool for
-	 * enclaves.
+	 * expectation is that full CPU cores are made available in the CPU pool
+	 * for enclaves.
 	 */
 	for_each_cpu(cpu, cpu_pool) {
 		for_each_cpu(cpu_sibling, topology_sibling_cpumask(cpu)) {
@@ -319,37 +337,45 @@ static int ne_setup_cpu_pool(const char *ne_cpu_list)
 		}
 	}
 
-	ne_cpu_pool.avail_cores_size = nr_cpu_ids / smp_num_siblings;
+	/* Calculate the number of threads from a full CPU core. */
+	cpu = cpumask_any(cpu_pool);
+	for_each_cpu(cpu_sibling, topology_sibling_cpumask(cpu))
+		ne_cpu_pool.nr_threads_per_core++;
 
-	ne_cpu_pool.avail_cores = kcalloc(ne_cpu_pool.avail_cores_size,
-					  sizeof(*ne_cpu_pool.avail_cores),
-					  GFP_KERNEL);
-	if (!ne_cpu_pool.avail_cores) {
+	ne_cpu_pool.nr_parent_vm_cores = nr_cpu_ids / ne_cpu_pool.nr_threads_per_core;
+
+	ne_cpu_pool.avail_threads_per_core = kcalloc(ne_cpu_pool.nr_parent_vm_cores,
+					     sizeof(*ne_cpu_pool.avail_threads_per_core),
+					     GFP_KERNEL);
+	if (!ne_cpu_pool.avail_threads_per_core) {
 		rc = -ENOMEM;
 
 		goto free_pool_cpumask;
 	}
 
-	for (i = 0; i < ne_cpu_pool.avail_cores_size; i++)
-		if (!zalloc_cpumask_var(&ne_cpu_pool.avail_cores[i], GFP_KERNEL)) {
+	for (i = 0; i < ne_cpu_pool.nr_parent_vm_cores; i++)
+		if (!zalloc_cpumask_var(&ne_cpu_pool.avail_threads_per_core[i], GFP_KERNEL)) {
 			rc = -ENOMEM;
 
 			goto free_cores_cpumask;
 		}
 
-	/* Split the NE CPU pool in CPU cores. */
+	/*
+	 * Split the NE CPU pool in threads per core to keep the CPU topology
+	 * after offlining the CPUs.
+	 */
 	for_each_cpu(cpu, cpu_pool) {
 		core_id = topology_core_id(cpu);
-		if (core_id < 0 || core_id >= ne_cpu_pool.avail_cores_size) {
-			pr_err("%s: Invalid core id  %d\n",
-			       ne_misc_dev.name, core_id);
+		if (core_id < 0 || core_id >= ne_cpu_pool.nr_parent_vm_cores) {
+			pr_err("%s: Invalid core id  %d for CPU %d\n",
+			       ne_misc_dev.name, core_id, cpu);
 
 			rc = -EINVAL;
 
 			goto clear_cpumask;
 		}
 
-		cpumask_set_cpu(cpu, ne_cpu_pool.avail_cores[core_id]);
+		cpumask_set_cpu(cpu, ne_cpu_pool.avail_threads_per_core[core_id]);
 	}
 
 	/*
@@ -384,15 +410,17 @@ online_cpus:
 	for_each_cpu(cpu, cpu_pool)
 		add_cpu(cpu);
 clear_cpumask:
-	for (i = 0; i < ne_cpu_pool.avail_cores_size; i++)
-		cpumask_clear(ne_cpu_pool.avail_cores[i]);
+	for (i = 0; i < ne_cpu_pool.nr_parent_vm_cores; i++)
+		cpumask_clear(ne_cpu_pool.avail_threads_per_core[i]);
 free_cores_cpumask:
-	for (i = 0; i < ne_cpu_pool.avail_cores_size; i++)
-		free_cpumask_var(ne_cpu_pool.avail_cores[i]);
-	kfree(ne_cpu_pool.avail_cores);
-	ne_cpu_pool.avail_cores_size = 0;
+	for (i = 0; i < ne_cpu_pool.nr_parent_vm_cores; i++)
+		free_cpumask_var(ne_cpu_pool.avail_threads_per_core[i]);
+	kfree(ne_cpu_pool.avail_threads_per_core);
 free_pool_cpumask:
 	free_cpumask_var(cpu_pool);
+	ne_cpu_pool.nr_parent_vm_cores = 0;
+	ne_cpu_pool.nr_threads_per_core = 0;
+	ne_cpu_pool.numa_node = -1;
 	mutex_unlock(&ne_cpu_pool.mutex);
 
 	return rc;
@@ -413,27 +441,29 @@ static void ne_teardown_cpu_pool(void)
 
 	mutex_lock(&ne_cpu_pool.mutex);
 
-	if (!ne_cpu_pool.avail_cores_size) {
+	if (!ne_cpu_pool.nr_parent_vm_cores) {
 		mutex_unlock(&ne_cpu_pool.mutex);
 
 		return;
 	}
 
-	for (i = 0; i < ne_cpu_pool.avail_cores_size; i++) {
-		for_each_cpu(cpu, ne_cpu_pool.avail_cores[i]) {
+	for (i = 0; i < ne_cpu_pool.nr_parent_vm_cores; i++) {
+		for_each_cpu(cpu, ne_cpu_pool.avail_threads_per_core[i]) {
 			rc = add_cpu(cpu);
 			if (rc != 0)
 				pr_err("%s: CPU %d is not onlined [rc=%d]\n",
 				       ne_misc_dev.name, cpu, rc);
 		}
 
-		cpumask_clear(ne_cpu_pool.avail_cores[i]);
+		cpumask_clear(ne_cpu_pool.avail_threads_per_core[i]);
 
-		free_cpumask_var(ne_cpu_pool.avail_cores[i]);
+		free_cpumask_var(ne_cpu_pool.avail_threads_per_core[i]);
 	}
 
-	kfree(ne_cpu_pool.avail_cores);
-	ne_cpu_pool.avail_cores_size = 0;
+	kfree(ne_cpu_pool.avail_threads_per_core);
+	ne_cpu_pool.nr_parent_vm_cores = 0;
+	ne_cpu_pool.nr_threads_per_core = 0;
+	ne_cpu_pool.numa_node = -1;
 
 	mutex_unlock(&ne_cpu_pool.mutex);
 }
@@ -473,7 +503,109 @@ static int ne_set_kernel_param(const char *val, const struct kernel_param *kp)
 		return rc;
 	}
 
-	return param_set_copystring(val, kp);
+	rc = param_set_copystring(val, kp);
+	if (rc < 0) {
+		pr_err("%s: Error in param set copystring [rc=%d]\n", ne_misc_dev.name, rc);
+
+		ne_teardown_cpu_pool();
+
+		param_set_copystring(error_val, kp);
+
+		return rc;
+	}
+
+	return 0;
+}
+
+/**
+ * ne_donated_cpu() - Check if the provided CPU is already used by the enclave.
+ * @ne_enclave :	Private data associated with the current enclave.
+ * @cpu:		CPU to check if already used.
+ *
+ * Context: Process context. This function is called with the ne_enclave mutex held.
+ * Return:
+ * * True if the provided CPU is already used by the enclave.
+ * * False otherwise.
+ */
+static bool ne_donated_cpu(struct ne_enclave *ne_enclave, unsigned int cpu)
+{
+	if (cpumask_test_cpu(cpu, ne_enclave->vcpu_ids))
+		return true;
+
+	return false;
+}
+
+/**
+ * ne_get_unused_core_from_cpu_pool() - Get the id of a full core from the
+ *					NE CPU pool.
+ * @void:	No parameters provided.
+ *
+ * Context: Process context. This function is called with the ne_enclave and
+ *	    ne_cpu_pool mutexes held.
+ * Return:
+ * * Core id.
+ * * -1 if no CPU core available in the pool.
+ */
+static int ne_get_unused_core_from_cpu_pool(void)
+{
+	int core_id = -1;
+	unsigned int i = 0;
+
+	for (i = 0; i < ne_cpu_pool.nr_parent_vm_cores; i++)
+		if (!cpumask_empty(ne_cpu_pool.avail_threads_per_core[i])) {
+			core_id = i;
+
+			break;
+		}
+
+	return core_id;
+}
+
+/**
+ * ne_set_enclave_threads_per_core() - Set the threads of the provided core in
+ *				       the enclave data structure.
+ * @ne_enclave :	Private data associated with the current enclave.
+ * @core_id:		Core id to get its threads from the NE CPU pool.
+ * @vcpu_id:		vCPU id part of the provided core.
+ *
+ * Context: Process context. This function is called with the ne_enclave and
+ *	    ne_cpu_pool mutexes held.
+ * Return:
+ * * 0 on success.
+ * * Negative return value on failure.
+ */
+static int ne_set_enclave_threads_per_core(struct ne_enclave *ne_enclave,
+					   int core_id, u32 vcpu_id)
+{
+	unsigned int cpu = 0;
+
+	if (core_id < 0 && vcpu_id == 0) {
+		dev_err_ratelimited(ne_misc_dev.this_device,
+				    "No CPUs available in NE CPU pool\n");
+
+		return -NE_ERR_NO_CPUS_AVAIL_IN_POOL;
+	}
+
+	if (core_id < 0) {
+		dev_err_ratelimited(ne_misc_dev.this_device,
+				    "CPU %d is not in NE CPU pool\n", vcpu_id);
+
+		return -NE_ERR_VCPU_NOT_IN_CPU_POOL;
+	}
+
+	if (core_id >= ne_enclave->nr_parent_vm_cores) {
+		dev_err_ratelimited(ne_misc_dev.this_device,
+				    "Invalid core id %d - ne_enclave\n", core_id);
+
+		return -NE_ERR_VCPU_INVALID_CPU_CORE;
+	}
+
+	for_each_cpu(cpu, ne_cpu_pool.avail_threads_per_core[core_id])
+		cpumask_set_cpu(cpu, ne_enclave->threads_per_core[core_id]);
+
+	cpumask_clear(ne_cpu_pool.avail_threads_per_core[core_id]);
+
+	return 0;
 }
 
 /**
@@ -481,63 +613,79 @@ static int ne_set_kernel_param(const char *val, const struct kernel_param *kp)
  *				remaining sibling(s) of a CPU core or the first
  *				sibling of a new CPU core.
  * @ne_enclave :	Private data associated with the current enclave.
+ * @vcpu_id:		vCPU to get from the NE CPU pool.
  *
  * Context: Process context. This function is called with the ne_enclave mutex held.
  * Return:
- * * vCPU id.
- * * 0, if no CPU available in the pool.
+ * * 0 on success.
+ * * Negative return value on failure.
  */
-static unsigned int ne_get_cpu_from_cpu_pool(struct ne_enclave *ne_enclave)
+static int ne_get_cpu_from_cpu_pool(struct ne_enclave *ne_enclave, u32 *vcpu_id)
 {
 	int core_id = -1;
 	unsigned int cpu = 0;
 	unsigned int i = 0;
-	unsigned int vcpu_id = 0;
+	int rc = -EINVAL;
 
-	/* There are CPU siblings available to choose from. */
-	for (i = 0; i < ne_enclave->avail_cpu_cores_size; i++)
-		for_each_cpu(cpu, ne_enclave->avail_cpu_cores[i])
-			if (!cpumask_test_cpu(cpu, ne_enclave->vcpu_ids)) {
-				vcpu_id = cpu;
+	/*
+	 * If previously allocated a thread of a core to this enclave, first
+	 * check remaining sibling(s) for new CPU allocations, so that full
+	 * CPU cores are used for the enclave.
+	 */
+	for (i = 0; i < ne_enclave->nr_parent_vm_cores; i++)
+		for_each_cpu(cpu, ne_enclave->threads_per_core[i])
+			if (!ne_donated_cpu(ne_enclave, cpu)) {
+				*vcpu_id = cpu;
 
-				goto out;
+				return 0;
 			}
 
 	mutex_lock(&ne_cpu_pool.mutex);
 
-	/* Choose a CPU from the available NE CPU pool. */
-	for (i = 0; i < ne_cpu_pool.avail_cores_size; i++)
-		if (!cpumask_empty(ne_cpu_pool.avail_cores[i])) {
-			core_id = i;
+	/*
+	 * If no remaining siblings, get a core from the NE CPU pool and keep
+	 * track of all the threads in the enclave threads per core data structure.
+	 */
+	core_id = ne_get_unused_core_from_cpu_pool();
 
-			break;
-		}
-
-	if (core_id < 0) {
-		dev_err_ratelimited(ne_misc_dev.this_device,
-				    "No CPUs available in NE CPU pool\n");
-
+	rc = ne_set_enclave_threads_per_core(ne_enclave, core_id, *vcpu_id);
+	if (rc < 0)
 		goto unlock_mutex;
-	}
 
-	if (core_id >= ne_enclave->avail_cpu_cores_size) {
-		dev_err_ratelimited(ne_misc_dev.this_device,
-				    "Invalid core id %d - ne_enclave\n", core_id);
+	*vcpu_id = cpumask_any(ne_enclave->threads_per_core[core_id]);
 
-		goto unlock_mutex;
-	}
-
-	vcpu_id = cpumask_any(ne_cpu_pool.avail_cores[core_id]);
-
-	for_each_cpu(cpu, ne_cpu_pool.avail_cores[core_id])
-		cpumask_set_cpu(cpu, ne_enclave->avail_cpu_cores[core_id]);
-
-	cpumask_clear(ne_cpu_pool.avail_cores[core_id]);
+	rc = 0;
 
 unlock_mutex:
 	mutex_unlock(&ne_cpu_pool.mutex);
-out:
-	return vcpu_id;
+
+	return rc;
+}
+
+/**
+ * ne_get_vcpu_core_from_cpu_pool() - Get from the NE CPU pool the id of the
+ *				      core associated with the provided vCPU.
+ * @vcpu_id:	Provided vCPU id to get its associated core id.
+ *
+ * Context: Process context. This function is called with the ne_enclave and
+ *	    ne_cpu_pool mutexes held.
+ * Return:
+ * * Core id.
+ * * -1 if the provided vCPU is not in the pool.
+ */
+static int ne_get_vcpu_core_from_cpu_pool(u32 vcpu_id)
+{
+	int core_id = -1;
+	unsigned int i = 0;
+
+	for (i = 0; i < ne_cpu_pool.nr_parent_vm_cores; i++)
+		if (cpumask_test_cpu(vcpu_id, ne_cpu_pool.avail_threads_per_core[i])) {
+			core_id = i;
+
+			break;
+	}
+
+	return core_id;
 }
 
 /**
@@ -554,55 +702,43 @@ out:
 static int ne_check_cpu_in_cpu_pool(struct ne_enclave *ne_enclave, u32 vcpu_id)
 {
 	int core_id = -1;
-	unsigned int cpu = 0;
 	unsigned int i = 0;
+	int rc = -EINVAL;
 
-	if (cpumask_test_cpu(vcpu_id, ne_enclave->vcpu_ids)) {
+	if (ne_donated_cpu(ne_enclave, vcpu_id)) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
 				    "CPU %d already used\n", vcpu_id);
 
 		return -NE_ERR_VCPU_ALREADY_USED;
 	}
 
-	for (i = 0; i < ne_enclave->avail_cpu_cores_size; i++)
-		if (cpumask_test_cpu(vcpu_id, ne_enclave->avail_cpu_cores[i]))
+	/*
+	 * If previously allocated a thread of a core to this enclave, but not
+	 * the full core, first check remaining sibling(s).
+	 */
+	for (i = 0; i < ne_enclave->nr_parent_vm_cores; i++)
+		if (cpumask_test_cpu(vcpu_id, ne_enclave->threads_per_core[i]))
 			return 0;
 
 	mutex_lock(&ne_cpu_pool.mutex);
 
-	for (i = 0; i < ne_cpu_pool.avail_cores_size; i++)
-		if (cpumask_test_cpu(vcpu_id, ne_cpu_pool.avail_cores[i])) {
-			core_id = i;
+	/*
+	 * If no remaining siblings, get from the NE CPU pool the core
+	 * associated with the vCPU and keep track of all the threads in the
+	 * enclave threads per core data structure.
+	 */
+	core_id = ne_get_vcpu_core_from_cpu_pool(vcpu_id);
 
-			break;
-	}
+	rc = ne_set_enclave_threads_per_core(ne_enclave, core_id, vcpu_id);
+	if (rc < 0)
+		goto unlock_mutex;
 
-	if (core_id < 0) {
-		dev_err_ratelimited(ne_misc_dev.this_device,
-				    "CPU %d is not in NE CPU pool\n", vcpu_id);
+	rc = 0;
 
-		mutex_unlock(&ne_cpu_pool.mutex);
-
-		return -NE_ERR_VCPU_NOT_IN_CPU_POOL;
-	}
-
-	if (core_id >= ne_enclave->avail_cpu_cores_size) {
-		dev_err_ratelimited(ne_misc_dev.this_device,
-				    "Invalid core id %d - ne_enclave\n", core_id);
-
-		mutex_unlock(&ne_cpu_pool.mutex);
-
-		return -NE_ERR_VCPU_INVALID_CPU_CORE;
-	}
-
-	for_each_cpu(cpu, ne_cpu_pool.avail_cores[core_id])
-		cpumask_set_cpu(cpu, ne_enclave->avail_cpu_cores[core_id]);
-
-	cpumask_clear(ne_cpu_pool.avail_cores[core_id]);
-
+unlock_mutex:
 	mutex_unlock(&ne_cpu_pool.mutex);
 
-	return 0;
+	return rc;
 }
 
 /**
@@ -693,8 +829,10 @@ static int ne_sanity_check_user_mem_region(struct ne_enclave *ne_enclave,
 		u64 memory_size = ne_mem_region->memory_size;
 		u64 userspace_addr = ne_mem_region->userspace_addr;
 
-		if (userspace_addr <= mem_region.userspace_addr &&
-		    mem_region.userspace_addr < (userspace_addr + memory_size)) {
+		if ((userspace_addr <= mem_region.userspace_addr &&
+		    mem_region.userspace_addr < (userspace_addr + memory_size)) ||
+		    (mem_region.userspace_addr <= userspace_addr &&
+		    (mem_region.userspace_addr + mem_region.memory_size) > userspace_addr)) {
 			dev_err_ratelimited(ne_misc_dev.this_device,
 					    "User space memory region already used\n");
 
@@ -939,8 +1077,8 @@ static int ne_start_enclave_ioctl(struct ne_enclave *ne_enclave,
 		return -NE_ERR_NO_VCPUS_ADDED;
 	}
 
-	for (i = 0; i < ne_enclave->avail_cpu_cores_size; i++)
-		for_each_cpu(cpu, ne_enclave->avail_cpu_cores[i])
+	for (i = 0; i < ne_enclave->nr_parent_vm_cores; i++)
+		for_each_cpu(cpu, ne_enclave->threads_per_core[i])
 			if (!cpumask_test_cpu(cpu, ne_enclave->vcpu_ids)) {
 				dev_err_ratelimited(ne_misc_dev.this_device,
 						    "Full CPU cores not used\n");
@@ -1002,7 +1140,8 @@ static long ne_enclave_ioctl(struct file *file, unsigned int cmd, unsigned long 
 			return -NE_ERR_NOT_IN_INIT_STATE;
 		}
 
-		if (vcpu_id >= (ne_enclave->avail_cpu_cores_size * smp_num_siblings)) {
+		if (vcpu_id >= (ne_enclave->nr_parent_vm_cores *
+		    ne_enclave->nr_threads_per_core)) {
 			dev_err_ratelimited(ne_misc_dev.this_device,
 					    "vCPU id higher than max CPU id\n");
 
@@ -1013,21 +1152,23 @@ static long ne_enclave_ioctl(struct file *file, unsigned int cmd, unsigned long 
 
 		if (!vcpu_id) {
 			/* Use the CPU pool for choosing a CPU for the enclave. */
-			vcpu_id = ne_get_cpu_from_cpu_pool(ne_enclave);
-			if (!vcpu_id) {
+			rc = ne_get_cpu_from_cpu_pool(ne_enclave, &vcpu_id);
+			if (rc < 0) {
 				dev_err_ratelimited(ne_misc_dev.this_device,
-						    "Error in getting CPU from pool\n");
+						    "Error in get CPU from pool [rc=%d]\n",
+						    rc);
 
 				mutex_unlock(&ne_enclave->enclave_info_mutex);
 
-				return -NE_ERR_NO_CPUS_AVAIL_IN_POOL;
+				return rc;
 			}
 		} else {
-			/* Check if the vCPU is available in the NE CPU pool. */
+			/* Check if the provided vCPU is available in the NE CPU pool. */
 			rc = ne_check_cpu_in_cpu_pool(ne_enclave, vcpu_id);
 			if (rc < 0) {
 				dev_err_ratelimited(ne_misc_dev.this_device,
-						    "Error in checking if CPU is in pool\n");
+						    "Error in check CPU %d in pool [rc=%d]\n",
+						    vcpu_id, rc);
 
 				mutex_unlock(&ne_enclave->enclave_info_mutex);
 
@@ -1037,8 +1178,6 @@ static long ne_enclave_ioctl(struct file *file, unsigned int cmd, unsigned long 
 
 		rc = ne_add_vcpu_ioctl(ne_enclave, vcpu_id);
 		if (rc < 0) {
-			cpumask_clear_cpu(vcpu_id, ne_enclave->vcpu_ids);
-
 			mutex_unlock(&ne_enclave->enclave_info_mutex);
 
 			return rc;
@@ -1201,17 +1340,17 @@ static void ne_enclave_remove_all_vcpu_id_entries(struct ne_enclave *ne_enclave)
 
 	mutex_lock(&ne_cpu_pool.mutex);
 
-	for (i = 0; i < ne_enclave->avail_cpu_cores_size; i++) {
-		for_each_cpu(cpu, ne_enclave->avail_cpu_cores[i])
+	for (i = 0; i < ne_enclave->nr_parent_vm_cores; i++) {
+		for_each_cpu(cpu, ne_enclave->threads_per_core[i])
 			/* Update the available NE CPU pool. */
-			cpumask_set_cpu(cpu, ne_cpu_pool.avail_cores[i]);
+			cpumask_set_cpu(cpu, ne_cpu_pool.avail_threads_per_core[i]);
 
-		free_cpumask_var(ne_enclave->avail_cpu_cores[i]);
+		free_cpumask_var(ne_enclave->threads_per_core[i]);
 	}
 
 	mutex_unlock(&ne_cpu_pool.mutex);
 
-	kfree(ne_enclave->avail_cpu_cores);
+	kfree(ne_enclave->threads_per_core);
 
 	free_cpumask_var(ne_enclave->vcpu_ids);
 }
@@ -1311,8 +1450,6 @@ static int ne_enclave_release(struct inode *inode, struct file *file)
 	ne_enclave_remove_all_mem_region_entries(ne_enclave);
 	ne_enclave_remove_all_vcpu_id_entries(ne_enclave);
 
-	pci_dev_put(ne_enclave->pdev);
-
 	mutex_unlock(&ne_enclave->enclave_info_mutex);
 	mutex_unlock(&ne_pci_dev->enclaves_list_mutex);
 
@@ -1386,11 +1523,11 @@ static int ne_create_vm_ioctl(struct pci_dev *pdev, struct ne_pci_dev *ne_pci_de
 
 	mutex_lock(&ne_cpu_pool.mutex);
 
-	for (i = 0; i < ne_cpu_pool.avail_cores_size; i++)
-		if (!cpumask_empty(ne_cpu_pool.avail_cores[i]))
+	for (i = 0; i < ne_cpu_pool.nr_parent_vm_cores; i++)
+		if (!cpumask_empty(ne_cpu_pool.avail_threads_per_core[i]))
 			break;
 
-	if (i == ne_cpu_pool.avail_cores_size) {
+	if (i == ne_cpu_pool.nr_parent_vm_cores) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
 				    "No CPUs available in CPU pool\n");
 
@@ -1407,21 +1544,22 @@ static int ne_create_vm_ioctl(struct pci_dev *pdev, struct ne_pci_dev *ne_pci_de
 
 	mutex_lock(&ne_cpu_pool.mutex);
 
-	ne_enclave->avail_cpu_cores_size = ne_cpu_pool.avail_cores_size;
+	ne_enclave->nr_parent_vm_cores = ne_cpu_pool.nr_parent_vm_cores;
+	ne_enclave->nr_threads_per_core = ne_cpu_pool.nr_threads_per_core;
 	ne_enclave->numa_node = ne_cpu_pool.numa_node;
 
 	mutex_unlock(&ne_cpu_pool.mutex);
 
-	ne_enclave->avail_cpu_cores = kcalloc(ne_enclave->avail_cpu_cores_size,
-		sizeof(*ne_enclave->avail_cpu_cores), GFP_KERNEL);
-	if (!ne_enclave->avail_cpu_cores) {
+	ne_enclave->threads_per_core = kcalloc(ne_enclave->nr_parent_vm_cores,
+		sizeof(*ne_enclave->threads_per_core), GFP_KERNEL);
+	if (!ne_enclave->threads_per_core) {
 		rc = -ENOMEM;
 
 		goto free_ne_enclave;
 	}
 
-	for (i = 0; i < ne_enclave->avail_cpu_cores_size; i++)
-		if (!zalloc_cpumask_var(&ne_enclave->avail_cpu_cores[i], GFP_KERNEL)) {
+	for (i = 0; i < ne_enclave->nr_parent_vm_cores; i++)
+		if (!zalloc_cpumask_var(&ne_enclave->threads_per_core[i], GFP_KERNEL)) {
 			rc = -ENOMEM;
 
 			goto free_cpumask;
@@ -1487,9 +1625,9 @@ put_fd:
 	put_unused_fd(enclave_fd);
 free_cpumask:
 	free_cpumask_var(ne_enclave->vcpu_ids);
-	for (i = 0; i < ne_enclave->avail_cpu_cores_size; i++)
-		free_cpumask_var(ne_enclave->avail_cpu_cores[i]);
-	kfree(ne_enclave->avail_cpu_cores);
+	for (i = 0; i < ne_enclave->nr_parent_vm_cores; i++)
+		free_cpumask_var(ne_enclave->threads_per_core[i]);
+	kfree(ne_enclave->threads_per_core);
 free_ne_enclave:
 	kfree(ne_enclave);
 
@@ -1514,9 +1652,7 @@ static long ne_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		int enclave_fd = -1;
 		struct file *enclave_file = NULL;
 		struct ne_pci_dev *ne_pci_dev = NULL;
-		/* TODO: Find another way to get the NE PCI device reference. */
-		struct pci_dev *pdev = pci_get_device(PCI_VENDOR_ID_AMAZON,
-						      PCI_DEVICE_ID_NE, NULL);
+		struct pci_dev *pdev = to_pci_dev(ne_misc_dev.parent);
 		int rc = -EINVAL;
 		u64 slot_uid = 0;
 
@@ -1529,8 +1665,6 @@ static long ne_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = enclave_fd;
 
 			mutex_unlock(&ne_pci_dev->enclaves_list_mutex);
-
-			pci_dev_put(pdev);
 
 			return rc;
 		}
@@ -1583,8 +1717,6 @@ static void __exit ne_exit(void)
 
 	ne_teardown_cpu_pool();
 }
-
-/* TODO: Handle actions such as reboot, kexec. */
 
 module_init(ne_init);
 module_exit(ne_exit);

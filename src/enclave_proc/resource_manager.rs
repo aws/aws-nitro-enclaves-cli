@@ -787,18 +787,17 @@ fn write_eif_to_regions(
         if total_written
             .checked_add(region.mem_size as usize)
             .ok_or_else(|| "Memory overflow".to_string())?
-            < image_write_offset
+            <= image_write_offset
         {
             // All bytes need to be skiped to get to the image write offset.
         } else {
-            let offset = image_write_offset.saturating_sub(total_written);
-            let bytes_left_in_file = file_size
-                .checked_add(image_write_offset)
-                .ok_or_else(|| "Memory overflow".to_string())?
-                .checked_sub(total_written)
-                .ok_or_else(|| "Corruption, written more than file size".to_string())?;
-            let size = std::cmp::min(bytes_left_in_file, region.mem_size as usize - offset);
-            region.fill_from_file(eif_file, offset, size)?;
+            let region_offset = image_write_offset.saturating_sub(total_written);
+            let file_offset = total_written.saturating_sub(image_write_offset);
+            let size = std::cmp::min(
+                region.mem_size as usize - region_offset,
+                file_size - file_offset,
+            );
+            region.fill_from_file(eif_file, region_offset, size)?;
         }
         total_written += region.mem_size as usize;
     }

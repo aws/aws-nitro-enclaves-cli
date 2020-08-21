@@ -23,6 +23,9 @@ use std::path::{Path, PathBuf};
 /// The most common result type provided by Nitro CLI operations.
 pub type NitroCliResult<T> = Result<T, String>;
 
+/// The CID for the vsock device of the parent VM.
+pub const VMADDR_CID_PARENT: u32 = 3;
+
 /// The amount of time in milliseconds an enclave process will wait for certain operations.
 pub const ENCLAVE_PROC_WAIT_TIMEOUT_MSEC: isize = 3000;
 

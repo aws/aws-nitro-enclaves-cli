@@ -113,7 +113,7 @@ static int user_access_ok(void __user *addr, unsigned long size)
 #endif
 }
 
-#ifndef remove_cpu
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 7, 0)
 static int remove_cpu(u32 cpu_id)
 {
 	struct device *cpu_dev = NULL;
@@ -141,7 +141,7 @@ static int remove_cpu(u32 cpu_id)
 }
 #endif
 
-#ifndef add_cpu
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 7, 0)
 static int add_cpu(u32 cpu_id)
 {
 	struct device *cpu_dev = NULL;
@@ -169,7 +169,7 @@ static int add_cpu(u32 cpu_id)
 }
 #endif
 
-#ifndef page_size
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
 /* Returns the number of bytes in this potentially compound page. */
 static inline unsigned long page_size(struct page *page)
 {

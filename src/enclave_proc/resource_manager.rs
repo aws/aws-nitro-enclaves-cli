@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::common::notify_error;
-use crate::common::{ExitGracefully, NitroCliResult};
-use crate::enclave_proc::commands::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
+use crate::common::{ExitGracefully, NitroCliResult, VMADDR_CID_PARENT};
+use crate::enclave_proc::commands::ENCLAVE_READY_VSOCK_PORT;
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::EnclaveCpuConfig;

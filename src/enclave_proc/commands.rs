@@ -15,9 +15,6 @@ use crate::enclave_proc::cpu_info::CpuInfo;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
 use crate::enclave_proc::utils::get_enclave_describe_info;
 
-/// Hypervisor CID as defined by <http://man7.org/linux/man-pages/man7/vsock.7.html>.
-pub const VMADDR_CID_PARENT: u32 = 3;
-
 /// The vsock port used to confirm that the enclave has booted.
 pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
 

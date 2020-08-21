@@ -59,7 +59,10 @@ pub const NITRO_ENCLAVES_RPLY_PENDING: usize = 0x0c;
 pub const NITRO_ENCLAVES_SEND_DATA: usize = 0x010;
 // 240 Bytes) Buffer for reading a reply.
 pub const NITRO_ENCLAVES_RECV_DATA: usize = 0x100;
-const DEV_ENABLE_MASK: u8 = 0x1;
+// The device enable register can hold 3 states: disabled, disabling, enabled
+// that are represented on 2 bits. Mask the first 2 least significant bits
+// for determining the state of the device.
+const DEV_ENABLE_MASK: u8 = 0x3;
 const DEBUG_FLAG: u64 = 0x1;
 
 #[derive(Default, Debug, Copy, Clone, Deserialize)]

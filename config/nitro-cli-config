@@ -35,6 +35,9 @@ UDEV_RULES_FILE="99-nitro-enclaves.rules"
 # The current user.
 THIS_USER="$(whoami)"
 
+# Flag for deciding whether to print stdout messages or not.
+VERBOSE="0"
+
 # A flag indicating if we must reset the terminal. This is needed when
 # inserting the driver and configuring the NE access group, since group
 # visibility normally requires a log-out / log-in or reboot.
@@ -82,7 +85,9 @@ function configure_huge_pages {
     local free_mem
     local huge_page_size
 
-    echo "Configuring the huge page memory..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Configuring the huge page memory..."
+    fi
 
     # Get the requested memory, trimming starting and ending whitespace.
     needed_mem="$1"
@@ -117,7 +122,9 @@ function configure_huge_pages {
     actual_num_pages="$(cat /proc/sys/vm/nr_hugepages)"
     [ "$num_pages" -eq "$actual_num_pages" ] || fail "Insufficient huge pages available ($actual_num_pages instead of the $num_pages needed)."
 
-    echo "Done."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Done."
+    fi
 }
 
 # Print the script's usage instructions.
@@ -147,14 +154,20 @@ function verify_driver_directory {
 
 # Clean the driver.
 function driver_clean {
-    echo "Cleaning the driver... "
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Cleaning the driver... "
+    fi
     make clean &> /dev/null || fail "Failed to clean driver."
-    echo "Done."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Done."
+    fi
 }
 
 # Remove the driver.
 function driver_remove {
-    echo "Removing the driver..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Removing the driver..."
+    fi
 
     # Attempt to remove the driver.
     sudo_run "rmmod $DRIVER_NAME &> /dev/null" || fail "Failed to remove driver."
@@ -162,14 +175,20 @@ function driver_remove {
     # Verify that the driver has indeed been removed.
     [ "$(lsmod | grep -cw $DRIVER_NAME)" -eq 0 ] || fail "The driver is still visible."
 
-    echo "Done."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Done."
+    fi
 }
 
 # Build the driver.
 function driver_build {
-    echo "Building the driver..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Building the driver..."
+    fi
     make &> /dev/null || fail "Failed to build driver."
-    echo "Done."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Done."
+    fi
 }
 
 # Configure a given directory for root:$NE_GROUP_NAME ownership and 775 permissions.
@@ -203,7 +222,9 @@ function driver_insert {
         driver_remove
     fi
 
-    echo "Inserting the driver..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Inserting the driver..."
+    fi
 
     # Insert the new driver.
     sudo_run "insmod $DRIVER_NAME.ko" || fail "Failed to insert driver."
@@ -211,7 +232,9 @@ function driver_insert {
     # Verify that the new driver has been inserted.
     [ "$(lsmod | grep -cw $DRIVER_NAME)" -eq 1 ] || fail "The driver is not visible."
 
-    echo "Configuring the device file..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Configuring the device file..."
+    fi
 
     # Create the NE group if it doesn't already exist.
     if [ "$(grep -cw $NE_GROUP_NAME /etc/group)" -eq 0 ]; then
@@ -242,14 +265,22 @@ function driver_insert {
     [ "660" == "$(stat -c '%a' /dev/$DRIVER_NAME)" ] || fail "Device file has incorrect permissions."
 
     # We also need to add the non-root user to the NE group.
-    echo "Adding user '$THIS_USER' to the group '$NE_GROUP_NAME'..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Adding user '$THIS_USER' to the group '$NE_GROUP_NAME'..."
+    fi
     sudo_run "usermod -a -G $NE_GROUP_NAME $THIS_USER" || fail "Could not add user to the NE group."
-    echo "Done."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Done."
+    fi
 
     # We configure the relevant resource directories.
-    echo "Configuring the resource directories..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Configuring the resource directories..."
+    fi
     configure_resource_directories
-    echo "Done."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Done."
+    fi
 
     # Lastly, we touch the log file so that any user may start a CLI instance at any time.
     # Otherwise, users outside of the group won't be able to start a CLI instance (since they won't have
@@ -281,9 +312,13 @@ function run_in_driver_dir {
 
 # Configure the CPU pool.
 function configure_cpu_pool {
-    echo "Configuring the enclave CPU pool..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Configuring the enclave CPU pool..."
+    fi
     sudo_run "echo $1 > /sys/module/nitro_enclaves/parameters/ne_cpus" || fail "Failed to configure the CPU pool."
-    echo "Done."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Done."
+    fi
 }
 
 # Configure the CPU pool using the provided CPU count.
@@ -305,7 +340,9 @@ function configure_cpu_pool_by_cpu_count {
     local threads_per_core=""
     local threads_per_core_count=""
 
-    echo "Auto-generating the enclave CPU pool by using the CPU count..."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Auto-generating the enclave CPU pool by using the CPU count..."
+    fi
 
     # Get the number of available CPUs, CPU threads (siblings) per core and the NUMA nodes count.
     nr_cpus="$(lscpu | grep "^CPU(s):" | cut -d ":" -f 2 | tr -d " \t")"
@@ -428,7 +465,9 @@ function configure_cpu_pool_by_cpu_count {
         cpu_pool="$cpu_pool,$cpu"
     done
 
-    echo "Auto-generated the enclave CPU pool - $cpu_pool."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Auto-generated the enclave CPU pool - $cpu_pool."
+    fi
 
     configure_cpu_pool "$cpu_pool"
 }
@@ -436,11 +475,17 @@ function configure_cpu_pool_by_cpu_count {
 # Script entry point.
 [ "$#" -gt 0 ] || fail "No arguments given."
 
-while getopts ":hd:cbrim:p:t:" opt; do
+while getopts ":hd:cbrim:p:t:v" opt; do
     case ${opt} in
         h)  # Help was requested.
             print_usage
             exit 0
+            ;;
+
+        v)  # Set the verbosity flag. Use this
+            # option first in order to print any
+            # messages.
+            VERBOSE="1"
             ;;
 
         d)  # Set the driver directory.
@@ -489,7 +534,9 @@ done
 
 # Reset the shell after configuring the driver.
 if [ "$SHELL_RESET" -eq 1 ] && [ "$SKIP_SHELL_RESET" -eq 0 ]; then
-    echo "Shell will be reset."
+    if [ "$VERBOSE" = "1" ]; then
+        echo "Shell will be reset."
+    fi
     sudo_run "exec su -l $THIS_USER"
 fi
 

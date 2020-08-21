@@ -46,7 +46,7 @@ function configure_ne_driver() {
 	then
 		# Preallocate 2048 Mb, that should be enough for all the tests
 		source build/install/etc/profile.d/nitro-cli-env.sh || test_failed
-		./build/install/etc/profile.d/nitro-cli-config.sh -m 2048 -p 1,3 || test_failed
+		./build/install/etc/profile.d/nitro-cli-config -m 2048 -p 1,3 || test_failed
 	fi
 }
 

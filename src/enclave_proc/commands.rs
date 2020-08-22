@@ -15,9 +15,6 @@ use crate::enclave_proc::cpu_info::CpuInfo;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
 use crate::enclave_proc::utils::get_enclave_describe_info;
 
-/// The vsock port used to confirm that the enclave has booted.
-pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
-
 /// Launch an enclave with the specified arguments and provide the launch status through the given connection.
 pub fn run_enclaves(
     args: &RunEnclavesArgs,

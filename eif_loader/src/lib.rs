@@ -4,7 +4,6 @@
 
 use nix::poll::poll;
 use nix::poll::{PollFd, PollFlags};
-use nix::sys::socket::SockAddr;
 use std::io::Read;
 use std::io::Write;
 use std::os::unix::io::AsRawFd;
@@ -23,10 +22,7 @@ pub enum EifLoaderError {
     VsockTimeoutError,
 }
 
-pub fn enclave_ready(cid: u32, port: u32) -> Result<(), EifLoaderError> {
-    let sockaddr = SockAddr::new_vsock(cid, port);
-    let listener =
-        VsockListener::bind(&sockaddr).map_err(|_err| EifLoaderError::VsockBindingError)?;
+pub fn enclave_ready(listener: VsockListener) -> Result<(), EifLoaderError> {
     let mut poll_fds = [PollFd::new(listener.as_raw_fd(), PollFlags::POLLIN)];
     let result = poll(&mut poll_fds, ACCEPT_TIMEOUT);
     if result == Ok(0) {

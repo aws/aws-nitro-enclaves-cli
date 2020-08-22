@@ -19,6 +19,7 @@ use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAlloca
 use crate::utils::generate_enclave_id;
 use crate::utils::ExitGracefully;
 use nix::fcntl::{flock, FlockArg};
+use nix::sys::socket::SockAddr;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -27,6 +28,7 @@ use std::io::Write;
 use std::mem::size_of_val;
 use std::os::unix::io::AsRawFd;
 use std::time::Duration;
+use vsock::VsockListener;
 
 // sys fs path to online/offline cpus
 const CPU_ONLINE_PATTERN: &str = "/sys/devices/system/cpu/cpu%/online";
@@ -190,8 +192,14 @@ impl EnclaveResourceManager {
     pub fn create_enclave(&mut self) -> NitroCliResult<(u64, u64)> {
         self.init_memory()?;
         self.init_cpus()?;
+
+        let sockaddr = SockAddr::new_vsock(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
+        let listener = VsockListener::bind(&sockaddr)
+            .map_err(|_err| "Enclave boot heartbeat vsock connection - vsock bind error")?;
+
         let enclave_cid = self.start()?;
-        eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT).map_err(|err| {
+
+        eif_loader::enclave_ready(listener).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
             self.terminate_enclave_error(&err_msg);
             err_msg

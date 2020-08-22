@@ -12,6 +12,7 @@ mod bindings {
 
 use bindings::*;
 use log::{debug, info};
+use nix::sys::socket::SockAddr;
 use std::collections::BTreeMap;
 use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
@@ -21,10 +22,10 @@ use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use vsock::VsockListener;
 
 use crate::common::notify_error;
-use crate::common::{ExitGracefully, NitroCliResult, VMADDR_CID_PARENT};
-use crate::enclave_proc::commands::ENCLAVE_READY_VSOCK_PORT;
+use crate::common::{ExitGracefully, NitroCliResult, ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
@@ -469,8 +470,14 @@ impl EnclaveHandle {
     fn create_enclave(&mut self, connection: Option<&Connection>) -> NitroCliResult<String> {
         self.init_memory(connection)?;
         self.init_cpus()?;
+
+        let sockaddr = SockAddr::new_vsock(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
+        let listener = VsockListener::bind(&sockaddr)
+            .map_err(|_err| "Enclave boot heartbeat vsock connection - vsock bind error")?;
+
         let enclave_start = self.start(connection)?;
-        eif_loader::enclave_ready(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT).map_err(|err| {
+
+        eif_loader::enclave_ready(listener).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
             self.terminate_enclave_error(&err_msg);
             err_msg

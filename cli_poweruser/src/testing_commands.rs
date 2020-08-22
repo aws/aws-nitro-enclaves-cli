@@ -9,10 +9,13 @@ use crate::resource_manager::ResourceAllocator;
 use crate::ExitGracefully;
 use crate::NitroCliResult;
 use crate::ResourceAllocatorDriver;
+use crate::ENCLAVE_READY_VSOCK_PORT;
+use crate::VMADDR_CID_PARENT;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 use eif_loader;
 use log::debug;
+use nix::sys::socket::SockAddr;
 use num_traits::FromPrimitive;
 
 use std::fs::OpenOptions;
@@ -21,6 +24,8 @@ use std::io::Write;
 
 use std::io::Read;
 use std::io::Seek;
+
+use vsock::VsockListener;
 
 pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
     app.subcommand(
@@ -191,10 +196,16 @@ pub fn execute_command(args: &ArgMatches) -> NitroCliResult<()> {
         .ok_or_else(|| "Invalid cmd-body".to_string())?;
     let mut cli = CliDev::new()?;
     cli.enable()?;
+    let mut listener = None;
     let reply = match cmd_id {
         NitroEnclavesCmdType::NitroEnclavesEnclaveStart => {
             let cmd: NitroEnclavesEnclaveStart = serde_json::from_str(cmd_body)
                 .map_err(|err| format!("Invalid json format for command: {}", err))?;
+            let sockaddr = SockAddr::new_vsock(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
+            listener =
+                Some(VsockListener::bind(&sockaddr).map_err(|_err| {
+                    "Enclave boot heartbeat vsock connection - vsock bind error"
+                })?);
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesGetSlot => {
@@ -260,30 +271,23 @@ pub fn execute_command(args: &ArgMatches) -> NitroCliResult<()> {
         }
     }?;
     debug!("CmdReply {:?}", reply);
-    Ok(())
+
+    match cmd_id {
+        NitroEnclavesCmdType::NitroEnclavesEnclaveStart => {
+            eif_loader::enclave_ready(listener.unwrap()).map_err(|err| {
+                format!(
+                    "Failed to receive 'ready' signal from the enclave: {:?}",
+                    err
+                )
+            })
+        }
+        _ => Ok(()),
+    }
 }
 
-pub fn wait_ready_signal(args: &ArgMatches) -> NitroCliResult<()> {
-    let enclave_cid = args
-        .value_of("enclave-cid")
-        .ok_or("enclave-cid not specified")?;
-    let vsock_ready_port = args
-        .value_of("vsock-ready-port")
-        .ok_or("vsock-ready-port not specified")?;
-    let enclave_cid: u32 = enclave_cid
-        .parse()
-        .map_err(|err| format!("Invalid enclave-cid format: {}", err))?;
-    let vsock_ready_port: u32 = vsock_ready_port
-        .parse()
-        .map_err(|err| format!("Invalid vsock-ready-port specified: {}", err))?;
-
-    let _ = eif_loader::enclave_ready(enclave_cid, vsock_ready_port).map_err(|err| {
-        format!(
-            "Failed to receive 'ready' signal from the enclave: {:?}",
-            err
-        )
-    });
-
+pub fn wait_ready_signal(_args: &ArgMatches) -> NitroCliResult<()> {
+    // TODO: Remove this function when not used anymore. The logic has
+    // been moved in the codebase for the enclave start command.
     Ok(())
 }
 

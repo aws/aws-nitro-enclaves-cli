@@ -4,7 +4,8 @@
 #![deny(warnings)]
 
 use std::collections::BTreeSet;
-use std::process::Command;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::NitroCliResult;
@@ -100,23 +101,44 @@ impl CpuInfo {
             .map_err(|e| format!("Failed to parse CPU ID: {}", e))
     }
 
-    /// Parse `lscpu -p=cpu -c` and build the list of off-line CPUs.
-    fn get_cpu_info() -> NitroCliResult<Vec<u32>> {
+    fn parse_cpu_pool_line(line_str: &str) -> NitroCliResult<Vec<u32>> {
         let mut result: Vec<u32> = Vec::new();
-        let output = Command::new("lscpu")
-            .arg("-p=cpu")
-            .arg("-c")
-            .output()
-            .map_err(|e| format!("Failed to execute \"lscpu -p=cpu -c\": {}", e))?;
 
-        let output_str = String::from_utf8_lossy(&output.stdout);
-        for line in output_str.lines() {
-            if line.starts_with('#') {
+        // The CPU pool format is: "id1-id2,id3-id4,..."
+        for interval in line_str.split(',') {
+            let bounds: Vec<&str> = interval.split('-').collect();
+            match bounds.len() {
+                1 => result.push(CpuInfo::get_value(bounds[0])?),
+                2 => {
+                    let start_id = CpuInfo::get_value(bounds[0])?;
+                    let end_id = CpuInfo::get_value(bounds[1])?;
+
+                    for cpu_id in start_id..=end_id {
+                        result.push(cpu_id);
+                    }
+                }
+                _ => return Err(format!("Invalid CPU ID interval ({})", interval)),
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Parse the CPU pool and build the list of off-line CPUs.
+    fn get_cpu_info() -> NitroCliResult<Vec<u32>> {
+        let pool_file = File::open("/sys/module/nitro_enclaves/parameters/ne_cpus")
+            .map_err(|e| format!("Failed to open CPU pool file: {}", e))?;
+        let file_reader = BufReader::new(pool_file);
+        let mut result: Vec<u32> = Vec::new();
+
+        for line in file_reader.lines() {
+            let line_str =
+                line.map_err(|e| format!("Failed to read line from CPU pool file: {}", e))?;
+            if line_str.trim().is_empty() {
                 continue;
             }
 
-            let cpu_id = CpuInfo::get_value(line)?;
-            result.push(cpu_id);
+            result.append(&mut CpuInfo::parse_cpu_pool_line(&line_str)?);
         }
 
         Ok(result)
@@ -126,6 +148,27 @@ impl CpuInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_cpu_pool_line() {
+        let result0 = CpuInfo::parse_cpu_pool_line("1-3,4-6,7-9");
+        assert!(result0.is_ok());
+        assert_eq!(result0.unwrap(), vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+        let result1 = CpuInfo::parse_cpu_pool_line("1-4,7");
+        assert!(result1.is_ok());
+        assert_eq!(result1.unwrap(), vec![1, 2, 3, 4, 7]);
+
+        let result2 = CpuInfo::parse_cpu_pool_line("3,5,7,9");
+        assert!(result2.is_ok());
+        assert_eq!(result2.unwrap(), vec![3, 5, 7, 9]);
+
+        let result3 = CpuInfo::parse_cpu_pool_line("3+5,7-10");
+        assert!(result3.is_err());
+
+        let result4 = CpuInfo::parse_cpu_pool_line("3-a,7-b");
+        assert!(result4.is_err());
+    }
 
     #[test]
     fn test_get_value_correct_format() {

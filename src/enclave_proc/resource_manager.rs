@@ -699,6 +699,16 @@ impl EnclaveHandle {
                 "The enclave cannot be created because no CPUs are available in the pool"
                     .to_string()
             }
+            NE_ERR_INVALID_PAGE_SIZE => {
+                "The memory region is not backed by page(s) multiple of 2 MiB".to_string()
+            }
+            NE_ERR_INVALID_FLAG_VALUE => {
+                "The provided flags value in the ioctl arg data structure is invalid".to_string()
+            }
+            NE_ERR_INVALID_ENCLAVE_CID => {
+                "The provided enclave CID is invalid, being a well-known CID or the parent VM CID"
+                    .to_string()
+            }
             e => format!("An error has occurred: {} (rc: {})", e, rc),
         };
 

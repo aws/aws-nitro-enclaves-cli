@@ -99,9 +99,9 @@
  * *  -1			- There was a failure in the ioctl logic.
  * On failure, errno is set to:
  * * EFAULT			- copy_from_user() / copy_to_user() failure.
- * * EINVAL			- Invalid flag value.
  * * NE_ERR_NOT_IN_INIT_STATE	- The enclave is not in init state (init =
  *				  before being started).
+ * * NE_ERR_INVALID_FLAG_VALUE	- The value of the provided flag is invalid.
  */
 #define NE_GET_IMAGE_LOAD_INFO		_IOWR(0xAE, 0x22, struct ne_image_load_info)
 
@@ -122,7 +122,8 @@
  * *  -1				- There was a failure in the ioctl logic.
  * On failure, errno is set to:
  * * EFAULT				- copy_from_user() failure.
- * * EINVAL				- Invalid flag value.
+ * * EINVAL				- Invalid physical memory region(s) e.g.
+ *					  unaligned address.
  * * EIO				- Current task mm is not the same as
  *					  the one that created the enclave.
  * * ENOMEM				- Memory allocation failure for internal
@@ -134,12 +135,15 @@
  * * NE_ERR_INVALID_MEM_REGION_ADDR	- Invalid user space address given.
  * * NE_ERR_UNALIGNED_MEM_REGION_ADDR	- Unaligned user space address given.
  * * NE_ERR_MEM_REGION_ALREADY_USED	- The memory region is already used.
- * * NE_ERR_MEM_NOT_HUGE_PAGE		- The memory regions is not backed by
+ * * NE_ERR_MEM_NOT_HUGE_PAGE		- The memory region is not backed by
  *					  huge pages.
  * * NE_ERR_MEM_DIFFERENT_NUMA_NODE	- The memory region is not from the same
  *					  NUMA node as the CPUs.
  * * NE_ERR_MEM_MAX_REGIONS		- The number of memory regions set for
  *					  the enclave reached maximum.
+ * * NE_ERR_INVALID_PAGE_SIZE		- The memory region is not backed by
+ *					  pages multiple of 2 MiB.
+ * * NE_ERR_INVALID_FLAG_VALUE		- The value of the provided flag is invalid.
  * * Error codes from get_user_pages().
  * * Error codes from the NE PCI device request.
  */
@@ -161,7 +165,6 @@
  * *  -1				- There was a failure in the ioctl logic.
  * On failure, errno is set to:
  * * EFAULT				- copy_from_user() / copy_to_user() failure.
- * * EINVAL				- Invalid flag value.
  * * NE_ERR_NOT_IN_INIT_STATE		- The enclave is not in init state
  *					  (init = before being started).
  * * NE_ERR_NO_MEM_REGIONS_ADDED	- No memory regions are set.
@@ -169,6 +172,8 @@
  * *  NE_ERR_FULL_CORES_NOT_USED	- Full core(s) not set for the enclave.
  * * NE_ERR_ENCLAVE_MEM_MIN_SIZE	- Enclave memory is less than minimum
  *					  memory size (64 MiB).
+ * * NE_ERR_INVALID_FLAG_VALUE		- The value of the provided flag is invalid.
+ * *  NE_ERR_INVALID_ENCLAVE_CID	- The provided enclave CID is invalid.
  * * Error codes from the NE PCI device request.
  */
 #define NE_START_ENCLAVE		_IOWR(0xAE, 0x24, struct ne_enclave_start_info)
@@ -259,6 +264,21 @@
  *				  and no CPUs are available in the pool.
  */
 #define NE_ERR_NO_CPUS_AVAIL_IN_POOL		(272)
+/**
+ * NE_ERR_INVALID_PAGE_SIZE - The user space memory region is not backed by pages
+ *			      multiple of 2 MiB.
+ */
+#define NE_ERR_INVALID_PAGE_SIZE		(273)
+/**
+ * NE_ERR_INVALID_FLAG_VALUE - The provided flag value is invalid.
+ */
+#define NE_ERR_INVALID_FLAG_VALUE		(274)
+/**
+ * NE_ERR_INVALID_ENCLAVE_CID - The provided enclave CID is invalid, either
+ *				being a well-known value or the CID of the
+ *				parent / primary VM.
+ */
+#define NE_ERR_INVALID_ENCLAVE_CID		(275)
 
 /**
  * DOC: Image load info flags
@@ -267,7 +287,9 @@
 /**
  * NE_EIF_IMAGE - Enclave Image Format (EIF)
  */
-#define NE_EIF_IMAGE	(0x01)
+#define NE_EIF_IMAGE			(0x01)
+
+#define NE_IMAGE_LOAD_MAX_FLAG_VAL	(0x02)
 
 /**
  * struct ne_image_load_info - Info necessary for in-memory enclave image

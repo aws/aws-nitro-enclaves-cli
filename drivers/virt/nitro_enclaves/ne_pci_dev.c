@@ -42,20 +42,15 @@ MODULE_DEVICE_TABLE(pci, ne_pci_ids);
  * @cmd_request_size:	Size of the command request payload.
  *
  * Context: Process context. This function is called with the ne_pci_dev mutex held.
- * Return:
- * * 0 on success.
- * * Negative return value on failure.
  */
-static int ne_submit_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
-			     void *cmd_request, size_t cmd_request_size)
+static void ne_submit_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
+			      void *cmd_request, size_t cmd_request_size)
 {
 	struct ne_pci_dev *ne_pci_dev = pci_get_drvdata(pdev);
 
 	memcpy_toio(ne_pci_dev->iomem_base + NE_SEND_DATA, cmd_request, cmd_request_size);
 
 	iowrite32(cmd_type, ne_pci_dev->iomem_base + NE_COMMAND);
-
-	return 0;
 }
 
 /**
@@ -65,18 +60,13 @@ static int ne_submit_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_
  * @cmd_reply_size:	Size of the command reply payload.
  *
  * Context: Process context. This function is called with the ne_pci_dev mutex held.
- * Return:
- * * 0 on success.
- * * Negative return value on failure.
  */
-static int ne_retrieve_reply(struct pci_dev *pdev, struct ne_pci_dev_cmd_reply *cmd_reply,
-			     size_t cmd_reply_size)
+static void ne_retrieve_reply(struct pci_dev *pdev, struct ne_pci_dev_cmd_reply *cmd_reply,
+			      size_t cmd_reply_size)
 {
 	struct ne_pci_dev *ne_pci_dev = pci_get_drvdata(pdev);
 
 	memcpy_fromio(cmd_reply, ne_pci_dev->iomem_base + NE_RECV_DATA, cmd_reply_size);
-
-	return 0;
 }
 
 /**
@@ -120,7 +110,8 @@ int ne_do_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 	}
 
 	if (!cmd_request) {
-		dev_err_ratelimited(&pdev->dev, "Null cmd request\n");
+		dev_err_ratelimited(&pdev->dev, "Null cmd request for cmd type=%u\n",
+				    cmd_type);
 
 		return -EINVAL;
 	}
@@ -133,13 +124,15 @@ int ne_do_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 	}
 
 	if (!cmd_reply) {
-		dev_err_ratelimited(&pdev->dev, "Null cmd reply\n");
+		dev_err_ratelimited(&pdev->dev, "Null cmd reply for cmd type=%u\n",
+				    cmd_type);
 
 		return -EINVAL;
 	}
 
 	if (cmd_reply_size > NE_RECV_DATA_SIZE) {
-		dev_err_ratelimited(&pdev->dev, "Invalid reply size=%zu\n", cmd_reply_size);
+		dev_err_ratelimited(&pdev->dev, "Invalid reply size=%zu for cmd type=%u\n",
+				    cmd_reply_size, cmd_type);
 
 		return -EINVAL;
 	}
@@ -152,33 +145,25 @@ int ne_do_request(struct pci_dev *pdev, enum ne_pci_dev_cmd_type cmd_type,
 
 	atomic_set(&ne_pci_dev->cmd_reply_avail, 0);
 
-	rc = ne_submit_request(pdev, cmd_type, cmd_request, cmd_request_size);
-	if (rc < 0) {
-		dev_err_ratelimited(&pdev->dev, "Error in submit request [rc=%d]\n", rc);
-
-		goto unlock_mutex;
-	}
+	ne_submit_request(pdev, cmd_type, cmd_request, cmd_request_size);
 
 	rc = ne_wait_for_reply(pdev);
 	if (rc < 0) {
-		dev_err_ratelimited(&pdev->dev, "Error in wait for reply [rc=%d]\n", rc);
+		dev_err_ratelimited(&pdev->dev, "Error in wait for reply for cmd type=%u [rc=%d]\n",
+				    cmd_type, rc);
 
 		goto unlock_mutex;
 	}
 
-	rc = ne_retrieve_reply(pdev, cmd_reply, cmd_reply_size);
-	if (rc < 0) {
-		dev_err_ratelimited(&pdev->dev, "Error in retrieve reply [rc=%d]\n", rc);
-
-		goto unlock_mutex;
-	}
+	ne_retrieve_reply(pdev, cmd_reply, cmd_reply_size);
 
 	atomic_set(&ne_pci_dev->cmd_reply_avail, 0);
 
 	if (cmd_reply->rc < 0) {
 		rc = cmd_reply->rc;
 
-		dev_err_ratelimited(&pdev->dev, "Error in cmd process logic [rc=%d]\n", rc);
+		dev_err_ratelimited(&pdev->dev, "Error in cmd process logic, cmd type=%u [rc=%d]\n",
+				    cmd_type, rc);
 
 		goto unlock_mutex;
 	}
@@ -593,6 +578,38 @@ static void ne_pci_remove(struct pci_dev *pdev)
 	kfree(ne_pci_dev);
 }
 
+/**
+ * ne_pci_shutdown() - Shutdown function for the NE PCI device.
+ * @pdev:	PCI device associated with the NE PCI driver.
+ *
+ * Context: Process context.
+ */
+static void ne_pci_shutdown(struct pci_dev *pdev)
+{
+	struct ne_pci_dev *ne_pci_dev = pci_get_drvdata(pdev);
+
+	if (!ne_pci_dev)
+		return;
+
+	misc_deregister(&ne_misc_dev);
+
+	ne_misc_dev.parent = NULL;
+
+	ne_pci_dev_disable(pdev);
+
+	ne_teardown_msix(pdev);
+
+	pci_set_drvdata(pdev, NULL);
+
+	pci_iounmap(pdev, ne_pci_dev->iomem_base);
+
+	pci_release_regions(pdev);
+
+	pci_disable_device(pdev);
+
+	kfree(ne_pci_dev);
+}
+
 /*
  * TODO: Add suspend / resume functions for power management w/ CONFIG_PM, if
  * needed.
@@ -603,4 +620,5 @@ struct pci_driver ne_pci_driver = {
 	.id_table	= ne_pci_ids,
 	.probe		= ne_pci_probe,
 	.remove		= ne_pci_remove,
+	.shutdown	= ne_pci_shutdown,
 };

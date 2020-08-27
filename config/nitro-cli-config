@@ -704,7 +704,7 @@ cpu_count_request=
 cpu_id_request=
 memory_request=
 
-while getopts ":hd:cbrim:p:t:v" opt; do
+while getopts ":hd:cbrim:p:t:vs" opt; do
     case ${opt} in
         h)  # Help was requested.
             print_usage

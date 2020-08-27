@@ -57,12 +57,15 @@ make vsock-proxy-native
 make NITRO_CLI_INSTALL_DIR=%{buildroot} SBIN_DIR=%{_sbindir} UNIT_DIR=%{_unitdir} VAR_DIR=%{_var} install-tools
 
 mkdir -p %{buildroot}/%{_sbindir}
-mkdir -p %{buildroot}/%{_datadir}/nitro_enclaves/test_images/
 mkdir -p %{buildroot}/%{_datadir}/nitro_enclaves/tests/integration/
 
 install -D -m 0755 run-nitro-cli-integration-tests %{buildroot}/%{_sbindir}/run-nitro-cli-integration-tests
-cp ./eifs/* %{buildroot}/%{_datadir}/nitro_enclaves/test_images/
+install -D -m 0755 config/nitro-cli-config %{buildroot}/%{_sbindir}/nitro-cli-config
+
 cp -r tests/integration/* %{buildroot}%{_datadir}/nitro_enclaves/tests/integration/
+
+cp -r drivers/ %{buildroot}%{_datadir}/nitro_enclaves/
+cp -r include/ %{buildroot}%{_datadir}/nitro_enclaves/
 
 
 %post
@@ -86,6 +89,7 @@ systemctl --system daemon-reload
 %defattr(0755,root,root,0755)
 
 %{_sbindir}/run-nitro-cli-integration-tests
+%{_sbindir}/nitro-cli-config
 %{_datadir}/nitro_enclaves/*
 
 

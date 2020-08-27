@@ -1,11 +1,17 @@
 #!/bin/bash
 
 # Install required packages
-pip3 install -U pytest
+echo "===== Installing required packages ====="
+sudo pip3 install -U pytest > /dev/null 2>&1
+sudo yum install -y kernel-headers-$(uname -r) kernel-devel-$(uname -r) > /dev/null 2>&1
 
-cp -r /usr/share/nitro_enclaves/test_images/ .
+# Configure enclaves environment
+echo "===== Configuring enclaves environment ====="
+PREV_DIR=$(pwd) && cd /usr/share/nitro_enclaves/drivers/virt/nitro_enclaves && sudo make > /dev/null 2>&1 && cd $PREV_DIR
+nitro-cli-config -s -d /usr/share/nitro_enclaves -i
 
+nitro-cli-config -m 2048 -t 2
+
+# Run integration tests
 echo "===== Running integration tests except for the installation test ====="
 python3 -m pytest /usr/share/nitro_enclaves/tests/integration/ --ignore /usr/share/nitro_enclaves/tests/integration/test_installation.py
-
-rm -rf test_images/

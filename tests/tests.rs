@@ -85,11 +85,11 @@ mod tests {
         .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "080149c92fd3f03b81362207c09428ca88c311c740584e62cead36a84e77357016d9a75d647cd5d7ad9fb96e7ce98d0d"
+            "d94e68dc2dba3e703fb7dd44c94418372c2c1c311e53f30bd24efebb951edaaa002b346da8b11419aa35eb1a5269a8ab"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "5b6fe484a874380a352d85004a7b7b43d4baec94e320db33270b979abe398d7d46b75a5f6383e85fd8d24c123deecf34"
+            "aca6e62ffbf5f7deccac452d7f8cee1b94048faf62afc16c8ab68c9fed8c38010c73a669f9a36e596032f0b973d21895"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
@@ -144,11 +144,11 @@ mod tests {
         .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "40c5be69cef6ab872da6640c4971f2d039af6f34ccb8b39a709e0a3588edbb966810ff86186d4c93f8ef16453f7bd4bb"
+            "8eac6906e2a0b9963f0591c5e69e5cbbdfd845d68c7e3685b73dad0fb06673dc22c2c02d22d047ee8bb15fc6e1f85a24"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "5b6fe484a874380a352d85004a7b7b43d4baec94e320db33270b979abe398d7d46b75a5f6383e85fd8d24c123deecf34"
+            "aca6e62ffbf5f7deccac452d7f8cee1b94048faf62afc16c8ab68c9fed8c38010c73a669f9a36e596032f0b973d21895"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
@@ -226,11 +226,11 @@ mod tests {
         .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "080149c92fd3f03b81362207c09428ca88c311c740584e62cead36a84e77357016d9a75d647cd5d7ad9fb96e7ce98d0d"
+            "d94e68dc2dba3e703fb7dd44c94418372c2c1c311e53f30bd24efebb951edaaa002b346da8b11419aa35eb1a5269a8ab"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "5b6fe484a874380a352d85004a7b7b43d4baec94e320db33270b979abe398d7d46b75a5f6383e85fd8d24c123deecf34"
+            "aca6e62ffbf5f7deccac452d7f8cee1b94048faf62afc16c8ab68c9fed8c38010c73a669f9a36e596032f0b973d21895"
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),

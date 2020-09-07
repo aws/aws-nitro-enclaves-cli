@@ -7,7 +7,7 @@ This repository contains a collection of tools and commands used for managing th
   2. Install gcc, make, git, llvm-dev, libclang-dev, clang.
 
 ### Driver information
-  The Nitro Enclaves kernel driver is currently at version 0.7. Out-of-tree driver build is supported.
+  The Nitro Enclaves kernel driver is currently at version 0.8. Out-of-tree driver build is supported.
 
 ### How to install:
   1. Clone the repository.

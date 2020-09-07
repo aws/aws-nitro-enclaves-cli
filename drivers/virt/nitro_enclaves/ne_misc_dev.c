@@ -14,6 +14,7 @@
 #include <linux/device.h>
 #include <linux/file.h>
 #include <linux/hugetlb.h>
+#include <linux/limits.h>
 #include <linux/list.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
@@ -25,6 +26,7 @@
 #include <linux/poll.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <uapi/linux/vm_sockets.h>
 
 #include "ne_misc_dev.h"
 #include "ne_pci_dev.h"
@@ -52,6 +54,11 @@
  * NE_MIN_MEM_REGION_SIZE - The minimum size of an enclave memory region.
  */
 #define NE_MIN_MEM_REGION_SIZE	(2 * 1024UL * 1024UL)
+
+/**
+ * NE_PARENT_VM_CID - The CID for the vsock device of the primary / parent VM.
+ */
+#define NE_PARENT_VM_CID	(3)
 
 /*
  * TODO: Update logic to create new sysfs entries instead of using
@@ -85,7 +92,7 @@ MODULE_PARM_DESC(ne_cpus, "<cpu-list> - CPU pool used for Nitro Enclaves");
  * @mutex:			Mutex for the access to the NE CPU pool.
  * @nr_parent_vm_cores :	The size of the available threads per core array.
  *				The total number of CPU cores available on the
- *				parent / primary VM.
+ *				primary / parent VM.
  * @nr_threads_per_core:	The number of threads that a full CPU core has.
  * @numa_node:			NUMA node of the CPUs in the pool.
  */
@@ -817,7 +824,7 @@ static int ne_sanity_check_user_mem_region(struct ne_enclave *ne_enclave,
 
 	if ((mem_region.userspace_addr & (NE_MIN_MEM_REGION_SIZE - 1)) ||
 	    !user_access_ok((void __user *)(unsigned long)mem_region.userspace_addr,
-		       mem_region.memory_size)) {
+			    mem_region.memory_size)) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
 				    "Invalid user space address range\n");
 
@@ -838,6 +845,46 @@ static int ne_sanity_check_user_mem_region(struct ne_enclave *ne_enclave,
 
 			return -NE_ERR_MEM_REGION_ALREADY_USED;
 		}
+	}
+
+	return 0;
+}
+
+/**
+ * ne_sanity_check_user_mem_region_page() - Sanity check a page from the user space
+ *					    memory region received during the set
+ *					    user memory region ioctl call.
+ * @ne_enclave :	Private data associated with the current enclave.
+ * @mem_region_page:	Page from the user space memory region to be sanity checked.
+ *
+ * Context: Process context. This function is called with the ne_enclave mutex held.
+ * Return:
+ * * 0 on success.
+ * * Negative return value on failure.
+ */
+static int ne_sanity_check_user_mem_region_page(struct ne_enclave *ne_enclave,
+						struct page *mem_region_page)
+{
+	if (!PageHuge(mem_region_page)) {
+		dev_err_ratelimited(ne_misc_dev.this_device,
+				    "Not a hugetlbfs page\n");
+
+		return -NE_ERR_MEM_NOT_HUGE_PAGE;
+	}
+
+	if (page_size(mem_region_page) & (NE_MIN_MEM_REGION_SIZE - 1)) {
+		dev_err_ratelimited(ne_misc_dev.this_device,
+				    "Page size not multiple of 2 MiB\n");
+
+		return -NE_ERR_INVALID_PAGE_SIZE;
+	}
+
+	if (ne_enclave->numa_node != page_to_nid(mem_region_page)) {
+		dev_err_ratelimited(ne_misc_dev.this_device,
+				    "Page is not from NUMA node %d\n",
+				    ne_enclave->numa_node);
+
+		return -NE_ERR_MEM_DIFFERENT_NUMA_NODE;
 	}
 
 	return 0;
@@ -915,24 +962,9 @@ static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
 			goto put_pages;
 		}
 
-		if (!PageHuge(ne_mem_region->pages[i])) {
-			dev_err_ratelimited(ne_misc_dev.this_device,
-					    "Not a hugetlbfs page\n");
-
-			rc = -NE_ERR_MEM_NOT_HUGE_PAGE;
-
+		rc = ne_sanity_check_user_mem_region_page(ne_enclave, ne_mem_region->pages[i]);
+		if (rc < 0)
 			goto put_pages;
-		}
-
-		if (ne_enclave->numa_node != page_to_nid(ne_mem_region->pages[i])) {
-			dev_err_ratelimited(ne_misc_dev.this_device,
-					    "Page is not from NUMA node %d\n",
-					    ne_enclave->numa_node);
-
-			rc = -NE_ERR_MEM_DIFFERENT_NUMA_NODE;
-
-			goto put_pages;
-		}
 
 		/*
 		 * TODO: Update once handled non-contiguous memory regions
@@ -1210,10 +1242,16 @@ static long ne_enclave_ioctl(struct file *file, unsigned int cmd, unsigned long 
 
 		mutex_unlock(&ne_enclave->enclave_info_mutex);
 
+		if (!image_load_info.flags ||
+		    image_load_info.flags >= NE_IMAGE_LOAD_MAX_FLAG_VAL) {
+			dev_err_ratelimited(ne_misc_dev.this_device,
+					    "Incorrect flag in enclave image load info\n");
+
+			return -NE_ERR_INVALID_FLAG_VALUE;
+		}
+
 		if (image_load_info.flags == NE_EIF_IMAGE)
 			image_load_info.memory_offset = NE_EIF_LOAD_OFFSET;
-		else
-			return -EINVAL;
 
 		if (copy_to_user((void __user *)arg, &image_load_info, sizeof(image_load_info)))
 			return -EFAULT;
@@ -1228,8 +1266,12 @@ static long ne_enclave_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		if (copy_from_user(&mem_region, (void __user *)arg, sizeof(mem_region)))
 			return -EFAULT;
 
-		if (mem_region.flags >= NE_MEMORY_REGION_MAX_FLAG_VAL)
-			return -EINVAL;
+		if (mem_region.flags >= NE_MEMORY_REGION_MAX_FLAG_VAL) {
+			dev_err_ratelimited(ne_misc_dev.this_device,
+					    "Incorrect flag for user memory region\n");
+
+			return -NE_ERR_INVALID_FLAG_VALUE;
+		}
 
 		mutex_lock(&ne_enclave->enclave_info_mutex);
 
@@ -1262,8 +1304,54 @@ static long ne_enclave_ioctl(struct file *file, unsigned int cmd, unsigned long 
 				   sizeof(enclave_start_info)))
 			return -EFAULT;
 
-		if (enclave_start_info.flags >= NE_ENCLAVE_START_MAX_FLAG_VAL)
-			return -EINVAL;
+		if (enclave_start_info.flags >= NE_ENCLAVE_START_MAX_FLAG_VAL) {
+			dev_err_ratelimited(ne_misc_dev.this_device,
+					    "Incorrect flag in enclave start info\n");
+
+			return -NE_ERR_INVALID_FLAG_VALUE;
+		}
+
+		/*
+		 * Do not use well-known CIDs - 0, 1, 2 - for enclaves.
+		 * VMADDR_CID_ANY = -1U
+		 * VMADDR_CID_HYPERVISOR = 0
+		 * VMADDR_CID_LOCAL = 1
+		 * VMADDR_CID_HOST = 2
+		 * Note: 0 is used as a placeholder to auto-generate an enclave CID.
+		 * http://man7.org/linux/man-pages/man7/vsock.7.html
+		 */
+		if (enclave_start_info.enclave_cid > 0 &&
+		    enclave_start_info.enclave_cid <= VMADDR_CID_HOST) {
+			dev_err_ratelimited(ne_misc_dev.this_device,
+					    "Well-known CID value, not to be used for enclaves\n");
+
+			return -NE_ERR_INVALID_ENCLAVE_CID;
+		}
+
+		if (enclave_start_info.enclave_cid == U32_MAX) {
+			dev_err_ratelimited(ne_misc_dev.this_device,
+					    "Well-known CID value, not to be used for enclaves\n");
+
+			return -NE_ERR_INVALID_ENCLAVE_CID;
+		}
+
+		/*
+		 * Do not use the CID of the primary / parent VM for enclaves.
+		 */
+		if (enclave_start_info.enclave_cid == NE_PARENT_VM_CID) {
+			dev_err_ratelimited(ne_misc_dev.this_device,
+					    "CID of the parent VM, not to be used for enclaves\n");
+
+			return -NE_ERR_INVALID_ENCLAVE_CID;
+		}
+
+		/* 64-bit CIDs are not yet supported for the vsock device. */
+		if (enclave_start_info.enclave_cid > U32_MAX) {
+			dev_err_ratelimited(ne_misc_dev.this_device,
+					    "64-bit CIDs not yet supported for the vsock device\n");
+
+			return -NE_ERR_INVALID_ENCLAVE_CID;
+		}
 
 		mutex_lock(&ne_enclave->enclave_info_mutex);
 

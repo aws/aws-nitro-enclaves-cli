@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
+use libc::{VMADDR_CID_HOST, VMADDR_CID_LOCAL};
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::Command;
@@ -265,6 +266,14 @@ mod test_dev_driver {
         ));
         assert_eq!(result.is_err(), true);
 
+        // Add wrongly sized memory region of max value multiple of 2 MiB.
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
+            0,
+            region.mem_addr(),
+            u64::max_value() - (2 * 1024 * 1024) + 1,
+        ));
+        assert_eq!(result.is_err(), true);
+
         let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
         check_dmesg
             .record_current_line()
@@ -408,6 +417,24 @@ mod test_dev_driver {
         // Start with an invalid flag.
         let mut enclave_start_info = EnclaveStartInfo::new_empty();
         enclave_start_info.flags = 1234;
+        let result = enclave.start(enclave_start_info);
+        assert_eq!(result.is_err(), true);
+
+        // Start with an invalid CID.
+        let mut enclave_start_info = EnclaveStartInfo::new_empty();
+        enclave_start_info.enclave_cid = VMADDR_CID_LOCAL as u64;
+        let result = enclave.start(enclave_start_info);
+        assert_eq!(result.is_err(), true);
+
+        enclave_start_info.enclave_cid = VMADDR_CID_HOST as u64;
+        let result = enclave.start(enclave_start_info);
+        assert_eq!(result.is_err(), true);
+
+        enclave_start_info.enclave_cid = u32::max_value() as u64;
+        let result = enclave.start(enclave_start_info);
+        assert_eq!(result.is_err(), true);
+
+        enclave_start_info.enclave_cid = u32::max_value() as u64 + 1234 as u64;
         let result = enclave.start(enclave_start_info);
         assert_eq!(result.is_err(), true);
 

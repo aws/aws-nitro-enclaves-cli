@@ -7,7 +7,7 @@ use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::Command;
 
-use nitro_cli::common::NitroCliResult;
+use nitro_cli::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use nitro_cli::enclave_proc::cpu_info::CpuInfo;
 use nitro_cli::enclave_proc::resource_manager::{
     EnclaveStartInfo, MemoryRegion, NE_ADD_VCPU, NE_CREATE_VM, NE_SET_USER_MEMORY_REGION,
@@ -57,8 +57,12 @@ impl NitroEnclavesDeviceDriver {
     /// Open the file descriptor for communicating with the NE driver.
     pub fn new() -> NitroCliResult<Self> {
         Ok(NitroEnclavesDeviceDriver {
-            file: File::open(NE_DEVICE_PATH)
-                .map_err(|err| format!("Could not open {}: {}", NE_DEVICE_PATH, err))?,
+            file: File::open(NE_DEVICE_PATH).map_err(|e| {
+                NitroCliFailure::new()
+                    .add_subaction(format!("Could not open {}: {}", NE_DEVICE_PATH, e))
+                    .set_error_code(NitroCliErrorEnum::FileOperationFailure)
+                    .set_file_and_line(file!(), line!())
+            })?,
         })
     }
 
@@ -70,11 +74,20 @@ impl NitroEnclavesDeviceDriver {
             unsafe { libc::ioctl(self.file.as_raw_fd(), NE_CREATE_VM as _, &mut slot_uid) };
 
         if enc_fd < 0 {
-            return Err(format!("Could not create an enclave fd: {}.", enc_fd));
+            return Err(NitroCliFailure::new()
+                .add_subaction(format!(
+                    "Could not create an enclave descriptor: {}",
+                    enc_fd
+                ))
+                .set_error_code(NitroCliErrorEnum::IoctlFailure)
+                .set_file_and_line(file!(), line!()));
         }
 
         if slot_uid == 0 {
-            return Err("Obtained invalid slot ID.".to_string());
+            return Err(NitroCliFailure::new()
+                .add_subaction("Obtained invalid slot ID".to_string())
+                .set_error_code(NitroCliErrorEnum::IoctlFailure)
+                .set_file_and_line(file!(), line!()));
         }
 
         Ok(NitroEnclave::new(enc_fd).unwrap())
@@ -102,7 +115,10 @@ impl NitroEnclave {
     pub fn add_mem_region(&mut self, mem_region: EnclaveMemoryRegion) -> NitroCliResult<()> {
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_SET_USER_MEMORY_REGION as _, &mem_region) };
         if rc < 0 {
-            return Err(format!("Could not add memory region: {}.", rc));
+            return Err(NitroCliFailure::new()
+                .add_subaction(format!("Could not add memory region: {}", rc))
+                .set_error_code(NitroCliErrorEnum::IoctlSetMemoryRegionFailure)
+                .set_file_and_line(file!(), line!()));
         }
 
         Ok(())
@@ -112,7 +128,10 @@ impl NitroEnclave {
         let mut actual_cpu_id: u32 = cpu_id;
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_ADD_VCPU as _, &mut actual_cpu_id) };
         if rc < 0 {
-            return Err(format!("Could not add vcpu: {}.", rc));
+            return Err(NitroCliFailure::new()
+                .add_subaction(format!("Could not add vCPU: {}", rc))
+                .set_error_code(NitroCliErrorEnum::IoctlAddVcpuFailure)
+                .set_file_and_line(file!(), line!()));
         }
 
         Ok(())
@@ -121,7 +140,10 @@ impl NitroEnclave {
     pub fn start(&mut self, start_info: EnclaveStartInfo) -> NitroCliResult<()> {
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_START_ENCLAVE as _, &start_info) };
         if rc < 0 {
-            return Err(format!("Could not start enclave: {}.", rc));
+            return Err(NitroCliFailure::new()
+                .add_subaction(format!("Could not start enclave: {}", rc))
+                .set_error_code(NitroCliErrorEnum::IoctlEnclaveStartFailure)
+                .set_file_and_line(file!(), line!()));
         }
 
         Ok(())
@@ -180,7 +202,10 @@ impl CheckDmesg {
             let upper_line = lines[i].to_uppercase();
             for word in checks.iter() {
                 if upper_line.contains(&word.to_uppercase()) {
-                    return Err(format!("Dmesg line: {} contains: {}", lines[i], word));
+                    return Err(NitroCliFailure::new()
+                        .add_subaction(format!("Dmesg line: {} contains: {}", lines[i], word))
+                        .set_error_code(NitroCliErrorEnum::IoctlFailure)
+                        .set_file_and_line(file!(), line!()));
                 }
             }
         }

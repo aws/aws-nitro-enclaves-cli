@@ -58,7 +58,7 @@ def test_run_invalid_cpu_count(init_resources):
         result = run_enclave_err(SAMPLE_EIF, "1028", "0")
         output = result.stdout.decode('UTF-8')
         error = result.stderr.decode('UTF-8')
-        assert error.find("Failed to run enclave") != -1
+        assert error.find("[ E29 ]") != -1
 
         result = run_enclave_err(SAMPLE_EIF, "1028", "1")
         result = run_enclave_err(SAMPLE_EIF, "1028", "3")

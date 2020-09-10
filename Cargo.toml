@@ -23,6 +23,8 @@ enclave_build = { path = "./enclave_build" }
 openssl = "0.10"
 vsock = "0.1.5"
 
+lazy_static = "1.4.0"
+
 [build-dependencies]
 bindgen = { version=">=0.54" }
 

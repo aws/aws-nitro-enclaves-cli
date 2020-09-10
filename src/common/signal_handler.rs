@@ -9,7 +9,8 @@ use nix::sys::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use std::os::unix::io::RawFd;
 use std::thread;
 
-use crate::common::ExitGracefully;
+use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use crate::new_nitro_cli_failure;
 
 /// The custom handler of POSIX signals.
 pub struct SignalHandler {
@@ -35,20 +36,31 @@ impl SignalHandler {
     }
 
     /// Mask (block) all signals covered by the handler.
-    pub fn mask_all(self) -> Self {
+    pub fn mask_all(self) -> NitroCliResult<Self> {
         for set in self.sig_set.iter() {
-            set.thread_block().ok_or_exit("Failed to block signal set.");
+            set.thread_block().map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Masking signals covered by handler failed: {:?}", e),
+                    NitroCliErrorEnum::SignalMaskingError
+                )
+            })?;
         }
-        self
+
+        Ok(self)
     }
 
     /// Unmask (unblock) all signals covered by the handler.
-    pub fn unmask_all(self) -> Self {
+    pub fn unmask_all(self) -> NitroCliResult<Self> {
         for set in self.sig_set.iter() {
-            set.thread_unblock()
-                .ok_or_exit("Failed to unblock signal set.");
+            set.thread_unblock().map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Unmasking signals covered by handler failed: {:?}", e),
+                    NitroCliErrorEnum::SignalUnmaskingError
+                )
+            })?;
         }
-        self
+
+        Ok(self)
     }
 
     /// Start listening for events on a dedicated thread and handle them using the provided function.

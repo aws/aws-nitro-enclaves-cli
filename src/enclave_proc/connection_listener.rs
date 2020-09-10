@@ -17,7 +17,10 @@ use super::connection::Connection;
 use super::socket::EnclaveProcSock;
 use crate::common::commands_parser::EmptyArgs;
 use crate::common::{enclave_proc_command_send_single, receive_from_stream};
-use crate::common::{EnclaveProcessCommandType, ExitGracefully, NitroCliResult};
+use crate::common::{
+    EnclaveProcessCommandType, ExitGracefully, NitroCliErrorEnum, NitroCliFailure, NitroCliResult,
+};
+use crate::new_nitro_cli_failure;
 
 /// A listener which waits for incoming connections on the enclave process socket.
 #[derive(Default)]
@@ -44,12 +47,17 @@ impl Clone for ConnectionListener {
 
 impl ConnectionListener {
     /// Create a new `ConnectionListener` instance.
-    pub fn new() -> Self {
-        ConnectionListener {
-            epoll_fd: epoll::epoll_create().ok_or_exit("Could not create epoll_fd."),
+    pub fn new() -> NitroCliResult<Self> {
+        Ok(ConnectionListener {
+            epoll_fd: epoll::epoll_create().map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to initialize epoll: {:?}", e),
+                    NitroCliErrorEnum::EpollError
+                )
+            })?,
             listener_thread: None,
             socket: EnclaveProcSock::default(),
-        }
+        })
     }
 
     /// Expose the `epoll` descriptor.
@@ -61,15 +69,19 @@ impl ConnectionListener {
     pub fn start(&mut self, enclave_id: &str) -> NitroCliResult<()> {
         // Obtain the socket to listen on.
         self.socket = EnclaveProcSock::new(enclave_id)
-            .map_err(|e| format!("Failed to create enclave process socket: {:?}", e))?;
+            .map_err(|e| e.add_subaction("Failed to create enclave process socket".to_string()))?;
 
         // Bind the listener to the socket and spawn the listener thread.
-        let listener = UnixListener::bind(self.socket.get_path())
-            .map_err(|e| format!("Failed to bind connection listener: {:?}", e))?;
+        let listener = UnixListener::bind(self.socket.get_path()).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to bind connection listener: {:?}", e),
+                NitroCliErrorEnum::SocketError
+            )
+        })?;
         self.enable_credentials_passing(&listener);
         self.socket
             .start_monitoring(true)
-            .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))?;
+            .map_err(|e| e.add_subaction("Failed to start monitoring socket".to_string()))?;
         debug!(
             "Connection listener started on socket {:?}.",
             self.socket.get_path()
@@ -79,7 +91,11 @@ impl ConnectionListener {
         self.listener_thread = Some(thread::spawn(move || {
             self_clone
                 .connection_listener_run(listener)
-                .ok_or_exit("Could not start the connection_listener")
+                .map_err(|e| {
+                    e.add_subaction("Failed to start the listener thread".to_string())
+                        .set_action("Run Enclave".to_string())
+                })
+                .ok_or_exit_with_errno(None);
         }));
 
         Ok(())
@@ -89,20 +105,34 @@ impl ConnectionListener {
     pub fn add_stream_to_epoll(&self, stream: UnixStream) -> NitroCliResult<()> {
         let stream_fd = stream.as_raw_fd();
         let mut cli_evt = EpollEvent::new(EpollFlags::EPOLLIN, stream.into_raw_fd() as u64);
-        epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, stream_fd, &mut cli_evt)
-            .map_err(|e| format!("Failed to add stream to epoll: {:?}", e))?;
+        epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, stream_fd, &mut cli_evt).map_err(
+            |e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to add stream to epoll: {:?}", e),
+                    NitroCliErrorEnum::EpollError
+                )
+            },
+        )?;
 
         Ok(())
     }
 
     /// Add the enclave descriptor to `epoll`.
-    pub fn register_enclave_descriptor(&mut self, enc_fd: RawFd) {
+    pub fn register_enclave_descriptor(&mut self, enc_fd: RawFd) -> NitroCliResult<()> {
         let mut enc_event = EpollEvent::new(
             EpollFlags::EPOLLIN | EpollFlags::EPOLLERR | EpollFlags::EPOLLHUP,
             enc_fd as u64,
         );
-        epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, enc_fd, &mut enc_event)
-            .ok_or_exit("Could not add enclave descriptor to epoll.");
+        epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, enc_fd, &mut enc_event).map_err(
+            |e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to add enclave descriptor to epoll: {:?}", e),
+                    NitroCliErrorEnum::EpollError
+                )
+            },
+        )?;
+
+        Ok(())
     }
 
     /// Handle an incoming connection.
@@ -110,13 +140,15 @@ impl ConnectionListener {
         &self,
         mut stream: UnixStream,
     ) -> NitroCliResult<EnclaveProcessCommandType> {
-        let cmd_type = receive_from_stream::<EnclaveProcessCommandType>(&mut stream)
-            .map_err(|e| format!("Failed to receive command type: {:?}", e))?;
+        let cmd_type =
+            receive_from_stream::<EnclaveProcessCommandType>(&mut stream).map_err(|e| {
+                e.add_subaction("Failed to receive command type from stream".to_string())
+            })?;
 
         // All connections must be registered with epoll, with the exception of the shutdown one.
         if cmd_type != EnclaveProcessCommandType::ConnectionListenerStop {
             self.add_stream_to_epoll(stream)
-                .map_err(|e| format!("Failed to add stream to epoll: {:?}", e))?;
+                .map_err(|e| e.add_subaction("Failed to add stream to epoll".to_string()))?;
         }
 
         Ok(cmd_type)
@@ -147,50 +179,64 @@ impl ConnectionListener {
         // Remove the listener's socket.
         self.socket
             .close()
-            .map_err(|e| format!("Failed to close the socket: {:?}", e))?;
+            .map_err(|e| e.add_subaction("Failed to close socket".to_string()))?;
         debug!("Connection listener has finished.");
         Ok(())
     }
 
     /// Terminate the connection listener.
-    pub fn stop(&mut self) {
+    pub fn stop(&mut self) -> NitroCliResult<()> {
         // Nothing to do if the connection listener thread has not been started.
         if self.listener_thread.is_none() {
-            return;
+            return Ok(());
         }
 
         // Send termination notification to the listener thread.
-        let mut self_conn = UnixStream::connect(self.socket.get_path())
-            .ok_or_exit("Failed to connect to our own socket.");
+        let mut self_conn = UnixStream::connect(self.socket.get_path()).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to connect to listener thread: {:?}", e),
+                NitroCliErrorEnum::SocketError
+            )
+        })?;
         enclave_proc_command_send_single::<EmptyArgs>(
             EnclaveProcessCommandType::ConnectionListenerStop,
             None,
             &mut self_conn,
         )
-        .ok_or_exit("Failed to notify listener thread of shutdown.");
+        .map_err(|e| e.add_subaction("Failed to notify listener thread of shutdown".to_string()))?;
 
         // Shut the connection down.
-        self_conn
-            .shutdown(std::net::Shutdown::Both)
-            .ok_or_exit("Failed to shut down.");
+        self_conn.shutdown(std::net::Shutdown::Both).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to close connection: {:?}", e),
+                NitroCliErrorEnum::SocketCloseError
+            )
+        })?;
 
         // Ensure that the listener thread has terminated.
-        self.listener_thread
-            .take()
-            .unwrap()
-            .join()
-            .ok_or_exit("Failed to join listener thread.");
+        self.listener_thread.take().unwrap().join().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to join listener thread: {:?}", e),
+                NitroCliErrorEnum::ThreadJoinFailure
+            )
+        })?;
         info!("The connection listener has been stopped.");
+
+        Ok(())
     }
 
     /// Fetch the next available connection.
-    pub fn get_next_connection(&self, enc_fd: Option<RawFd>) -> Connection {
+    pub fn get_next_connection(&self, enc_fd: Option<RawFd>) -> NitroCliResult<Connection> {
         // Wait on epoll until a valid event is received.
         let mut events = [EpollEvent::empty(); 1];
 
         loop {
-            let num_events = epoll::epoll_wait(self.epoll_fd, &mut events, -1)
-                .ok_or_exit("Waiting on epoll failed.");
+            let num_events = epoll::epoll_wait(self.epoll_fd, &mut events, -1).map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to wait on epoll: {:?}", e),
+                    NitroCliErrorEnum::EpollError
+                )
+            })?;
             if num_events > 0 {
                 break;
             }
@@ -207,10 +253,14 @@ impl ConnectionListener {
         // Remove the fetched descriptor from epoll. We are doing this here since
         // otherwise the Connection would have to do it when dropped and we prefer
         // the Connection not touch epoll directly.
-        epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlDel, fd, None)
-            .ok_or_exit("Failed to remove fd from epoll.");
+        epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlDel, fd, None).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to remove descriptor from epoll: {:?}", e),
+                NitroCliErrorEnum::EpollError
+            )
+        })?;
 
-        Connection::new(events[0].events(), input_stream)
+        Ok(Connection::new(events[0].events(), input_stream))
     }
 
     /// Enable the sending of credentials from incoming connections.
@@ -289,7 +339,7 @@ mod tests {
     /// Tests that get_epoll_fd() returns the expected epoll_fd.
     #[test]
     fn test_get_epoll_fd() {
-        let connection_listener = ConnectionListener::new();
+        let connection_listener = ConnectionListener::new().unwrap();
         let epoll_fd = connection_listener.epoll_fd;
 
         assert_eq!(epoll_fd, connection_listener.get_epoll_fd());
@@ -301,7 +351,7 @@ mod tests {
     fn test_handle_new_connection() {
         let (mut sock0, sock1) = UnixStream::pair().unwrap();
 
-        let connection_listener = ConnectionListener::new();
+        let connection_listener = ConnectionListener::new().unwrap();
 
         let cmd = EnclaveProcessCommandType::Describe;
         let _ = enclave_proc_command_send_single::<EmptyArgs>(cmd, None, &mut sock0);
@@ -319,7 +369,7 @@ mod tests {
     fn test_add_stream_to_epoll() {
         let (_, sock1) = UnixStream::pair().unwrap();
 
-        let connection_listener = ConnectionListener::new();
+        let connection_listener = ConnectionListener::new().unwrap();
         let copy_sock1 = sock1.try_clone();
 
         if let Ok(copy_sock1) = copy_sock1 {
@@ -365,7 +415,7 @@ mod tests {
         // Remove pre-existing socket file
         let _ = std::fs::remove_file(&dummy_sock_path);
 
-        let mut connection_listener = ConnectionListener::new();
+        let mut connection_listener = ConnectionListener::new().unwrap();
         connection_listener
             .socket
             .set_path(PathBuf::from(&dummy_sock_path));
@@ -483,7 +533,7 @@ mod tests {
         // Remove pre-existing socket file
         let _ = std::fs::remove_file(&dummy_sock_path);
 
-        let mut connection_listener = ConnectionListener::new();
+        let mut connection_listener = ConnectionListener::new().unwrap();
         connection_listener
             .socket
             .set_path(PathBuf::from(&dummy_sock_path));

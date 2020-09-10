@@ -10,7 +10,8 @@ use libc::VMADDR_CID_LOCAL;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
-use crate::common::{ExitGracefully, NitroCliResult, VMADDR_CID_PARENT};
+use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_CID_PARENT};
+use crate::new_nitro_cli_failure;
 
 /// The arguments used by the `run-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,30 +34,45 @@ impl RunEnclavesArgs {
     /// Construct a new `RunEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         if let Some(config_file) = args.value_of("config") {
-            let file = File::open(config_file).ok_or_exit("Invalid file path");
+            let file = File::open(config_file).map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to open config file: {:?}", err),
+                    NitroCliErrorEnum::FileOperationFailure
+                )
+            })?;
 
-            let json: RunEnclavesArgs =
-                serde_json::from_reader(file).ok_or_exit("Invalid json format for file");
+            let json: RunEnclavesArgs = serde_json::from_reader(file).map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("Invalid JSON format for config file: {:?}", err),
+                    NitroCliErrorEnum::SerdeError
+                )
+            })?;
             if json.cpu_count == None && json.cpu_ids == None {
-                let error: NitroCliResult<()> =
-                    Err(String::from("missing field `cpu_count` or `cpu_ids`"));
-                error.ok_or_exit("Invalid json format for file");
+                return Err(new_nitro_cli_failure!(
+                    "Missing both `cpu-count` and `cpu-ids`",
+                    NitroCliErrorEnum::MissingArgument
+                ));
             }
             if json.cpu_count.is_some() && json.cpu_ids.is_some() {
-                let error: NitroCliResult<()> = Err(String::from(
-                    "`cpu_count` and `cpu_ids` cannot be used together",
+                return Err(new_nitro_cli_failure!(
+                    "`cpu-count` and `cpu-ids` cannot be used together",
+                    NitroCliErrorEnum::ConflictingArgument
                 ));
-                error.ok_or_exit("Invalid json format for file");
             }
 
             Ok(json)
         } else {
             Ok(RunEnclavesArgs {
-                cpu_count: parse_cpu_count(args)?,
-                eif_path: parse_eif_path(args)?,
-                enclave_cid: parse_enclave_cid(args)?,
-                memory_mib: parse_memory(args)?,
-                cpu_ids: parse_cpu_ids(args)?,
+                cpu_count: parse_cpu_count(args)
+                    .map_err(|err| err.add_subaction("Parse CPU count".to_string()))?,
+                eif_path: parse_eif_path(args)
+                    .map_err(|err| err.add_subaction("Parse EIF path".to_string()))?,
+                enclave_cid: parse_enclave_cid(args)
+                    .map_err(|err| err.add_subaction("Parse enclave CID".to_string()))?,
+                memory_mib: parse_memory(args)
+                    .map_err(|err| err.add_subaction("Parse memory".to_string()))?,
+                cpu_ids: parse_cpu_ids(args)
+                    .map_err(|err| err.add_subaction("Parse CPU IDs".to_string()))?,
                 debug_mode: debug_mode(args),
             })
         }
@@ -85,17 +101,39 @@ impl BuildEnclavesArgs {
         let private_key = parse_private_key(args);
 
         match (&signing_certificate, &private_key) {
-            (Some(_), None) => return Err("Could not find private-key argument".to_string()),
+            (Some(_), None) => {
+                return Err(new_nitro_cli_failure!(
+                    "`private-key` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["private-key"]))
+            }
             (None, Some(_)) => {
-                return Err("Could not find signing-certificate argument".to_string())
+                return Err(new_nitro_cli_failure!(
+                    "`signing-certificate` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["signing-certificate"]))
             }
             _ => (),
         };
 
         Ok(BuildEnclavesArgs {
-            docker_uri: parse_docker_tag(args).ok_or("Could not find docker-uri argument")?,
+            docker_uri: parse_docker_tag(args).ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`docker-uri` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["docker-uri"])
+            })?,
             docker_dir: parse_docker_dir(args),
-            output: parse_output(args).ok_or("Could not find output argument")?,
+            output: parse_output(args).ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`output` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["output"])
+            })?,
             signing_certificate,
             private_key,
         })
@@ -113,7 +151,8 @@ impl TerminateEnclavesArgs {
     /// Construct a new `TerminateEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         Ok(TerminateEnclavesArgs {
-            enclave_id: parse_enclave_id(args)?,
+            enclave_id: parse_enclave_id(args)
+                .map_err(|e| e.add_subaction("Parse enclave ID".to_string()))?,
         })
     }
 }
@@ -129,7 +168,8 @@ impl ConsoleArgs {
     /// Construct a new `ConsoleArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         Ok(ConsoleArgs {
-            enclave_id: parse_enclave_id(args)?,
+            enclave_id: parse_enclave_id(args)
+                .map_err(|e| e.add_subaction("Parse enclave ID".to_string()))?,
         })
     }
 }
@@ -138,14 +178,38 @@ impl ConsoleArgs {
 #[derive(Serialize, Deserialize)]
 pub struct EmptyArgs {}
 
+/// The arguments used by the `explain` command.
+#[derive(Debug, Clone)]
+pub struct ExplainArgs {
+    /// The error code of the error to explain.
+    pub error_code_str: String,
+}
+
+impl ExplainArgs {
+    /// Construct a new `ExplainArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        Ok(ExplainArgs {
+            error_code_str: parse_error_code_str(args)
+                .map_err(|e| e.add_subaction("Parse error code".to_string()))?,
+        })
+    }
+}
+
 /// Parse the requested amount of enclave memory from the command-line arguments.
 fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
-    let memory = args
-        .value_of("memory")
-        .ok_or("Could not find memory argument")?;
-    memory
-        .parse()
-        .map_err(|_err| "memory is not a number".to_string())
+    let memory = args.value_of("memory").ok_or_else(|| {
+        new_nitro_cli_failure!(
+            "`memory` argument not found",
+            NitroCliErrorEnum::MissingArgument
+        )
+    })?;
+    memory.parse().map_err(|_| {
+        new_nitro_cli_failure!(
+            "`memory` is not a number",
+            NitroCliErrorEnum::InvalidArgument
+        )
+        .add_info(vec!["memory", memory])
+    })
 }
 
 /// Parse the Docker tag from the command-line arguments.
@@ -161,9 +225,13 @@ fn parse_docker_dir(args: &ArgMatches) -> Option<String> {
 /// Parse the enclave's required CID from the command-line arguments.
 fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
     let enclave_cid = if let Some(enclave_cid) = args.value_of("enclave-cid") {
-        let enclave_cid: u64 = enclave_cid
-            .parse()
-            .map_err(|_err| "enclave-cid is not a number")?;
+        let enclave_cid: u64 = enclave_cid.parse().map_err(|_| {
+            new_nitro_cli_failure!(
+                "`enclave-cid` is not a number",
+                NitroCliErrorEnum::InvalidArgument
+            )
+            .add_info(vec!["enclave-cid", enclave_cid])
+        })?;
 
         // Do not use well-known CID values - 0, 1, 2 - as the enclave CID.
         // VMADDR_CID_ANY = -1U
@@ -177,32 +245,44 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
         }
 
         if enclave_cid > 0 && enclave_cid <= VMADDR_CID_HOST as u64 {
-            return Err(format!(
-                "CID {} is a well-known CID, not to be used for enclaves",
-                enclave_cid
+            return Err(new_nitro_cli_failure!(
+                &format!(
+                    "CID {} is a well-known CID, not to be used for enclaves",
+                    enclave_cid
+                ),
+                NitroCliErrorEnum::InvalidArgument
             ));
         }
 
         if enclave_cid == u32::max_value() as u64 {
-            return Err(format!(
-                "CID {} is a well-known CID, not to be used for enclaves",
-                enclave_cid
+            return Err(new_nitro_cli_failure!(
+                &format!(
+                    "CID {} is a well-known CID, not to be used for enclaves",
+                    enclave_cid
+                ),
+                NitroCliErrorEnum::InvalidArgument
             ));
         }
 
         // Do not use the CID of the parent VM as the enclave CID.
         if enclave_cid == VMADDR_CID_PARENT as u64 {
-            return Err(format!(
-                "CID {} is the CID of the parent VM, not to be used for enclaves",
-                enclave_cid
+            return Err(new_nitro_cli_failure!(
+                &format!(
+                    "CID {} is the CID of the parent VM, not to be used for enclaves",
+                    enclave_cid
+                ),
+                NitroCliErrorEnum::InvalidArgument
             ));
         }
 
         // 64-bit CIDs are not yet supported for the vsock device.
         if enclave_cid > u32::max_value() as u64 {
-            return Err(format!(
-                "CID {} is higher than the maximum supported (u32 max) for a vsock device.",
-                enclave_cid
+            return Err(new_nitro_cli_failure!(
+                &format!(
+                    "CID {} is higher than the maximum supported (u32 max) for a vsock device",
+                    enclave_cid
+                ),
+                NitroCliErrorEnum::InvalidArgument
             ));
         }
 
@@ -216,17 +296,23 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
 
 /// Parse the enclave image file path from the command-line arguments.
 fn parse_eif_path(args: &ArgMatches) -> NitroCliResult<String> {
-    let eif_path = args
-        .value_of("eif-path")
-        .ok_or("Could not find eif-path argument")?;
+    let eif_path = args.value_of("eif-path").ok_or_else(|| {
+        new_nitro_cli_failure!(
+            "`eif-path` argument not found",
+            NitroCliErrorEnum::MissingArgument
+        )
+    })?;
     Ok(eif_path.to_string())
 }
 
 /// Parse the enclave's ID from the command-line arguments.
 fn parse_enclave_id(args: &ArgMatches) -> NitroCliResult<String> {
-    let enclave_id = args
-        .value_of("enclave-id")
-        .ok_or("Could not find enclave-id argument")?;
+    let enclave_id = args.value_of("enclave-id").ok_or_else(|| {
+        new_nitro_cli_failure!(
+            "`enclave-id` argument not found",
+            NitroCliErrorEnum::MissingArgument
+        )
+    })?;
     Ok(enclave_id.to_string())
 }
 
@@ -237,7 +323,13 @@ fn parse_cpu_ids(args: &ArgMatches) -> NitroCliResult<Option<Vec<u32>>> {
         Some(iterator) => {
             let mut cpu_ids = Vec::new();
             for cpu_id in iterator {
-                cpu_ids.push(cpu_id.parse().map_err(|_err| "cpu-id is not a number")?);
+                cpu_ids.push(cpu_id.parse().map_err(|_| {
+                    new_nitro_cli_failure!(
+                        "`cpu-id` is not a number",
+                        NitroCliErrorEnum::InvalidArgument
+                    )
+                    .add_info(vec!["cpu-id", cpu_id])
+                })?);
             }
             Ok(Some(cpu_ids))
         }
@@ -248,9 +340,13 @@ fn parse_cpu_ids(args: &ArgMatches) -> NitroCliResult<Option<Vec<u32>>> {
 /// Parse the requested number of CPUs from the command-line arguments.
 fn parse_cpu_count(args: &ArgMatches) -> NitroCliResult<Option<u32>> {
     let cpu_count = if let Some(cpu_count) = args.value_of("cpu-count") {
-        let cpu_count: u32 = cpu_count
-            .parse()
-            .map_err(|_err| "cpu-count is not a number")?;
+        let cpu_count: u32 = cpu_count.parse().map_err(|_| {
+            new_nitro_cli_failure!(
+                "`cpu-count` is not a number",
+                NitroCliErrorEnum::InvalidArgument
+            )
+            .add_info(vec!["cpu-count", cpu_count])
+        })?;
         Some(cpu_count)
     } else {
         None
@@ -282,19 +378,31 @@ fn parse_private_key(args: &ArgMatches) -> Option<String> {
     args.value_of("private-key").map(|val| val.to_string())
 }
 
+fn parse_error_code_str(args: &ArgMatches) -> NitroCliResult<String> {
+    let error_code_str = args.value_of("error-code").ok_or_else(|| {
+        new_nitro_cli_failure!(
+            "`error-code` argument not found",
+            NitroCliErrorEnum::MissingArgument
+        )
+    })?;
+    Ok(error_code_str.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use crate::common::construct_error_message;
     use crate::create_app;
 
     use clap::{App, AppSettings, Arg, SubCommand};
 
     /// Parse the path of the JSON config file
     fn parse_config_file(args: &ArgMatches) -> NitroCliResult<String> {
-        let config_file = args
-            .value_of("config")
-            .ok_or("Could not find config argument")?;
+        let config_file = args.value_of("config").ok_or(new_nitro_cli_failure!(
+            "`config` argument not found",
+            NitroCliErrorEnum::MissingArgument
+        ))?;
         Ok(config_file.to_string())
     }
 
@@ -323,7 +431,10 @@ mod tests {
                 .unwrap(),
         );
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "memory is not a number");
+        if let Err(err_info) = result {
+            let err_str = construct_error_message(&err_info);
+            assert!(err_str.contains("Invalid argument provided"))
+        }
     }
 
     #[test]
@@ -470,7 +581,10 @@ mod tests {
                 .unwrap(),
         );
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "enclave-cid is not a number");
+        if let Err(err_info) = result {
+            let err_str = construct_error_message(&err_info);
+            assert!(err_str.contains("Invalid argument provided"))
+        }
     }
 
     #[test]
@@ -500,13 +614,10 @@ mod tests {
                 .unwrap(),
         );
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            format!(
-                "CID {} is a well-known CID, not to be used for enclaves",
-                VMADDR_CID_LOCAL
-            )
-        );
+        if let Err(err_info) = result {
+            let err_str = construct_error_message(&err_info);
+            assert!(err_str.contains("Invalid argument provided"));
+        }
     }
 
     #[test]
@@ -536,13 +647,10 @@ mod tests {
                 .unwrap(),
         );
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            format!(
-                "CID {} is a well-known CID, not to be used for enclaves",
-                VMADDR_CID_HOST
-            )
-        );
+        if let Err(err_info) = result {
+            let err_str = construct_error_message(&err_info);
+            assert!(err_str.contains("Invalid argument provided"));
+        }
     }
 
     #[test]
@@ -572,13 +680,10 @@ mod tests {
                 .unwrap(),
         );
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            format!(
-                "CID {} is the CID of the parent VM, not to be used for enclaves",
-                VMADDR_CID_PARENT
-            )
-        );
+        if let Err(err_info) = result {
+            let err_str = construct_error_message(&err_info);
+            assert!(err_str.contains("Invalid argument provided"));
+        }
     }
 
     #[test]
@@ -727,7 +832,10 @@ mod tests {
                 .unwrap(),
         );
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "cpu-id is not a number");
+        if let Err(err_info) = result {
+            let err_str = construct_error_message(&err_info);
+            assert!(err_str.contains("Invalid argument provided"));
+        }
     }
 
     #[test]
@@ -784,7 +892,10 @@ mod tests {
                 .unwrap(),
         );
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "cpu-count is not a number");
+        if let Err(err_info) = result {
+            let err_str = construct_error_message(&err_info);
+            assert!(err_str.contains("Invalid argument provided"));
+        }
     }
 
     #[test]

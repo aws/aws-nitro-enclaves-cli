@@ -8,9 +8,10 @@ use std::fs::File;
 use std::io::Read;
 
 use crate::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo};
-use crate::common::NitroCliResult;
+use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::enclave_proc::resource_manager::EnclaveManager;
 use crate::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
+use crate::new_nitro_cli_failure;
 
 /// Kibibytes.
 #[allow(non_upper_case_globals)]
@@ -73,10 +74,19 @@ pub fn get_run_enclaves_info(
 pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
     let file_path = "/sys/devices/virtual/dmi/id/board_asset_tag";
     if metadata(file_path).is_ok() {
-        let mut file = File::open(file_path).map_err(|err| format!("{:?}", err))?;
+        let mut file = File::open(file_path).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to open file: {:?}", e),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+        })?;
         let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .map_err(|err| format!("{:?}", err))?;
+        file.read_to_string(&mut contents).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to read from file: {:?}", e),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+        })?;
         contents.retain(|c| !c.is_whitespace());
         return Ok(format!("{}-enc{:x}", contents, slot_id));
     }

@@ -17,8 +17,10 @@ use std::sync::{Arc, Mutex};
 
 use crate::common::{receive_from_stream, write_u64_le};
 use crate::common::{
-    EnclaveProcessCommandType, EnclaveProcessReply, ExitGracefully, NitroCliResult,
+    EnclaveProcessCommandType, EnclaveProcessReply, ExitGracefully, NitroCliErrorEnum,
+    NitroCliFailure, NitroCliResult,
 };
+use crate::new_nitro_cli_failure;
 
 /// The types of requesters which may send commands to the enclave process.
 #[derive(PartialEq, Eq, Hash)]
@@ -58,7 +60,13 @@ impl Drop for ConnectionData {
             // Close the stream.
             input_stream
                 .shutdown(std::net::Shutdown::Both)
-                .ok_or_exit("Failed to shut down.");
+                .map_err(|e| {
+                    new_nitro_cli_failure!(
+                        &format!("Stream shutdown error: {:?}", e),
+                        NitroCliErrorEnum::SocketCloseError
+                    )
+                })
+                .ok_or_exit_with_errno(Some("Failed to shut down"));
         }
     }
 }
@@ -150,9 +158,17 @@ impl Connection {
 
     /// Read a command and its corresponding credentials.
     pub fn read_command(&self) -> NitroCliResult<EnclaveProcessCommandType> {
-        let mut lock = self.data.lock().map_err(|e| e.to_string())?;
+        let mut lock = self.data.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         if lock.input_stream.is_none() {
-            return Err("Cannot read a command from this connection.".to_string());
+            return Err(new_nitro_cli_failure!(
+                "Cannot read a command from this connection",
+                NitroCliErrorEnum::UnusableConnectionError
+            ));
         }
 
         // First, read the incoming command.
@@ -199,9 +215,17 @@ impl Connection {
     where
         T: DeserializeOwned,
     {
-        let mut lock = self.data.lock().map_err(|e| e.to_string())?;
+        let mut lock = self.data.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         if lock.input_stream.is_none() {
-            return Err("Cannot read from this connection.".to_string());
+            return Err(new_nitro_cli_failure!(
+                "Cannot read from this connection",
+                NitroCliErrorEnum::SocketError
+            ));
         }
 
         receive_from_stream::<T>(lock.input_stream.as_mut().unwrap())
@@ -209,9 +233,17 @@ impl Connection {
 
     /// Write a 64-bit unsigned value on this connection.
     pub fn write_u64(&self, value: u64) -> NitroCliResult<()> {
-        let mut lock = self.data.lock().map_err(|e| e.to_string())?;
+        let mut lock = self.data.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         if lock.input_stream.is_none() {
-            return Err("Cannot write a 64-bit value to this connection.".to_string());
+            return Err(new_nitro_cli_failure!(
+                "Cannot write a 64-bit value to this connection",
+                NitroCliErrorEnum::SocketError
+            ));
         }
 
         write_u64_le(lock.input_stream.as_mut().unwrap(), value)
@@ -247,10 +279,12 @@ impl Connection {
 
     /// Get the enclave event flags.
     pub fn get_enclave_event_flags(&self) -> NitroCliResult<Option<EpollFlags>> {
-        let lock = self
-            .data
-            .lock()
-            .map_err(|e| format!("Failed to get connection lock: {:?}", e))?;
+        let lock = self.data.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire connection lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         match lock.input_stream {
             None => Ok(Some(lock.epoll_flags)),
             _ => Ok(None),
@@ -259,18 +293,35 @@ impl Connection {
 
     /// Write a string and its corresponding destination to a socket.
     fn write_reply(&self, reply: &EnclaveProcessReply) -> NitroCliResult<()> {
-        let mut lock = self.data.lock().map_err(|e| e.to_string())?;
+        let mut lock = self.data.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         if lock.input_stream.is_none() {
-            return Err("Cannot write a message to this connection.".to_string());
+            return Err(new_nitro_cli_failure!(
+                "Cannot write message to connection",
+                NitroCliErrorEnum::SocketError
+            ));
         }
 
         let mut stream = lock.input_stream.as_mut().unwrap();
-        let reply_bytes = serde_cbor::to_vec(reply).map_err(|e| e.to_string())?;
+        let reply_bytes = serde_cbor::to_vec(reply).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to serialize reply: {:?}", e),
+                NitroCliErrorEnum::SerdeError
+            )
+        })?;
 
-        write_u64_le(&mut stream, reply_bytes.len() as u64)?;
-        stream
-            .write_all(&reply_bytes)
-            .map_err(|e| format!("Failed to write to stream: {:?}", e))
+        write_u64_le(&mut stream, reply_bytes.len() as u64)
+            .map_err(|e| e.add_subaction("Write reply".to_string()))?;
+        stream.write_all(&reply_bytes).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to write to stream: {:?}", e),
+                NitroCliErrorEnum::SocketError
+            )
+        })
     }
 }
 

@@ -16,7 +16,8 @@ use std::os::unix::io::RawFd;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
-use crate::common::NitroCliResult;
+use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use crate::new_nitro_cli_failure;
 
 /// The size of the buffers used for reading console data.
 const BUFFER_SIZE: usize = 1024;
@@ -54,14 +55,25 @@ impl Console {
             SockFlag::empty(),
             None,
         )
-        .map_err(|err| format!("Failed to create blocking console socket: {}", err))?;
+        .map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to create blocking console socket: {:?}", err),
+                NitroCliErrorEnum::SocketError
+            )
+        })?;
 
         let sockaddr = SockAddr::new_vsock(cid, port);
 
-        vsock_set_connect_timeout(socket_fd, CONSOLE_CONNECT_TIMEOUT)?;
+        vsock_set_connect_timeout(socket_fd, CONSOLE_CONNECT_TIMEOUT).map_err(|err| {
+            err.add_subaction("Failed to set console connect timeout".to_string())
+        })?;
 
-        connect(socket_fd, &sockaddr)
-            .map_err(|err| format!("Failed to connect to the console: {}", err))?;
+        connect(socket_fd, &sockaddr).map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to connect to the console: {:?}", err),
+                NitroCliErrorEnum::EnclaveConsoleConnectionFailure
+            )
+        })?;
 
         Ok(Console { fd: socket_fd })
     }
@@ -75,9 +87,16 @@ impl Console {
             SockFlag::SOCK_NONBLOCK,
             None,
         )
-        .map_err(|err| format!("Failed to create nonblocking console socket: {}", err))?;
+        .map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to create nonblocking console socket: {:?}", err),
+                NitroCliErrorEnum::SocketError
+            )
+        })?;
 
-        vsock_set_connect_timeout(socket_fd, CONSOLE_CONNECT_TIMEOUT)?;
+        vsock_set_connect_timeout(socket_fd, CONSOLE_CONNECT_TIMEOUT).map_err(|err| {
+            err.add_subaction("Failed to set console connect timeout".to_string())
+        })?;
 
         let sockaddr = SockAddr::new_vsock(cid, port);
         let result = connect(socket_fd, &sockaddr);
@@ -93,13 +112,28 @@ impl Console {
                             let mut poll_fds = [poll_fd];
                             match poll(&mut poll_fds, POLL_TIMEOUT) {
                                 Ok(1) => println!("Connected to the console"),
-                                _ => return Err(String::from("Failed to connect to the console")),
+                                _ => {
+                                    return Err(new_nitro_cli_failure!(
+                                        "Failed to connect to the console",
+                                        NitroCliErrorEnum::SocketError
+                                    ))
+                                }
                             }
                         }
-                        _ => return Err(String::from("Failed to connect to the console")),
+                        _ => {
+                            return Err(new_nitro_cli_failure!(
+                                "Failed to connect to the console",
+                                NitroCliErrorEnum::SocketError
+                            ))
+                        }
                     }
                 }
-                _ => return Err(String::from("Failed to connect to the console")),
+                _ => {
+                    return Err(new_nitro_cli_failure!(
+                        "Failed to connect to the console",
+                        NitroCliErrorEnum::SocketError
+                    ))
+                }
             },
         };
 
@@ -110,16 +144,27 @@ impl Console {
     pub fn read_to(&self, output: &mut dyn Write) -> NitroCliResult<()> {
         loop {
             let mut buffer = [0u8; BUFFER_SIZE];
-            let size = read(self.fd, &mut buffer).map_err(|err| format!("{}", err))?;
+            let size = read(self.fd, &mut buffer).map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to read data from the console: {:?}", e),
+                    NitroCliErrorEnum::EnclaveConsoleReadError
+                )
+            })?;
 
             if size == 0 {
                 break;
             }
 
             if size > 0 {
-                output
-                    .write(&buffer[..size])
-                    .map_err(|err| format!("{}", err))?;
+                output.write(&buffer[..size]).map_err(|e| {
+                    new_nitro_cli_failure!(
+                        &format!(
+                            "Failed to write data from the console to the given stream: {:?}",
+                            e
+                        ),
+                        NitroCliErrorEnum::EnclaveConsoleWriteOutputError
+                    )
+                })?;
             }
         }
 
@@ -144,7 +189,14 @@ impl Console {
 
             sleep(Duration::from_millis(TIMEOUT));
 
-            if sys_time.elapsed().map_err(|err| format!("{}", err))? >= duration {
+            let time_elapsed = sys_time.elapsed().map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("System time moved backwards: {:?}", err),
+                    NitroCliErrorEnum::ClockSkewError
+                )
+            })?;
+
+            if time_elapsed >= duration {
                 break;
             }
         }
@@ -168,9 +220,12 @@ fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
 
     match ret {
         0 => Ok(()),
-        _ => Err(format!(
-            "Failed to configure SO_VM_SOCKETS_CONNECT_TIMEOUT: {}",
-            ret
+        _ => Err(new_nitro_cli_failure!(
+            &format!(
+                "Failed to configure SO_VM_SOCKETS_CONNECT_TIMEOUT: {:?}",
+                ret
+            ),
+            NitroCliErrorEnum::SocketConnectTimeoutError
         )),
     }
 }

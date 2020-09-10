@@ -24,6 +24,8 @@ openssl = "0.10"
 nitro-cli-poweruser = { path = "./cli_poweruser" }
 vsock = "0.1.5"
 
+lazy_static = "1.4.0"
+
 [build-dependencies]
 bindgen = { version=">=0.54" }
 

@@ -26,7 +26,7 @@ use std::path::PathBuf;
 use common::commands_parser::{BuildEnclavesArgs, EmptyArgs};
 use common::json_output::EnclaveTerminateInfo;
 use common::{enclave_proc_command_send_single, get_sockets_dir_path};
-use common::{EnclaveProcessCommandType, NitroCliResult};
+use common::{EnclaveProcessCommandType, NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use enclave_proc_comm::enclave_process_handle_all_replies;
 use log::info;
 
@@ -62,7 +62,8 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
         &args.output,
         &args.signing_certificate,
         &args.private_key,
-    )?;
+    )
+    .map_err(|e| e.add_subaction("Failed to build EIF from docker".to_string()))?;
     Ok(())
 }
 
@@ -74,14 +75,22 @@ pub fn build_from_docker(
     signing_certificate: &Option<String>,
     private_key: &Option<String>,
 ) -> NitroCliResult<(File, BTreeMap<String, String>)> {
-    let blobs_path = blobs_path()?;
-    let mut cmdline_file = File::open(format!("{}/cmdline", blobs_path))
-        .map_err(|err| format!("Could not open kernel command line file: {}", err))?;
+    let blobs_path =
+        blobs_path().map_err(|e| e.add_subaction("Failed to retrieve blobs path".to_string()))?;
+    let mut cmdline_file = File::open(format!("{}/cmdline", blobs_path)).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Could not open kernel command line file: {:?}", e),
+            NitroCliErrorEnum::FileOperationFailure
+        )
+    })?;
 
     let mut cmdline = String::new();
-    cmdline_file
-        .read_to_string(&mut cmdline)
-        .map_err(|err| format!("Failed to read kernel command line: {:?}", err))?;
+    cmdline_file.read_to_string(&mut cmdline).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to read kernel command line: {:?}", e),
+            NitroCliErrorEnum::FileOperationFailure
+        )
+    })?;
 
     let mut file_output = OpenOptions::new()
         .read(true)
@@ -89,7 +98,12 @@ pub fn build_from_docker(
         .write(true)
         .truncate(true)
         .open(output_path)
-        .map_err(|err| format!("Could not create output file: {}", err))?;
+        .map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Could not create output file: {:?}", e),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+        })?;
 
     let mut docker2eif = enclave_build::Docker2Eif::new(
         docker_uri.to_string(),
@@ -103,26 +117,45 @@ pub fn build_from_docker(
         signing_certificate,
         private_key,
     )
-    .map_err(|err| format!("Failed to create Eif image: {:?}", err))?;
+    .map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Failed to create EIF image: {:?}", err),
+            NitroCliErrorEnum::EifBuildingError
+        )
+    })?;
 
     if let Some(docker_dir) = docker_dir {
         docker2eif
             .build_docker_image(docker_dir.clone())
-            .map_err(|err| format!("Failed to build docker image {:?}", err))?;
+            .map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to build docker image: {:?}", err),
+                    NitroCliErrorEnum::DockerImageBuildError
+                )
+            })?;
     } else {
-        docker2eif
-            .pull_docker_image()
-            .map_err(|err| format!("Failed to pull docker image {:?}", err))?;
+        docker2eif.pull_docker_image().map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to pull docker image: {:?}", err),
+                NitroCliErrorEnum::DockerImagePullError
+            )
+        })?;
     }
-    let measurements = docker2eif
-        .create()
-        .map_err(|err| format!("Failed to create Eif image: {:?}", err))?;
+    let measurements = docker2eif.create().map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Failed to create EIF image: {:?}", err),
+            NitroCliErrorEnum::EifBuildingError
+        )
+    })?;
     eprintln!("Enclave Image successfully created.");
 
     let info = EnclaveBuildInfo::new(measurements.clone());
     println!(
         "{}",
-        serde_json::to_string_pretty(&info).map_err(|err| format!("{:?}", err))?
+        serde_json::to_string_pretty(&info).map_err(|err| new_nitro_cli_failure!(
+            &format!("Failed to display EnclaveBuild data: {:?}", err),
+            NitroCliErrorEnum::SerdeError
+        ))?
     );
 
     Ok((file_output, measurements))
@@ -139,8 +172,12 @@ pub fn build_from_docker(
 fn blobs_path() -> NitroCliResult<String> {
     // TODO Improve error message with a suggestion to the user
     // consider using the default path used by rpm install
-    std::env::var("NITRO_CLI_BLOBS")
-        .map_err(|_err| "NITRO_CLI_BLOBS environment variable is not set".to_string())
+    std::env::var("NITRO_CLI_BLOBS").map_err(|_| {
+        new_nitro_cli_failure!(
+            "NITRO_CLI_BLOBS environment variable is not set",
+            NitroCliErrorEnum::BlobsPathNotSet
+        )
+    })
 }
 
 /// Returns the value of the `NITRO_CLI_ARTIFACTS` environment variable.
@@ -148,30 +185,27 @@ fn blobs_path() -> NitroCliResult<String> {
 /// This variable configures the path where the build artifacts should be saved.
 fn artifacts_path() -> NitroCliResult<String> {
     if let Ok(artifacts) = std::env::var("NITRO_CLI_ARTIFACTS") {
-        std::fs::create_dir_all(artifacts.clone()).map_err(|err| {
-            format!(
-                "Could not create artifacts path {}: {}",
-                artifacts,
-                err.to_string()
+        std::fs::create_dir_all(artifacts.clone()).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Could not create artifacts path {}: {:?}", artifacts, e),
+                NitroCliErrorEnum::FileOperationFailure
             )
         })?;
         Ok(artifacts)
     } else if let Ok(home) = std::env::var("HOME") {
         let artifacts = format!("{}/.nitro_cli/", home);
-        std::fs::create_dir_all(artifacts.clone()).map_err(|err| {
-            format!(
-                "Could not create artifacts path {}: {}",
-                artifacts,
-                err.to_string()
+        std::fs::create_dir_all(artifacts.clone()).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Could not create artifacts path {}: {:?}", artifacts, e),
+                NitroCliErrorEnum::FileOperationFailure
             )
         })?;
         Ok(artifacts)
     } else {
-        Err(
-            "Could not find a folder for the cli artifacts, set either the \
-             HOME or NITRO_CLI_ARTIFACTS"
-                .to_string(),
-        )
+        Err(new_nitro_cli_failure!(
+            "Could not find a folder for the CLI artifacts, set either HOME or NITRO_CLI_ARTIFACTS",
+            NitroCliErrorEnum::ArtifactsPathNotSet
+        ))
     }
 }
 
@@ -179,8 +213,7 @@ fn artifacts_path() -> NitroCliResult<String> {
 pub fn console_enclaves(enclave_cid: u64) -> NitroCliResult<()> {
     debug!("console_enclaves");
     println!("Connecting to the console for enclave {}...", enclave_cid);
-    enclave_console(enclave_cid)
-        .map_err(|err| format!("Failed to start enclave logger: {:?}", err))?;
+    enclave_console(enclave_cid)?;
     Ok(())
 }
 
@@ -188,12 +221,18 @@ pub fn console_enclaves(enclave_cid: u64) -> NitroCliResult<()> {
 pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
     let console = Console::new(
         VMADDR_CID_HYPERVISOR,
-        u32::try_from(enclave_cid)
-            .map_err(|err| format!("Failed to connect to the enclave: {}", err))?
-            + CID_TO_CONSOLE_PORT_OFFSET,
-    )?;
+        u32::try_from(enclave_cid).map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to parse enclave CID: {:?}", err),
+                NitroCliErrorEnum::IntegerParsingError
+            )
+        })? + CID_TO_CONSOLE_PORT_OFFSET,
+    )
+    .map_err(|e| e.add_subaction("Connect to enclave console".to_string()))?;
     println!("Successfully connected to the console.");
-    console.read_to(io::stdout().by_ref())?;
+    console
+        .read_to(io::stdout().by_ref())
+        .map_err(|e| e.add_subaction("Connect to enclave console".to_string()))?;
 
     Ok(())
 }
@@ -203,8 +242,12 @@ pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
 pub fn terminate_all_enclaves() -> NitroCliResult<()> {
     let sockets_dir = get_sockets_dir_path();
     let mut replies: Vec<UnixStream> = vec![];
-    let sockets = std::fs::read_dir(sockets_dir.as_path())
-        .map_err(|e| format!("Error while accessing sockets directory: {}", e))?;
+    let sockets = std::fs::read_dir(sockets_dir.as_path()).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Error while accessing sockets directory: {:?}", e),
+            NitroCliErrorEnum::FileOperationFailure
+        )
+    })?;
 
     let mut err_socket_files: usize = 0;
     let mut failed_connections: Vec<PathBuf> = Vec::new();
@@ -254,7 +297,7 @@ pub fn terminate_all_enclaves() -> NitroCliResult<()> {
         false,
         vec![0, libc::EACCES],
     )
-    .map_err(|e| format!("Failed to handle all replies: {}", e))
+    .map_err(|e| e.add_subaction("Failed to handle all enclave processes replies".to_string()))
 }
 
 /// Macro defining the arguments configuration for a *Nitro CLI* application.
@@ -405,6 +448,17 @@ macro_rules! create_app {
                             .long("enclave-id")
                             .takes_value(true)
                             .help("Enclave ID, used to uniquely identify an enclave")
+                            .required(true),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("explain")
+                    .about("Display detailed information about an error returned by a misbehaving Nitro CLI command")
+                    .arg(
+                        Arg::with_name("error-code")
+                            .long("error-code")
+                            .takes_value(true)
+                            .help("Error code, as returned by the misbehaving Nitro CLI command")
                             .required(true),
                     ),
             )

@@ -11,7 +11,8 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use crate::common::get_socket_path;
-use crate::common::{ExitGracefully, NitroCliResult};
+use crate::common::{ExitGracefully, NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use crate::new_nitro_cli_failure;
 
 /// The structure which manages the Unix socket that an enclave process listens on for commands.
 #[derive(Default)]
@@ -38,15 +39,20 @@ impl Clone for EnclaveProcSock {
 
 impl Drop for EnclaveProcSock {
     fn drop(&mut self) {
-        self.close_mut().ok_or_exit("Failed to drop socket.");
+        self.close_mut()
+            .ok_or_exit_with_errno(Some("Failed to drop socket"));
     }
 }
 
 impl EnclaveProcSock {
     /// Create a new `EnclaveProcSock` instance from a given enclave ID.
     pub fn new(enclave_id: &str) -> NitroCliResult<Self> {
-        let socket_path = get_socket_path(enclave_id)
-            .map_err(|e| format!("Failed to get socket path: {:?}", e))?;
+        let socket_path = get_socket_path(enclave_id).map_err(|_| {
+            new_nitro_cli_failure!(
+                "Failed to create enclave process socket",
+                NitroCliErrorEnum::SocketPathNotFound
+            )
+        })?;
 
         Ok(EnclaveProcSock {
             socket_path,
@@ -69,8 +75,12 @@ impl EnclaveProcSock {
     pub fn start_monitoring(&mut self, exit_on_delete: bool) -> NitroCliResult<()> {
         let path_clone = self.socket_path.clone();
         let requested_remove_clone = self.requested_remove.clone();
-        let mut socket_inotify = Inotify::init()
-            .map_err(|e| format!("Failed to initialize socket notifications: {:?}", e))?;
+        let mut socket_inotify = Inotify::init().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to initialize socket notifications: {:?}", e),
+                NitroCliErrorEnum::InotifyError
+            )
+        })?;
 
         // Relevant events to listen for are:
         // - IN_DELETE_SELF: triggered when the socket file inode gets removed.
@@ -80,7 +90,12 @@ impl EnclaveProcSock {
                 self.socket_path.as_path(),
                 WatchMask::ATTRIB | WatchMask::DELETE_SELF,
             )
-            .map_err(|e| format!("Failed to add watch to inotify: {:?}", e))?;
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to add watch to inotify: {:?}", e),
+                    NitroCliErrorEnum::InotifyError
+                )
+            })?;
         self.remove_listener_thread = Some(thread::spawn(move || {
             socket_removal_listener(
                 path_clone,
@@ -99,9 +114,12 @@ impl EnclaveProcSock {
         self.requested_remove.store(true, Ordering::SeqCst);
         if self.socket_path.exists() {
             std::fs::remove_file(&self.socket_path).map_err(|e| {
-                format!(
-                    "Failed to remove socket {:?} from disk: {:?}",
-                    self.socket_path, e
+                new_nitro_cli_failure!(
+                    &format!(
+                        "Failed to remove socket file {:?} from disk: {:?}",
+                        self.socket_path, e
+                    ),
+                    NitroCliErrorEnum::FileOperationFailure
                 )
             })?;
         }
@@ -112,7 +130,12 @@ impl EnclaveProcSock {
                 .take()
                 .unwrap()
                 .join()
-                .map_err(|e| format!("Failed to join socket notification thread: {:?}", e))?;
+                .map_err(|e| {
+                    new_nitro_cli_failure!(
+                        &format!("Failed to join socket notification thread: {:?}", e),
+                        NitroCliErrorEnum::ThreadJoinFailure
+                    )
+                })?;
         }
 
         Ok(())
@@ -121,7 +144,7 @@ impl EnclaveProcSock {
     /// Remove the managed Unix socket and clean up after it.
     pub fn close(mut self) -> NitroCliResult<()> {
         self.close_mut()
-            .map_err(|e| format!("Failed to close socket: {:?}", e))
+            .map_err(|e| e.add_subaction("Close socket".to_string()))
     }
 }
 
@@ -141,7 +164,14 @@ fn socket_removal_listener(
         // Read events.
         let events = socket_inotify
             .read_events_blocking(&mut buffer)
-            .ok_or_exit("Failed to read inotify events.");
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Socket removal listener error: {:?}", e),
+                    NitroCliErrorEnum::InotifyError
+                )
+                .set_action("Run Enclave".to_string())
+            })
+            .ok_or_exit_with_errno(Some("Failed to read inotify events"));
 
         for event in events {
             // We monitor the DELETE_SELF event, which occurs when the inode is no longer referenced by anybody. We
@@ -229,7 +259,14 @@ mod tests {
         assert!(socket.is_ok());
 
         if let Ok(mut socket) = socket {
-            UnixListener::bind(socket.get_path()).ok_or_exit("Error binding.");
+            UnixListener::bind(socket.get_path())
+                .map_err(|e| {
+                    new_nitro_cli_failure!(
+                        &format!("Failed to bind to socket: {:?}", e),
+                        NitroCliErrorEnum::SocketError
+                    )
+                })
+                .ok_or_exit_with_errno(Some("Error binding"));
             let result = socket.start_monitoring(false);
 
             assert!(result.is_ok());
@@ -259,7 +296,14 @@ mod tests {
         let crt_num_threads0 = get_num_threads_from_status_output(out0.to_string());
 
         if let Ok(mut socket) = socket {
-            let _ = UnixListener::bind(socket.get_path()).ok_or_exit("Error binding.");
+            let _ = UnixListener::bind(socket.get_path())
+                .map_err(|e| {
+                    new_nitro_cli_failure!(
+                        &format!("Failed to bind to socket: {:?}", e),
+                        NitroCliErrorEnum::SocketError
+                    )
+                })
+                .ok_or_exit_with_errno(Some("Error binding"));
             let result = socket.start_monitoring(true);
 
             assert!(result.is_ok());

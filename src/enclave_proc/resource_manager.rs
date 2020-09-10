@@ -24,13 +24,17 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use vsock::VsockListener;
 
-use crate::common::notify_error;
-use crate::common::{ExitGracefully, NitroCliResult, ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
+use crate::common::{construct_error_message, notify_error};
+use crate::common::{
+    ExitGracefully, NitroCliErrorEnum, NitroCliFailure, NitroCliResult, ENCLAVE_READY_VSOCK_PORT,
+    VMADDR_CID_PARENT,
+};
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
 use crate::enclave_proc::utils::get_run_enclaves_info;
 use crate::enclave_proc::utils::{GiB, MiB};
+use crate::new_nitro_cli_failure;
 
 /// CamelCase alias for the bindgen generated driver struct (ne_enclave_start_info).
 pub type EnclaveStartInfo = ne_enclave_start_info;
@@ -189,10 +193,15 @@ impl MemoryRegion {
         let region_index = HUGE_PAGE_MAP
             .iter()
             .position(|&page_info| page_info.0 == hugepage_flag)
-            .ok_or(format!(
-                "Failed to find huge page entry for flag {:X?}",
-                hugepage_flag
-            ))?;
+            .ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    &format!(
+                        "Failed to find huge page entry for flag {:X?}",
+                        hugepage_flag
+                    ),
+                    NitroCliErrorEnum::NoSuchHugepageFlag
+                )
+            })?;
         let region_size = HUGE_PAGE_MAP[region_index].1;
 
         let addr = unsafe {
@@ -207,7 +216,10 @@ impl MemoryRegion {
         };
 
         if addr == libc::MAP_FAILED {
-            return Err("Failed to map memory.".to_string());
+            return Err(new_nitro_cli_failure!(
+                "Failed to map memory",
+                NitroCliErrorEnum::EnclaveMmapError
+            ));
         }
 
         // Record the allocated region.
@@ -238,7 +250,10 @@ impl MemoryRegion {
             unsafe { libc::munmap(self.mem_addr as *mut libc::c_void, self.mem_size as usize) };
 
         if rc < 0 {
-            return Err("Failed to unmap memory.".to_string());
+            return Err(new_nitro_cli_failure!(
+                "Failed to unmap memory",
+                NitroCliErrorEnum::EnclaveMunmapError
+            ));
         }
 
         // Set the address and length to 0 to avoid double-freeing.
@@ -255,12 +270,18 @@ impl MemoryRegion {
         region_offset: usize,
         size: usize,
     ) -> NitroCliResult<()> {
-        if region_offset
-            .checked_add(size)
-            .ok_or_else(|| "Memory overflow".to_string())?
-            > self.mem_size as usize
-        {
-            return Err("Out of region".to_string());
+        let offset_plus_size = region_offset.checked_add(size).ok_or_else(|| {
+            new_nitro_cli_failure!(
+                "Memory overflow when writing EIF file to region",
+                NitroCliErrorEnum::MemoryOverflow
+            )
+        })?;
+
+        if offset_plus_size > self.mem_size as usize {
+            return Err(new_nitro_cli_failure!(
+                "Out of region",
+                NitroCliErrorEnum::MemoryOverflow
+            ));
         }
 
         let bytes = unsafe {
@@ -268,7 +289,12 @@ impl MemoryRegion {
         };
 
         file.read_exact(&mut bytes[region_offset..region_offset + size])
-            .map_err(|err| format!("Error while reading from enclave image: {:?}", err))?;
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Error while reading from enclave image: {:?}", e),
+                    NitroCliErrorEnum::EifParsingError
+                )
+            })?;
 
         Ok(())
     }
@@ -286,7 +312,8 @@ impl MemoryRegion {
 
 impl Drop for MemoryRegion {
     fn drop(&mut self) {
-        self.free().ok_or_exit("Failed to drop memory region.");
+        self.free()
+            .ok_or_exit_with_errno(Some("Failed to drop memory region"));
     }
 }
 
@@ -294,7 +321,11 @@ impl ResourceAllocator {
     /// Create a new `ResourceAllocator` instance which must cover at least the requested amount of memory (in bytes).
     fn new(requested_mem: u64) -> NitroCliResult<Self> {
         if requested_mem == 0 {
-            return Err("Cannot start an enclave with no memory.".to_string());
+            return Err(new_nitro_cli_failure!(
+                "Cannot start an enclave with no memory",
+                NitroCliErrorEnum::InsufficientMemoryRequested
+            )
+            .add_info(vec!["memory", &(requested_mem >> 20).to_string()]));
         }
 
         Ok(ResourceAllocator {
@@ -355,10 +386,14 @@ impl ResourceAllocator {
 
         // If we still have memory to alocate, it means we have insufficient resources.
         if needed_mem > 0 {
-            return Err(format!(
-                "Failed to allocate entire memory ({} MB remained).",
-                needed_mem >> 20,
-            ));
+            return Err(new_nitro_cli_failure!(
+                &format!(
+                    "Failed to allocate entire memory ({} MB remained)",
+                    needed_mem >> 20
+                ),
+                NitroCliErrorEnum::InsufficientMemoryAvailable
+            )
+            .add_info(vec!["memory", &(self.requested_mem >> 20).to_string()]));
         }
 
         // At this point, we may have allocated more than we need, so we release all
@@ -405,7 +440,9 @@ impl ResourceAllocator {
     /// Free all previously-allocated memory regions.
     fn free(&mut self) -> NitroCliResult<()> {
         for region in self.mem_regions.iter_mut() {
-            region.free()?;
+            region
+                .free()
+                .map_err(|e| e.add_subaction("Failed to free enclave memory region".to_string()))?;
         }
 
         self.mem_regions.clear();
@@ -415,7 +452,8 @@ impl ResourceAllocator {
 
 impl Drop for ResourceAllocator {
     fn drop(&mut self) {
-        self.free().ok_or_exit("Failed to drop resource allocator.");
+        self.free()
+            .ok_or_exit_with_errno(Some("Failed to drop resource allocator"));
     }
 }
 
@@ -431,10 +469,27 @@ impl EnclaveHandle {
         let requested_mem = memory_mib << 20;
         let eif_size = eif_file
             .metadata()
-            .map_err(|e| format!("Failed to get enclave file metadata: {:?}", e))?
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to get enclave image file metadata: {:?}", e),
+                    NitroCliErrorEnum::FileOperationFailure
+                )
+            })?
             .len();
         if eif_size > requested_mem {
-            return Err(format!("Requested memory is lower than the enclave image. At least {} MiB must be allocated.", eif_size >> 20));
+            return Err(new_nitro_cli_failure!(
+                &format!(
+                    "At least {} MiB must be allocated (which is the EIF file size)",
+                    eif_size >> 20
+                ),
+                NitroCliErrorEnum::InsufficientMemoryRequested
+            )
+            .add_info(vec![
+                "memory",
+                &memory_mib.to_string(),
+                "EIF size",
+                &(eif_size >> 20).to_string(),
+            ]));
         }
 
         // Open the device file.
@@ -442,14 +497,23 @@ impl EnclaveHandle {
             .read(true)
             .write(true)
             .open("/dev/nitro_enclaves")
-            .map_err(|e| format!("Failed to open device file: {:?}", e))?;
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to open device file: {:?}", e),
+                    NitroCliErrorEnum::FileOperationFailure
+                )
+            })?;
 
         let mut slot_uid: u64 = 0;
-        let enc_fd = EnclaveHandle::do_ioctl(dev_file.as_raw_fd(), NE_CREATE_VM, &mut slot_uid)?;
+        let enc_fd = EnclaveHandle::do_ioctl(dev_file.as_raw_fd(), NE_CREATE_VM, &mut slot_uid)
+            .map_err(|e| e.add_subaction("Create VM ioctl failed".to_string()))?;
         let flags: u64 = if debug_mode { NE_ENCLAVE_DEBUG_MODE } else { 0 };
 
         if enc_fd < 0 {
-            return Err(format!("Invalid enclave file descriptor ({}).", enc_fd));
+            return Err(new_nitro_cli_failure!(
+                &format!("Invalid enclave file descriptor ({})", enc_fd),
+                NitroCliErrorEnum::InvalidEnclaveFd
+            ));
         }
 
         Ok(EnclaveHandle {
@@ -460,7 +524,8 @@ impl EnclaveHandle {
             enclave_cid,
             flags,
             enc_fd,
-            resource_allocator: ResourceAllocator::new(requested_mem)?,
+            resource_allocator: ResourceAllocator::new(requested_mem)
+                .map_err(|e| e.add_subaction("Create resource allocator".to_string()))?,
             eif_file: Some(eif_file),
             state: EnclaveState::default(),
         })
@@ -468,19 +533,27 @@ impl EnclaveHandle {
 
     /// Initialize the enclave environment and start the enclave.
     fn create_enclave(&mut self, connection: Option<&Connection>) -> NitroCliResult<String> {
-        self.init_memory(connection)?;
-        self.init_cpus()?;
+        self.init_memory(connection)
+            .map_err(|e| e.add_subaction("Memory initialization issue".to_string()))?;
+        self.init_cpus()
+            .map_err(|e| e.add_subaction("vCPUs initialization issue".to_string()))?;
 
         let sockaddr = SockAddr::new_vsock(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
-        let listener = VsockListener::bind(&sockaddr)
-            .map_err(|_err| "Enclave boot heartbeat vsock connection - vsock bind error")?;
+        let listener = VsockListener::bind(&sockaddr).map_err(|_| {
+            new_nitro_cli_failure!(
+                "Enclave boot heartbeat vsock connection - vsock bind error",
+                NitroCliErrorEnum::EnclaveBootFailure
+            )
+        })?;
 
-        let enclave_start = self.start(connection)?;
+        let enclave_start = self
+            .start(connection)
+            .map_err(|e| e.add_subaction("Enclave start issue".to_string()))?;
 
         eif_loader::enclave_ready(listener).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
             self.terminate_enclave_error(&err_msg);
-            err_msg
+            new_nitro_cli_failure!(&err_msg, NitroCliErrorEnum::EnclaveBootFailure)
         })?;
 
         self.enclave_cid = Some(enclave_start.enclave_cid);
@@ -490,12 +563,18 @@ impl EnclaveHandle {
             self.slot_uid,
             self.cpu_ids.clone(),
             self.allocated_memory_mib,
-        )?;
+        )
+        .map_err(|e| e.add_subaction("Get RunEnclaves information issue".to_string()))?;
 
         safe_conn_println(
             connection,
             serde_json::to_string_pretty(&info)
-                .map_err(|err| format!("{:?}", err))?
+                .map_err(|err| {
+                    new_nitro_cli_failure!(
+                        &format!("Failed to display RunEnclaves data: {:?}", err),
+                        NitroCliErrorEnum::SerdeError
+                    )
+                })?
                 .as_str(),
         )?;
 
@@ -508,7 +587,10 @@ impl EnclaveHandle {
         safe_conn_eprintln(connection, "Start allocating memory...")?;
 
         let requested_mem_mib = self.resource_allocator.requested_mem >> 20;
-        let regions = self.resource_allocator.allocate()?;
+        let regions = self
+            .resource_allocator
+            .allocate()
+            .map_err(|e| e.add_subaction("Failed to allocate enclave memory".to_string()))?;
 
         self.allocated_memory_mib = regions.iter().fold(0, |mut acc, val| {
             acc += val.mem_size;
@@ -516,32 +598,39 @@ impl EnclaveHandle {
         }) >> 20;
 
         if self.allocated_memory_mib < requested_mem_mib {
-            return Err(format!(
-                "Failed to allocate sufficient memory (requested {} MB, but got {} MB).",
-                requested_mem_mib, self.allocated_memory_mib
-            ));
+            return Err(new_nitro_cli_failure!(
+                &format!(
+                    "Failed to allocate sufficient memory (requested {} MB, but got {} MB)",
+                    requested_mem_mib, self.allocated_memory_mib
+                ),
+                NitroCliErrorEnum::InsufficientMemoryAvailable
+            )
+            .add_info(vec!["memory", &requested_mem_mib.to_string()]));
         }
 
-        let eif_file = self
-            .eif_file
-            .as_mut()
-            .ok_or_else(|| "Cannot get eif_file".to_string())?;
+        let eif_file = self.eif_file.as_mut().ok_or_else(|| {
+            new_nitro_cli_failure!(
+                "Failed to get mutable reference to EIF file",
+                NitroCliErrorEnum::FileOperationFailure
+            )
+        })?;
 
         let mut image_load_info = ImageLoadInfo {
             flags: NE_EIF_IMAGE,
             memory_offset: 0,
         };
         EnclaveHandle::do_ioctl(self.enc_fd, NE_GET_IMAGE_LOAD_INFO, &mut image_load_info)
-            .map_err(|e| format!("Failed to get image load information: {}", e))?;
+            .map_err(|e| e.add_subaction("Get image load info ioctl failed".to_string()))?;
 
         debug!("Memory load information: {:?}", image_load_info);
-        write_eif_to_regions(eif_file, regions, image_load_info.memory_offset as usize)?;
+        write_eif_to_regions(eif_file, regions, image_load_info.memory_offset as usize)
+            .map_err(|e| e.add_subaction("Write EIF to enclave memory regions".to_string()))?;
 
         // Provide the regions to the driver for ownership change.
         for region in regions {
             let mut user_mem_region: UserMemoryRegion = region.into();
             EnclaveHandle::do_ioctl(self.enc_fd, NE_SET_USER_MEMORY_REGION, &mut user_mem_region)
-                .map_err(|e| format!("Failed to set enclave memory region: {}", e))?;
+                .map_err(|e| e.add_subaction("Set user memory region ioctl failed".to_string()))?;
         }
 
         info!("Finished initializing memory.");
@@ -552,7 +641,7 @@ impl EnclaveHandle {
     /// Initialize a single vCPU from a given ID.
     fn init_single_cpu(&mut self, mut cpu_id: u32) -> NitroCliResult<()> {
         EnclaveHandle::do_ioctl(self.enc_fd, NE_ADD_VCPU, &mut cpu_id)
-            .map_err(|e| format!("Failed to add CPU {}: {}", cpu_id, e))?;
+            .map_err(|e| e.add_subaction("Add vCPU ioctl failed".to_string()))?;
 
         self.cpu_ids.push(cpu_id);
         debug!("Added CPU with ID {}.", cpu_id);
@@ -567,7 +656,9 @@ impl EnclaveHandle {
         match cpu_config {
             EnclaveCpuConfig::List(cpu_ids) => {
                 for cpu_id in cpu_ids {
-                    self.init_single_cpu(cpu_id.clone())?;
+                    self.init_single_cpu(cpu_id.clone()).map_err(|e| {
+                        e.add_subaction(format!("Failed to add CPU with ID {}", cpu_id))
+                    })?;
                 }
             }
             EnclaveCpuConfig::Count(cpu_count) => {
@@ -585,7 +676,7 @@ impl EnclaveHandle {
         let mut start = EnclaveStartInfo::new(&self);
 
         EnclaveHandle::do_ioctl(self.enc_fd, NE_START_ENCLAVE, &mut start)
-            .map_err(|e| format!("Failed to start enclave: {}", e))?;
+            .map_err(|e| e.add_subaction("Start enclave ioctl failed".to_string()))?;
 
         safe_conn_eprintln(
             connection,
@@ -604,10 +695,13 @@ impl EnclaveHandle {
     /// Terminate an enclave.
     fn terminate_enclave(&mut self) -> NitroCliResult<()> {
         if self.enclave_cid.unwrap_or(0) != 0 {
-            release_enclave_descriptor(self.enc_fd)?;
+            release_enclave_descriptor(self.enc_fd)
+                .map_err(|e| e.add_subaction("Failed to release enclave descriptor".to_string()))?;
 
             // Release used memory.
-            self.resource_allocator.free()?;
+            self.resource_allocator
+                .free()
+                .map_err(|e| e.add_subaction("Failed to release used memory".to_string()))?;
             info!("Enclave terminated.");
 
             // Mark enclave as termiated.
@@ -620,10 +714,11 @@ impl EnclaveHandle {
     /// Terminate an enclave and notify in case of errors.
     fn terminate_enclave_and_notify(&mut self) {
         // Attempt to terminate the enclave we are holding.
-        if let Err(err) = self.terminate_enclave() {
+        if let Err(error_info) = self.terminate_enclave() {
             let mut err_msg = format!(
                 "Terminating enclave '{:X}' failed with error: {:?}",
-                self.slot_uid, err
+                self.slot_uid,
+                construct_error_message(&error_info).as_str()
             );
             err_msg.push_str(
                 "!!! The instance could be in an inconsistent state, please reboot it !!!",
@@ -719,7 +814,10 @@ impl EnclaveHandle {
             e => format!("An error has occurred: {} (rc: {})", e, rc),
         };
 
-        Err(err_msg)
+        Err(new_nitro_cli_failure!(
+            &err_msg,
+            NitroCliErrorEnum::IoctlFailure
+        ))
     }
 }
 
@@ -764,7 +862,8 @@ impl EnclaveManager {
         debug_mode: bool,
     ) -> NitroCliResult<Self> {
         let enclave_handle =
-            EnclaveHandle::new(enclave_cid, memory_mib, cpu_ids, eif_file, debug_mode)?;
+            EnclaveHandle::new(enclave_cid, memory_mib, cpu_ids, eif_file, debug_mode)
+                .map_err(|e| e.add_subaction("Failed to create enclave handle".to_string()))?;
         Ok(EnclaveManager {
             enclave_id: String::new(),
             enclave_handle: Arc::new(Mutex::new(enclave_handle)),
@@ -779,8 +878,14 @@ impl EnclaveManager {
         self.enclave_id = self
             .enclave_handle
             .lock()
-            .map_err(|e| e.to_string())?
-            .create_enclave(connection)?;
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to acquire lock: {:?}", e),
+                    NitroCliErrorEnum::LockAcquireFailure
+                )
+            })?
+            .create_enclave(connection)
+            .map_err(|e| e.add_subaction("Failed to create enclave".to_string()))?;
         Ok(())
     }
 
@@ -788,7 +893,12 @@ impl EnclaveManager {
     ///
     /// The enclave handle is locked during this operation.
     pub fn get_description_resources(&self) -> NitroCliResult<UnpackedHandle> {
-        let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        let locked_handle = self.enclave_handle.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         Ok((
             locked_handle.slot_uid,
             locked_handle.enclave_cid.unwrap(),
@@ -804,7 +914,12 @@ impl EnclaveManager {
     ///
     /// The enclave handle is locked during this operation.
     pub fn get_console_resources(&self) -> NitroCliResult<u64> {
-        let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        let locked_handle = self.enclave_handle.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         Ok(locked_handle.enclave_cid.unwrap())
     }
 
@@ -812,7 +927,12 @@ impl EnclaveManager {
     ///
     /// The enclave handle is locked during this operation.
     fn get_termination_resources(&self) -> NitroCliResult<(RawFd, ResourceAllocator)> {
-        let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        let locked_handle = self.enclave_handle.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         Ok((
             locked_handle.enc_fd,
             locked_handle.resource_allocator.clone(),
@@ -823,7 +943,12 @@ impl EnclaveManager {
     ///
     /// The enclave handle is locked during this operation.
     pub fn get_enclave_descriptor(&self) -> NitroCliResult<RawFd> {
-        let locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        let locked_handle = self.enclave_handle.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         Ok(locked_handle.enc_fd)
     }
 
@@ -831,7 +956,12 @@ impl EnclaveManager {
     ///
     /// The enclave handle is locked during this operation.
     pub fn update_state(&mut self, state: EnclaveState) -> NitroCliResult<()> {
-        let mut locked_handle = self.enclave_handle.lock().map_err(|e| e.to_string())?;
+        let mut locked_handle = self.enclave_handle.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
         locked_handle.state = state;
         Ok(())
     }
@@ -842,12 +972,23 @@ impl EnclaveManager {
     /// This will allow the enclave process to execute other commands while termination
     /// is taking place.
     pub fn terminate_enclave(&mut self) -> NitroCliResult<()> {
-        let (enc_fd, mut resource_allocator) = self.get_termination_resources()?;
-        release_enclave_descriptor(enc_fd)?;
-        resource_allocator.free()?;
+        let (enc_fd, mut resource_allocator) = self.get_termination_resources().map_err(|e| {
+            e.add_subaction("Enclave manager failed to get termination resources".to_string())
+        })?;
+        release_enclave_descriptor(enc_fd).map_err(|e| {
+            e.add_subaction("Enclave manager failed to release enclave descriptor".to_string())
+        })?;
+        resource_allocator.free().map_err(|e| {
+            e.add_subaction("Enclave manager failed to free enclave memory".to_string())
+        })?;
         self.enclave_handle
             .lock()
-            .map_err(|e| e.to_string())?
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to acquire lock: {:?}", e),
+                    NitroCliErrorEnum::LockAcquireFailure
+                )
+            })?
             .clear();
         Ok(())
     }
@@ -861,29 +1002,46 @@ fn write_eif_to_regions(
 ) -> NitroCliResult<()> {
     let file_size = eif_file
         .metadata()
-        .map_err(|err| format!("Error during fs::metadata: {}", err))?
+        .map_err(|_| {
+            new_nitro_cli_failure!(
+                "Failed to obtain EIF file metadata",
+                NitroCliErrorEnum::FileOperationFailure
+            )
+        })?
         .len() as usize;
 
-    eif_file
-        .seek(SeekFrom::Start(0))
-        .map_err(|err| format!("Error during file seek: {}", err))?;
+    eif_file.seek(SeekFrom::Start(0)).map_err(|_| {
+        new_nitro_cli_failure!(
+            "Failed to seek to the beginning of the EIF file",
+            NitroCliErrorEnum::FileOperationFailure
+        )
+    })?;
 
     let mut total_written: usize = 0;
 
     for region in regions {
-        if total_written
-            >= file_size
-                .checked_add(image_write_offset)
-                .ok_or_else(|| "Memory overflow".to_string())?
-        {
+        let offset_plus_file_size = file_size.checked_add(image_write_offset).ok_or_else(|| {
+            new_nitro_cli_failure!(
+                "Memory overflow when trying to write EIF file",
+                NitroCliErrorEnum::MemoryOverflow
+            )
+        })?;
+
+        if total_written >= offset_plus_file_size {
             // All bytes have been written.
             break;
         }
-        if total_written
+
+        let written_plus_region_size = total_written
             .checked_add(region.mem_size as usize)
-            .ok_or_else(|| "Memory overflow".to_string())?
-            <= image_write_offset
-        {
+            .ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "Memory overflow when trying to write EIF file",
+                    NitroCliErrorEnum::MemoryOverflow
+                )
+            })?;
+
+        if written_plus_region_size <= image_write_offset {
             // All bytes need to be skiped to get to the image write offset.
         } else {
             let region_offset = image_write_offset.saturating_sub(total_written);
@@ -892,7 +1050,11 @@ fn write_eif_to_regions(
                 region.mem_size as usize - region_offset,
                 file_size - file_offset,
             );
-            region.fill_from_file(eif_file, region_offset, size)?;
+            region
+                .fill_from_file(eif_file, region_offset, size)
+                .map_err(|e| {
+                    e.add_subaction("Failed to fill region with file content".to_string())
+                })?;
         }
         total_written += region.mem_size as usize;
     }
@@ -905,7 +1067,10 @@ fn release_enclave_descriptor(enc_fd: RawFd) -> NitroCliResult<()> {
     // Close enclave descriptor.
     let rc = unsafe { libc::close(enc_fd) };
     if rc < 0 {
-        return Err("Failed to close enclave descriptor.".to_string());
+        return Err(new_nitro_cli_failure!(
+            "Failed to close enclave descriptor",
+            NitroCliErrorEnum::FileOperationFailure
+        ));
     }
 
     Ok(())

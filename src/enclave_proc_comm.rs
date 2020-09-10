@@ -21,16 +21,22 @@ use crate::common::{
     read_u64_le, receive_from_stream,
 };
 use crate::common::{
-    EnclaveProcessCommandType, EnclaveProcessReply, ExitGracefully, NitroCliResult,
+    EnclaveProcessCommandType, EnclaveProcessReply, NitroCliErrorEnum, NitroCliFailure,
+    NitroCliResult,
 };
 use crate::common::{ENCLAVE_PROC_WAIT_TIMEOUT_MSEC, MSG_ENCLAVE_CONFIRM};
 use crate::enclave_proc::enclave_process_run;
+use crate::new_nitro_cli_failure;
 
 /// Spawn an enclave process and wait until it has detached and has
 /// taken ownership of its communication socket.
 pub fn enclave_proc_spawn(logger: &EnclaveProcLogWriter) -> NitroCliResult<UnixStream> {
-    let (cli_socket, enclave_proc_socket) =
-        UnixStream::pair().map_err(|e| format!("Failed to create a socket pair: {:?}", e))?;
+    let (cli_socket, enclave_proc_socket) = UnixStream::pair().map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Could not create a socket pair: {:?}", e),
+            NitroCliErrorEnum::SocketPairCreationFailure
+        )
+    })?;
 
     // Prevent the descriptor from being closed when calling exec().
     let enclave_proc_fd = enclave_proc_socket.as_raw_fd();
@@ -47,7 +53,12 @@ pub fn enclave_proc_spawn(logger: &EnclaveProcLogWriter) -> NitroCliResult<UnixS
         // This is our intermediate child process.
         enclave_process_run(enclave_proc_socket, logger);
     } else {
-        fork_status.ok_or_exit("Failed to create intermediate process");
+        fork_status.map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to create intermediate process: {:?}", e),
+                NitroCliErrorEnum::ProcessSpawnFailure
+            )
+        })?;
     }
 
     // The enclave process will open a socket named "<enclave_id>.sock", but this
@@ -59,8 +70,12 @@ pub fn enclave_proc_spawn(logger: &EnclaveProcLogWriter) -> NitroCliResult<UnixS
 
 /// Connect to all existing enclave processes, returning a connection to each.
 pub fn enclave_proc_connect_to_all() -> NitroCliResult<Vec<UnixStream>> {
-    let paths = fs::read_dir(get_sockets_dir_path())
-        .map_err(|e| format!("Failed to access the sockets directory: {:?}", e))?;
+    let paths = fs::read_dir(get_sockets_dir_path()).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to access sockets directory: {:?}", e),
+            NitroCliErrorEnum::ReadFromDiskFailure
+        )
+    })?;
     Ok(paths
         .filter_map(|path| path.ok())
         .map(|path| path.path())
@@ -87,7 +102,12 @@ pub fn enclave_proc_connect_to_all() -> NitroCliResult<Vec<UnixStream>> {
                         } else {
                             // For all other connection errors, assume the socket is stale and delete it.
                             info!("Deleting stale socket: {}", path_str);
-                            fs::remove_file(path_str).ok_or_exit("Failed to delete socket.");
+                            let _ = fs::remove_file(path_str).map_err(|e| {
+                                new_nitro_cli_failure!(
+                                    &format!("Failed to delete socket: {:?}", e),
+                                    NitroCliErrorEnum::FileOperationFailure
+                                )
+                            });
                         }
                     }
                 }
@@ -100,10 +120,16 @@ pub fn enclave_proc_connect_to_all() -> NitroCliResult<Vec<UnixStream>> {
 
 /// Open a connection to an enclave-specific socket.
 pub fn enclave_proc_connect_to_single(enclave_id: &str) -> NitroCliResult<UnixStream> {
-    let socket_path = get_socket_path(enclave_id)
-        .map_err(|e| format!("Failed to get path to socket file: {:?}", e))?;
-    UnixStream::connect(socket_path)
-        .map_err(|e| format!("Failed to connect to enclave process: {:?}", e))
+    let socket_path = get_socket_path(enclave_id).map_err(|e| {
+        e.add_subaction("Connect to specific enclave process".to_string())
+            .set_error_code(NitroCliErrorEnum::SocketError)
+    })?;
+    UnixStream::connect(socket_path).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to connect to specific enclave process: {:?}", e),
+            NitroCliErrorEnum::SocketError
+        )
+    })
 }
 
 /// Broadcast a command to all available enclave processes.
@@ -116,15 +142,25 @@ where
 {
     // Open a connection to each valid socket.
     let mut replies: Vec<UnixStream> = vec![];
-    let epoll_fd = epoll::epoll_create().map_err(|e| format!("Failed to create epoll: {:?}", e))?;
+    let epoll_fd = epoll::epoll_create().map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to create epoll: {:?}", e),
+            NitroCliErrorEnum::EpollError
+        )
+    })?;
     let comms: Vec<NitroCliResult<()>> = enclave_proc_connect_to_all()
-        .map_err(|e| format!("Failed to connect to all enclave processes: {:?}", e))?
+        .map_err(|e| {
+            e.add_subaction("Failed to send command to all enclave processes".to_string())
+        })?
         .iter_mut()
         .map(|socket| {
             // Add each valid connection to epoll.
-            let socket_clone = socket
-                .try_clone()
-                .map_err(|e| format!("Failed to clone socket: {:?}", e))?;
+            let socket_clone = socket.try_clone().map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to clone socket: {:?}", e),
+                    NitroCliErrorEnum::SocketError
+                )
+            })?;
             let mut process_evt =
                 EpollEvent::new(EpollFlags::EPOLLIN, socket_clone.into_raw_fd() as u64);
             epoll::epoll_ctl(
@@ -133,7 +169,12 @@ where
                 socket.as_raw_fd(),
                 &mut process_evt,
             )
-            .map_err(|e| format!("Failed to register socket with epoll: {:?}", e))?;
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to register socket with epoll: {:?}", e),
+                    NitroCliErrorEnum::EpollError
+                )
+            })?;
 
             // Send the command.
             enclave_proc_command_send_single(cmd, args, socket)
@@ -158,7 +199,12 @@ where
                 Ok(num_events) => break num_events,
                 Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => continue,
                 // TODO: Handle bad descriptors (closed remote connections).
-                Err(e) => return Err(format!("Failed to wait on epoll: {:?}", e)),
+                Err(e) => {
+                    return Err(new_nitro_cli_failure!(
+                        &format!("Failed to wait on epoll: {:?}", e),
+                        NitroCliErrorEnum::EpollError
+                    ))
+                }
             }
         };
 
@@ -260,15 +306,19 @@ where
         let obj_vec: Vec<T> = objects.iter().map(|v| v.0.clone()).collect();
         println!(
             "{}",
-            serde_json::to_string_pretty(&obj_vec)
-                .map_err(|e| format!("Failed to print JSON vector: {:?}", e))?
+            serde_json::to_string_pretty(&obj_vec).map_err(|e| new_nitro_cli_failure!(
+                &format!("Failed to print JSON vector: {:?}", e),
+                NitroCliErrorEnum::SerdeError
+            ))?
         );
     } else {
         for object in objects.iter().map(|v| v.0.clone()) {
             println!(
                 "{}",
-                serde_json::to_string_pretty(&object)
-                    .map_err(|e| format!("Failed to print JSON object: {:?}", e))?
+                serde_json::to_string_pretty(&object).map_err(|e| new_nitro_cli_failure!(
+                    &format!("Failed to print JSON object: {:?}", e),
+                    NitroCliErrorEnum::SerdeError
+                ))?
             );
         }
     }
@@ -280,17 +330,20 @@ where
         .count()
         > 0
     {
-        return Err(format!(
-            "Failed to execute {} enclave process commands.",
-            objects
-                .iter()
-                .filter(|v| !allowed_return_codes.contains(&v.1))
-                .count()
+        return Err(new_nitro_cli_failure!(
+            &format!(
+                "Failed to execute {} enclave process commands",
+                objects
+                    .iter()
+                    .filter(|v| !allowed_return_codes.contains(&v.1))
+                    .count()
+            ),
+            NitroCliErrorEnum::EnclaveProcessCommandNotExecuted
         ));
     } else if failed_conns > 0 {
-        return Err(format!(
-            "Failed to connect to {} enclave processes.",
-            failed_conns
+        return Err(new_nitro_cli_failure!(
+            &format!("Failed to connect to {} enclave processes", failed_conns),
+            NitroCliErrorEnum::EnclaveProcessConnectionFailure
         ));
     }
 
@@ -300,24 +353,27 @@ where
 /// Obtain an enclave's CID given its full ID.
 pub fn enclave_proc_get_cid(enclave_id: &str) -> NitroCliResult<u64> {
     let mut comm = enclave_proc_connect_to_single(enclave_id)
-        .map_err(|e| format!("Failed to connect to a single enclave process: {:?}", e))?;
+        .map_err(|e| e.add_subaction("Failed to connect to enclave process".to_string()))?;
     // TODO: Replicate output of old CLI on invalid enclave IDs.
     enclave_proc_command_send_single::<EmptyArgs>(
         EnclaveProcessCommandType::GetEnclaveCID,
         None,
         &mut comm,
     )
-    .map_err(|e| format!("Failed to send CID request to enclave process: {:?}", e))?;
+    .map_err(|e| e.add_subaction("Failed to send CID request to enclave process".to_string()))?;
 
     info!("Sent command: GetEnclaveCID");
     let enclave_cid = read_u64_le(&mut comm)
-        .map_err(|e| format!("Failed to read CID from enclave process: {:?}", e))?;
+        .map_err(|e| e.add_subaction(String::from("Failed to read CID from enclave process")))?;
 
     // We got the CID, so shut the connection down.
     comm.shutdown(std::net::Shutdown::Both).map_err(|e| {
-        format!(
-            "Failed to shut down the connection with the enclave process: {:?}",
-            e
+        new_nitro_cli_failure!(
+            &format!(
+                "Failed to shut down connection after obtaining CID: {:?}",
+                e
+            ),
+            NitroCliErrorEnum::SocketError
         )
     })?;
 

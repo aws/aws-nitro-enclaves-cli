@@ -15,6 +15,8 @@
 #include <linux/version.h>
 #include <linux/wait.h>
 
+#include "ne_pci_dev.h"
+
 /*
  * The type '__poll_t' is not available in kernels older than 4.16.0
  * so for these we define it here.
@@ -60,7 +62,6 @@ struct ne_mem_region {
  * @nr_threads_per_core:	The number of threads that a full CPU core has.
  * @nr_vcpus:			Number of vcpus associated with the enclave.
  * @numa_node:			NUMA node of the enclave memory and CPUs.
- * @pdev:			PCI device used for enclave lifetime management.
  * @slot_uid:			Slot unique id mapped to the enclave.
  * @state:			Enclave state, updated during enclave lifetime.
  * @threads_per_core:		Enclave full CPU cores array, indexed by core id,
@@ -83,7 +84,6 @@ struct ne_enclave {
 	unsigned int		nr_threads_per_core;
 	unsigned int		nr_vcpus;
 	int			numa_node;
-	struct pci_dev		*pdev;
 	u64			slot_uid;
 	u16			state;
 	cpumask_var_t		*threads_per_core;
@@ -102,7 +102,17 @@ enum ne_state {
 	NE_STATE_STOPPED	= U16_MAX,
 };
 
-/* Nitro Enclaves (NE) misc device */
-extern struct miscdevice ne_misc_dev;
+/**
+ * struct ne_devs - Data structure to keep refs to the NE misc and PCI devices.
+ * @ne_misc_dev:	Nitro Enclaves misc device.
+ * @ne_pci_dev :	Nitro Enclaves PCI device.
+ */
+struct ne_devs {
+	struct miscdevice	*ne_misc_dev;
+	struct ne_pci_dev	*ne_pci_dev;
+};
+
+/* Nitro Enclaves (NE) data structure for keeping refs to the NE misc and PCI devices. */
+extern struct ne_devs ne_devs;
 
 #endif /* _NE_MISC_DEV_H_ */

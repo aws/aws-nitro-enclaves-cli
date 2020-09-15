@@ -60,6 +60,25 @@
  */
 #define NE_PARENT_VM_CID	(3)
 
+static long ne_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+
+static const struct file_operations ne_fops = {
+	.owner		= THIS_MODULE,
+	.llseek		= noop_llseek,
+	.unlocked_ioctl	= ne_ioctl,
+};
+
+static struct miscdevice ne_misc_dev = {
+	.minor	= MISC_DYNAMIC_MINOR,
+	.name	= "nitro_enclaves",
+	.fops	= &ne_fops,
+	.mode	= 0660,
+};
+
+struct ne_devs ne_devs = {
+	.ne_misc_dev	= &ne_misc_dev,
+};
+
 /*
  * TODO: Update logic to create new sysfs entries instead of using
  * a kernel parameter e.g. if multiple sysfs files needed.
@@ -195,18 +214,9 @@ static inline unsigned long page_size(struct page *page)
  */
 static bool ne_check_enclaves_created(void)
 {
-	struct ne_pci_dev *ne_pci_dev = NULL;
-	struct pci_dev *pdev = NULL;
+	struct ne_pci_dev *ne_pci_dev = ne_devs.ne_pci_dev;
 	bool ret = false;
 
-	if (!ne_misc_dev.parent)
-		return ret;
-
-	pdev = to_pci_dev(ne_misc_dev.parent);
-	if (!pdev)
-		return ret;
-
-	ne_pci_dev = pci_get_drvdata(pdev);
 	if (!ne_pci_dev)
 		return ret;
 
@@ -763,6 +773,7 @@ unlock_mutex:
 static int ne_add_vcpu_ioctl(struct ne_enclave *ne_enclave, u32 vcpu_id)
 {
 	struct ne_pci_dev_cmd_reply cmd_reply = {};
+	struct pci_dev *pdev = ne_devs.ne_pci_dev->pdev;
 	int rc = -EINVAL;
 	struct slot_add_vcpu_req slot_add_vcpu_req = {};
 
@@ -772,8 +783,9 @@ static int ne_add_vcpu_ioctl(struct ne_enclave *ne_enclave, u32 vcpu_id)
 	slot_add_vcpu_req.slot_uid = ne_enclave->slot_uid;
 	slot_add_vcpu_req.vcpu_id = vcpu_id;
 
-	rc = ne_do_request(ne_enclave->pdev, SLOT_ADD_VCPU, &slot_add_vcpu_req,
-			   sizeof(slot_add_vcpu_req), &cmd_reply, sizeof(cmd_reply));
+	rc = ne_do_request(pdev, SLOT_ADD_VCPU,
+			   &slot_add_vcpu_req, sizeof(slot_add_vcpu_req),
+			   &cmd_reply, sizeof(cmd_reply));
 	if (rc < 0) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
 				    "Error in slot add vCPU [rc=%d]\n", rc);
@@ -910,6 +922,7 @@ static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
 	unsigned long memory_size = 0;
 	struct ne_mem_region *ne_mem_region = NULL;
 	unsigned long nr_phys_contig_mem_regions = 0;
+	struct pci_dev *pdev = ne_devs.ne_pci_dev->pdev;
 	struct page **phys_contig_mem_regions = NULL;
 	int rc = -EINVAL;
 
@@ -1032,7 +1045,7 @@ static int ne_set_user_memory_region_ioctl(struct ne_enclave *ne_enclave,
 		slot_add_mem_req.paddr = page_to_phys(phys_contig_mem_regions[i]);
 		slot_add_mem_req.size = page_size(phys_contig_mem_regions[i]);
 
-		rc = ne_do_request(ne_enclave->pdev, SLOT_ADD_MEM,
+		rc = ne_do_request(pdev, SLOT_ADD_MEM,
 				   &slot_add_mem_req, sizeof(slot_add_mem_req),
 				   &cmd_reply, sizeof(cmd_reply));
 		if (rc < 0) {
@@ -1085,6 +1098,7 @@ static int ne_start_enclave_ioctl(struct ne_enclave *ne_enclave,
 	unsigned int cpu = 0;
 	struct enclave_start_req enclave_start_req = {};
 	unsigned int i = 0;
+	struct pci_dev *pdev = ne_devs.ne_pci_dev->pdev;
 	int rc = -EINVAL;
 
 	if (!ne_enclave->nr_mem_regions) {
@@ -1122,8 +1136,9 @@ static int ne_start_enclave_ioctl(struct ne_enclave *ne_enclave,
 	enclave_start_req.flags = enclave_start_info->flags;
 	enclave_start_req.slot_uid = ne_enclave->slot_uid;
 
-	rc = ne_do_request(ne_enclave->pdev, ENCLAVE_START, &enclave_start_req,
-			   sizeof(enclave_start_req), &cmd_reply, sizeof(cmd_reply));
+	rc = ne_do_request(pdev, ENCLAVE_START,
+			   &enclave_start_req, sizeof(enclave_start_req),
+			   &cmd_reply, sizeof(cmd_reply));
 	if (rc < 0) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
 				    "Error in enclave start [rc=%d]\n", rc);
@@ -1484,7 +1499,8 @@ static int ne_enclave_release(struct inode *inode, struct file *file)
 	struct ne_pci_dev_cmd_reply cmd_reply = {};
 	struct enclave_stop_req enclave_stop_request = {};
 	struct ne_enclave *ne_enclave = file->private_data;
-	struct ne_pci_dev *ne_pci_dev = NULL;
+	struct ne_pci_dev *ne_pci_dev = ne_devs.ne_pci_dev;
+	struct pci_dev *pdev = ne_pci_dev->pdev;
 	int rc = -EINVAL;
 	struct slot_free_req slot_free_req = {};
 
@@ -1498,8 +1514,6 @@ static int ne_enclave_release(struct inode *inode, struct file *file)
 	if (!ne_enclave->slot_uid)
 		return 0;
 
-	ne_pci_dev = pci_get_drvdata(ne_enclave->pdev);
-
 	/*
 	 * Acquire the enclave list mutex before the enclave mutex
 	 * in order to avoid deadlocks with @ref ne_event_work_handler.
@@ -1510,7 +1524,7 @@ static int ne_enclave_release(struct inode *inode, struct file *file)
 	if (ne_enclave->state != NE_STATE_INIT && ne_enclave->state != NE_STATE_STOPPED) {
 		enclave_stop_request.slot_uid = ne_enclave->slot_uid;
 
-		rc = ne_do_request(ne_enclave->pdev, ENCLAVE_STOP,
+		rc = ne_do_request(pdev, ENCLAVE_STOP,
 				   &enclave_stop_request, sizeof(enclave_stop_request),
 				   &cmd_reply, sizeof(cmd_reply));
 		if (rc < 0) {
@@ -1525,7 +1539,8 @@ static int ne_enclave_release(struct inode *inode, struct file *file)
 
 	slot_free_req.slot_uid = ne_enclave->slot_uid;
 
-	rc = ne_do_request(ne_enclave->pdev, SLOT_FREE, &slot_free_req, sizeof(slot_free_req),
+	rc = ne_do_request(pdev, SLOT_FREE,
+			   &slot_free_req, sizeof(slot_free_req),
 			   &cmd_reply, sizeof(cmd_reply));
 	if (rc < 0) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
@@ -1588,7 +1603,6 @@ static const struct file_operations ne_enclave_fops = {
  * ne_create_vm_ioctl() - Alloc slot to be associated with an enclave. Create
  *			  enclave file descriptor to be further used for enclave
  *			  resources handling e.g. memory regions and CPUs.
- * @pdev:		PCI device used for enclave lifetime management.
  * @ne_pci_dev :	Private data associated with the PCI device.
  * @slot_uid:		Generated unique slot id associated with an enclave.
  *
@@ -1598,14 +1612,14 @@ static const struct file_operations ne_enclave_fops = {
  * * Enclave fd on success.
  * * Negative return value on failure.
  */
-static int ne_create_vm_ioctl(struct pci_dev *pdev, struct ne_pci_dev *ne_pci_dev,
-			      u64 *slot_uid)
+static int ne_create_vm_ioctl(struct ne_pci_dev *ne_pci_dev, u64 *slot_uid)
 {
 	struct ne_pci_dev_cmd_reply cmd_reply = {};
 	int enclave_fd = -1;
 	struct file *enclave_file = NULL;
 	unsigned int i = 0;
 	struct ne_enclave *ne_enclave = NULL;
+	struct pci_dev *pdev = ne_pci_dev->pdev;
 	int rc = -EINVAL;
 	struct slot_alloc_req slot_alloc_req = {};
 
@@ -1659,8 +1673,6 @@ static int ne_create_vm_ioctl(struct pci_dev *pdev, struct ne_pci_dev *ne_pci_de
 		goto free_cpumask;
 	}
 
-	ne_enclave->pdev = pdev;
-
 	enclave_fd = get_unused_fd_flags(O_CLOEXEC);
 	if (enclave_fd < 0) {
 		rc = enclave_fd;
@@ -1681,7 +1693,8 @@ static int ne_create_vm_ioctl(struct pci_dev *pdev, struct ne_pci_dev *ne_pci_de
 		goto put_fd;
 	}
 
-	rc = ne_do_request(ne_enclave->pdev, SLOT_ALLOC, &slot_alloc_req, sizeof(slot_alloc_req),
+	rc = ne_do_request(pdev, SLOT_ALLOC,
+			   &slot_alloc_req, sizeof(slot_alloc_req),
 			   &cmd_reply, sizeof(cmd_reply));
 	if (rc < 0) {
 		dev_err_ratelimited(ne_misc_dev.this_device,
@@ -1739,16 +1752,13 @@ static long ne_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case NE_CREATE_VM: {
 		int enclave_fd = -1;
 		struct file *enclave_file = NULL;
-		struct ne_pci_dev *ne_pci_dev = NULL;
-		struct pci_dev *pdev = to_pci_dev(ne_misc_dev.parent);
+		struct ne_pci_dev *ne_pci_dev = ne_devs.ne_pci_dev;
 		int rc = -EINVAL;
 		u64 slot_uid = 0;
 
-		ne_pci_dev = pci_get_drvdata(pdev);
-
 		mutex_lock(&ne_pci_dev->enclaves_list_mutex);
 
-		enclave_fd = ne_create_vm_ioctl(pdev, ne_pci_dev, &slot_uid);
+		enclave_fd = ne_create_vm_ioctl(ne_pci_dev, &slot_uid);
 		if (enclave_fd < 0) {
 			rc = enclave_fd;
 
@@ -1778,19 +1788,6 @@ static long ne_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	return 0;
 }
-
-static const struct file_operations ne_fops = {
-	.owner		= THIS_MODULE,
-	.llseek		= noop_llseek,
-	.unlocked_ioctl	= ne_ioctl,
-};
-
-struct miscdevice ne_misc_dev = {
-	.minor	= MISC_DYNAMIC_MINOR,
-	.name	= "nitro_enclaves",
-	.fops	= &ne_fops,
-	.mode	= 0660,
-};
 
 static int __init ne_init(void)
 {

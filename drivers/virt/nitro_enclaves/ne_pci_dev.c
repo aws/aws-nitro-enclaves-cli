@@ -217,6 +217,7 @@ static void ne_event_work_handler(struct work_struct *work)
 	struct ne_enclave *ne_enclave = NULL;
 	struct ne_pci_dev *ne_pci_dev =
 		container_of(work, struct ne_pci_dev, notify_work);
+	struct pci_dev *pdev = ne_pci_dev->pdev;
 	int rc = -EINVAL;
 	struct slot_info_req slot_info_req = {};
 
@@ -239,10 +240,11 @@ static void ne_event_work_handler(struct work_struct *work)
 
 		slot_info_req.slot_uid = ne_enclave->slot_uid;
 
-		rc = ne_do_request(ne_enclave->pdev, SLOT_INFO, &slot_info_req,
-				   sizeof(slot_info_req), &cmd_reply, sizeof(cmd_reply));
+		rc = ne_do_request(pdev, SLOT_INFO,
+				   &slot_info_req, sizeof(slot_info_req),
+				   &cmd_reply, sizeof(cmd_reply));
 		if (rc < 0)
-			dev_err(&ne_enclave->pdev->dev, "Error in slot info [rc=%d]\n", rc);
+			dev_err(&pdev->dev, "Error in slot info [rc=%d]\n", rc);
 
 		/* Notify enclave process that the enclave state changed. */
 		if (ne_enclave->state != cmd_reply.state) {
@@ -512,16 +514,6 @@ static int ne_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto teardown_msix;
 	}
 
-	/* Set the NE PCI device as parent to use it in the ioctl logic. */
-	ne_misc_dev.parent = &pdev->dev;
-
-	rc = misc_register(&ne_misc_dev);
-	if (rc < 0) {
-		dev_err(&pdev->dev, "Error in misc dev register [rc=%d]\n", rc);
-
-		goto disable_ne_pci_dev;
-	}
-
 	atomic_set(&ne_pci_dev->cmd_reply_avail, 0);
 	init_waitqueue_head(&ne_pci_dev->cmd_reply_wait_q);
 	INIT_LIST_HEAD(&ne_pci_dev->enclaves_list);
@@ -529,10 +521,19 @@ static int ne_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	mutex_init(&ne_pci_dev->pci_dev_mutex);
 	ne_pci_dev->pdev = pdev;
 
+	ne_devs.ne_pci_dev = ne_pci_dev;
+
+	rc = misc_register(ne_devs.ne_misc_dev);
+	if (rc < 0) {
+		dev_err(&pdev->dev, "Error in misc dev register [rc=%d]\n", rc);
+
+		goto disable_ne_pci_dev;
+	}
+
 	return 0;
 
 disable_ne_pci_dev:
-	ne_misc_dev.parent = NULL;
+	ne_devs.ne_pci_dev = NULL;
 	ne_pci_dev_disable(pdev);
 teardown_msix:
 	ne_teardown_msix(pdev);
@@ -559,9 +560,9 @@ static void ne_pci_remove(struct pci_dev *pdev)
 {
 	struct ne_pci_dev *ne_pci_dev = pci_get_drvdata(pdev);
 
-	misc_deregister(&ne_misc_dev);
+	misc_deregister(ne_devs.ne_misc_dev);
 
-	ne_misc_dev.parent = NULL;
+	ne_devs.ne_pci_dev = NULL;
 
 	ne_pci_dev_disable(pdev);
 
@@ -591,9 +592,9 @@ static void ne_pci_shutdown(struct pci_dev *pdev)
 	if (!ne_pci_dev)
 		return;
 
-	misc_deregister(&ne_misc_dev);
+	misc_deregister(ne_devs.ne_misc_dev);
 
-	ne_misc_dev.parent = NULL;
+	ne_devs.ne_pci_dev = NULL;
 
 	ne_pci_dev_disable(pdev);
 

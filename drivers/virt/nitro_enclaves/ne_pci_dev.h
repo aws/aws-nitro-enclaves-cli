@@ -128,18 +128,18 @@
  * @MAX_CMD:			A gatekeeper for max possible command type.
  */
 enum ne_pci_dev_cmd_type {
-	INVALID_CMD = 0,
-	ENCLAVE_START = 1,
-	ENCLAVE_GET_SLOT = 2,
-	ENCLAVE_STOP = 3,
-	SLOT_ALLOC = 4,
-	SLOT_FREE = 5,
-	SLOT_ADD_MEM = 6,
-	SLOT_ADD_VCPU = 7,
-	SLOT_COUNT = 8,
-	NEXT_SLOT = 9,
-	SLOT_INFO = 10,
-	SLOT_ADD_BULK_VCPUS = 11,
+	INVALID_CMD		= 0,
+	ENCLAVE_START		= 1,
+	ENCLAVE_GET_SLOT	= 2,
+	ENCLAVE_STOP		= 3,
+	SLOT_ALLOC		= 4,
+	SLOT_FREE		= 5,
+	SLOT_ADD_MEM		= 6,
+	SLOT_ADD_VCPU		= 7,
+	SLOT_COUNT		= 8,
+	NEXT_SLOT		= 9,
+	SLOT_INFO		= 10,
+	SLOT_ADD_BULK_VCPUS	= 11,
 	MAX_CMD,
 };
 

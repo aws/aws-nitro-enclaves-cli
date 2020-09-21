@@ -76,6 +76,8 @@ pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     bootstrap_hasher: EifHasher<T>,
     /// Hash of the remaining ramdisks.
     customer_app_hasher: EifHasher<T>,
+    /// Hash the signing certificate
+    certificate_hasher: EifHasher<T>,
     hasher_template: T,
     eif_crc: crc32::Digest,
 }
@@ -104,6 +106,8 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 .expect("Could not create bootstrap_hasher"),
             customer_app_hasher: EifHasher::new_without_cache(hasher.clone())
                 .expect("Could not create customer app hasher"),
+            certificate_hasher: EifHasher::new_without_cache(hasher.clone())
+                .expect("Could not create certificate hasher"),
             hasher_template: hasher,
             eif_crc: crc32::Digest::new_with_initial(crc32::IEEE, 0),
         }
@@ -491,6 +495,15 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 self.customer_app_hasher.write_all(&buffer[..]).unwrap();
             }
         }
+
+        if let Some(sign_info) = self.sign_info.as_ref() {
+            let cert = openssl::x509::X509::from_pem(&sign_info.signing_certificate[..]).unwrap();
+            let cert_der = cert.to_der().unwrap();
+            // This is equivalent to extend(cert.digest(sha384)), since hasher is going to
+            // hash the DER certificate (cert.digest()) and then tpm_extend_result_reset
+            // will do the extend.
+            self.certificate_hasher.write_all(&cert_der).unwrap();
+        }
     }
 
     pub fn boot_measurement(&mut self) -> BTreeMap<String, String> {
@@ -511,6 +524,17 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
                 .tpm_extend_result_reset()
                 .expect("Could not get result for app_hasher"),
         );
+        // Hash certificate only if signing key is set, otherwise related PCR will be zero
+        let cert_hash = if self.sign_info.is_some() {
+            Some(hex::encode(
+                self.certificate_hasher
+                    .tpm_extend_result_reset()
+                    .expect("Could not get result for certificate_hasher"),
+            ))
+        } else {
+            None
+        };
+
         measurements.insert(
             "HashAlgorithm".to_string(),
             format!("{:?}", self.hasher_template),
@@ -518,6 +542,9 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         measurements.insert("PCR0".to_string(), image_hasher);
         measurements.insert("PCR1".to_string(), bootstrap_hasher);
         measurements.insert("PCR2".to_string(), app_hash);
+        if let Some(cert_hash) = cert_hash {
+            measurements.insert("PCR8".to_string(), cert_hash);
+        }
 
         measurements
     }

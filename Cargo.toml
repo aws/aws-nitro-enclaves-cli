@@ -20,11 +20,10 @@ signal-hook = "0.1"
 serde_cbor = "0.10"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
+enclave_api = { path = "./enclave_api" }
 openssl = "0.10"
 nitro-cli-poweruser = { path = "./cli_poweruser" }
 vsock = "0.1.5"
-
-lazy_static = "1.4.0"
 
 [build-dependencies]
 bindgen = { version=">=0.54" }
@@ -36,7 +35,7 @@ num-traits = "0.2"
 tempfile = "3.1"
 
 [workspace]
-members = [".", "cli_poweruser", "eif_defs", "eif_loader", "eif_utils", "enclave_build", "vsock_proxy"]
+members = [".", "cli_poweruser", "eif_defs", "eif_loader", "eif_utils", "enclave_build", "vsock_proxy", "enclave_api"]
 
 [features]
 default = []

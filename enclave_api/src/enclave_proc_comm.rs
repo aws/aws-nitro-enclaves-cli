@@ -3,28 +3,22 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-use log::{debug, info};
-use nix::sys::epoll;
-use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
+use log::info;
 use nix::unistd::*;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
-use std::fs;
-use std::io::ErrorKind;
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
+use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
+use std::u64;
 
 use crate::common::commands_parser::EmptyArgs;
 use crate::common::logger::EnclaveProcLogWriter;
 use crate::common::{
-    enclave_proc_command_send_single, get_socket_path, get_sockets_dir_path, notify_error,
-    read_u64_le, receive_from_stream,
+    enclave_proc_command_send_single, get_socket_path, read_u64_le, receive_from_stream,
 };
 use crate::common::{
     EnclaveProcessCommandType, EnclaveProcessReply, NitroCliErrorEnum, NitroCliFailure,
     NitroCliResult,
 };
-use crate::common::{ENCLAVE_PROC_WAIT_TIMEOUT_MSEC, MSG_ENCLAVE_CONFIRM};
 use crate::enclave_proc::enclave_process_run;
 use crate::new_nitro_cli_failure;
 
@@ -233,34 +227,56 @@ where
 }
 
 /// Print the output from a single enclave process.
-fn enclave_proc_handle_output<T>(conn: &mut UnixStream) -> (Option<T>, Option<i32>)
+pub fn enclave_proc_handle_output<T>(conn: &mut UnixStream) -> NitroCliResult<T>
 where
     T: DeserializeOwned,
 {
     let mut stdout_str = String::new();
+    let mut stderr_str = String::new();
     let mut status: Option<i32> = None;
 
     // The contents meant for standard output must always form a valid JSON object.
     while let Ok(reply) = receive_from_stream::<EnclaveProcessReply>(conn) {
         match reply {
             EnclaveProcessReply::StdOutMessage(msg) => stdout_str.push_str(&msg),
-            EnclaveProcessReply::StdErrMessage(msg) => eprint!("{}", msg),
+            EnclaveProcessReply::StdErrMessage(msg) => stderr_str.push_str(&msg),
             EnclaveProcessReply::Status(status_code) => status = Some(status_code),
         }
     }
 
     // Shut the connection down.
-    match conn.shutdown(std::net::Shutdown::Both) {
-        Ok(()) => (),
-        Err(e) => {
-            notify_error(&format!("Failed to shut connection down: {}", e));
-            status = Some(-1);
-        }
+    if let Err(e) = conn.shutdown(std::net::Shutdown::Both) {
+        return Err(new_nitro_cli_failure!(
+            &format!("Failed to shut down connection down {}, {}", e, stderr_str),
+            NitroCliErrorEnum::SocketError
+        ));
     }
 
     // Decode the JSON object.
     let json_obj = serde_json::from_str::<T>(&stdout_str).ok();
-    (json_obj, status)
+
+    if let Some(status_code) = status {
+        if status_code == libc::EACCES {
+            return Err(new_nitro_cli_failure!(
+                &format!("Operation not permitted {}", stderr_str),
+                NitroCliErrorEnum::UnspecifiedError
+            ));
+        } else if status_code != 0 {
+            return Err(new_nitro_cli_failure!(
+                stderr_str,
+                NitroCliErrorEnum::UnspecifiedError
+            ));
+        }
+    }
+
+    if json_obj.is_none() {
+        return Err(new_nitro_cli_failure!(
+            &format!("Failed to parse enclave proc response {}", stderr_str),
+            NitroCliErrorEnum::SerdeError
+        ));
+    }
+
+    Ok(json_obj.unwrap())
 }
 
 /// Fetch JSON objects and statuses from all connected enclave processes.
@@ -272,7 +288,7 @@ where
 
     for conn in conns.iter_mut() {
         // We only count connections that have yielded a valid JSON object and a status
-        let (object, status) = enclave_proc_handle_output::<T>(conn);
+        let (_, object, status) = enclave_proc_handle_output::<T>(conn);
         if let Some(object) = object {
             if let Some(status) = status {
                 objects.push((object, status));

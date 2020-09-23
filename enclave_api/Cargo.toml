@@ -1,0 +1,33 @@
+[package]
+name = "enclave_api"
+version = "0.1.0"
+authors = ["Paul-Sebastian Ungurenu <paulsebu@amazon.com>"]
+edition = "2018"
+
+[dependencies]
+bitflags = "1.2.1"
+serde = { version = ">=1.0", features = ["derive"] }
+chrono = "0.4"
+clap = "2.33"
+inotify = "0.7"
+memmap = "0.7"
+serde_json = "1.0"
+nix = "0.15"
+lazy_static = "1.4.0"
+log = "0.4"
+libc = { version = ">=0.2.69" }
+flexi_logger = "0.15"
+page_size = "0.4"
+signal-hook = "0.1"
+serde_cbor = "0.10"
+eif_loader = { path = "../eif_loader" }
+enclave_build = { path = "../enclave_build" }
+openssl = "0.10"
+nitro-cli-poweruser = { path = "../cli_poweruser" }
+vsock = "0.1.5"
+
+[build-dependencies]
+bindgen = { version=">=0.54" }
+
+[dev-dependencies]
+tempfile = "3.1"

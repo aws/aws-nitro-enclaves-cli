@@ -413,14 +413,14 @@ impl CliDev {
         command: C,
     ) -> NitroCliResult<NitroEnclavesCmdReply> {
         debug!("submit: {:?}", command);
-        let past_reply = self.read_u32(NITRO_ENCLAVES_RPLY_PENDING)?;
+        let past_reply = self.read_u32(NITRO_ENCLAVES_RPLY_PENDING)? & 0xFFFF;
 
         self.submit_command(cmd_type, command)?;
 
         let mut num_trys = 20000;
         let mut warn_trys = 200;
         let err_prefix = sanitize_command(cmd_type);
-        while past_reply == self.read_u32(NITRO_ENCLAVES_RPLY_PENDING)? && num_trys > 0 {
+        while past_reply == (self.read_u32(NITRO_ENCLAVES_RPLY_PENDING)? & 0xFFFF) && num_trys > 0 {
             sleep(time::Duration::from_millis(10));
             num_trys -= 1;
             warn_trys -= 1;

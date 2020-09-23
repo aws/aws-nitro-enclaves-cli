@@ -10,8 +10,8 @@ use std::io::Read;
 use crate::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo};
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::enclave_proc::resource_manager::EnclaveManager;
-use crate::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
 use crate::new_nitro_cli_failure;
+use enclave_driver::NE_ENCLAVE_DEBUG_MODE;
 
 /// Kibibytes.
 #[allow(non_upper_case_globals)]

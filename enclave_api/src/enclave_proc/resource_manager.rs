@@ -3,15 +3,9 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-mod bindings {
-    #![allow(missing_docs)]
-    #![allow(non_camel_case_types)]
-
-    include!(concat!(env!("OUT_DIR"), "/driver_structs.rs"));
-}
-
-use bindings::*;
 use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
+use enclave_driver::includes::*;
+use enclave_driver::*;
 use libc::c_int;
 use log::{debug, info};
 use nix::sys::socket::SockAddr;
@@ -20,7 +14,6 @@ use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{Error, SeekFrom};
-use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -38,47 +31,8 @@ use crate::enclave_proc::utils::get_run_enclaves_info;
 use crate::enclave_proc::utils::{GiB, MiB};
 use crate::new_nitro_cli_failure;
 
-/// CamelCase alias for the bindgen generated driver struct (ne_enclave_start_info).
-pub type EnclaveStartInfo = ne_enclave_start_info;
-
-/// CamelCase alias for the bindgen generated driver struct (ne_user_memory_region).
-pub type UserMemoryRegion = ne_user_memory_region;
-
-/// CamelCase alias for the bindgen generate struct (ne_image_load_info).
-pub type ImageLoadInfo = ne_image_load_info;
-
 /// The internal data type needed for describing an enclave.
 type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u64, EnclaveState);
-
-/// The bit indicating if an enclave has been launched in debug mode.
-pub const NE_ENCLAVE_DEBUG_MODE: u64 = 0x1;
-
-/// Enclave Image Format (EIF) flag.
-const NE_EIF_IMAGE: u64 = 0x01;
-
-/// Flag indicating a memory region for enclave general usage.
-const NE_DEFAULT_MEMORY_REGION: u64 = 0;
-
-/// Magic number for Nitro Enclave IOCTL codes.
-const NE_MAGIC: u64 = 0xAE;
-
-/// IOCTL code for `NE_CREATE_VM`.
-pub const NE_CREATE_VM: u64 = nix::request_code_read!(NE_MAGIC, 0x20, size_of::<u64>()) as _;
-
-/// IOCTL code for `NE_ADD_VCPU`.
-pub const NE_ADD_VCPU: u64 = nix::request_code_readwrite!(NE_MAGIC, 0x21, size_of::<u32>()) as _;
-
-/// IOCTL code for `NE_GET_IMAGE_LOAD_INFO`.
-pub const NE_GET_IMAGE_LOAD_INFO: u64 =
-    nix::request_code_readwrite!(NE_MAGIC, 0x22, size_of::<ImageLoadInfo>()) as _;
-
-/// IOCTL code for `NE_SET_USER_MEMORY_REGION`.
-pub const NE_SET_USER_MEMORY_REGION: u64 =
-    nix::request_code_write!(NE_MAGIC, 0x23, size_of::<MemoryRegion>()) as _;
-
-/// IOCTL code for `NE_START_ENCLAVE`.
-pub const NE_START_ENCLAVE: u64 =
-    nix::request_code_readwrite!(NE_MAGIC, 0x24, size_of::<EnclaveStartInfo>()) as _;
 
 /// Mapping between hugepage size and allocation flag, in descending order of size.
 const HUGE_PAGE_MAP: [(libc::c_int, u64); 9] = [
@@ -680,7 +634,7 @@ impl EnclaveHandle {
 
     /// Start an enclave after providing it with its necessary resources.
     fn start(&mut self, connection: Option<&Connection>) -> NitroCliResult<EnclaveStartInfo> {
-        let mut start = EnclaveStartInfo::new(&self);
+        let mut start = EnclaveStartInfo::from(&self);
 
         EnclaveHandle::do_ioctl(self.enc_fd, NE_START_ENCLAVE, &mut start)
             .map_err(|e| e.add_subaction("Start enclave ioctl failed".to_string()))?;
@@ -841,20 +795,12 @@ impl Drop for EnclaveHandle {
     }
 }
 
-impl EnclaveStartInfo {
+impl From<&&mut EnclaveHandle> for EnclaveStartInfo {
     /// Create a new `EnclaveStartInfo` instance from the given enclave handle.
-    fn new(enclave_handle: &EnclaveHandle) -> Self {
+    fn from(enclave_handle: &&mut EnclaveHandle) -> EnclaveStartInfo {
         EnclaveStartInfo {
             flags: enclave_handle.flags,
             enclave_cid: enclave_handle.enclave_cid.unwrap_or(0),
-        }
-    }
-
-    /// Create an empty `EnclaveStartInfo` instance.
-    pub fn new_empty() -> Self {
-        EnclaveStartInfo {
-            flags: 0,
-            enclave_cid: 0,
         }
     }
 }

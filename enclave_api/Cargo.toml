@@ -22,12 +22,10 @@ signal-hook = "0.1"
 serde_cbor = "0.10"
 eif_loader = { path = "../eif_loader" }
 enclave_build = { path = "../enclave_build" }
+enclave_driver = { path = "../enclave_driver" }
 openssl = "0.10"
 nitro-cli-poweruser = { path = "../cli_poweruser" }
 vsock = "0.1.5"
-
-[build-dependencies]
-bindgen = { version=">=0.54" }
 
 [dev-dependencies]
 tempfile = "3.1"

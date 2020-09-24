@@ -38,6 +38,9 @@ pub const VMADDR_CID_HYPERVISOR: u32 = 0;
 /// An offset applied to an enclave's CID in order to determine its console port.
 pub const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
 
+/// Default blobs path to be used if the corresponding environment variable is not set.
+const DEFAULT_BLOBS_PATH: &str = "/usr/share/nitro_enclaves/blobs/";
+
 /// Information obtained from a newly-build enclave image file.
 #[derive(Serialize)]
 pub struct EnclaveBuildInfo {
@@ -172,12 +175,9 @@ pub fn build_from_docker(
 fn blobs_path() -> NitroCliResult<String> {
     // TODO Improve error message with a suggestion to the user
     // consider using the default path used by rpm install
-    std::env::var("NITRO_CLI_BLOBS").map_err(|_| {
-        new_nitro_cli_failure!(
-            "NITRO_CLI_BLOBS environment variable is not set",
-            NitroCliErrorEnum::BlobsPathNotSet
-        )
-    })
+    let blobs_res = std::env::var("NITRO_CLI_BLOBS");
+
+    Ok(blobs_res.unwrap_or_else(|_| DEFAULT_BLOBS_PATH.to_string()))
 }
 
 /// Returns the value of the `NITRO_CLI_ARTIFACTS` environment variable.

@@ -5,8 +5,8 @@ DefaultDependencies=no
 
 [Service]
 Type=simple
-StandardOutput=none
-StandardError=none
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=vsock-proxy
 ExecStart=/bin/bash -ce "REGION=$(curl --silent http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region) ; \
 			exec /usr/sbin/vsock-proxy 8000 kms.$${REGION}.amazonaws.com 443 --config /etc/vsock_proxy/config.yaml"

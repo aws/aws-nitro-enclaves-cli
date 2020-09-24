@@ -1,0 +1,5 @@
+# Enclave configuration file.
+# How much memory to allocate for enclaves. Unit is MB.
+Memory 512
+# How many CPUs to reserve for enclaves.
+CPUs	2

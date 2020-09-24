@@ -1,0 +1,156 @@
+#!/bin/bash
+
+# This script is executed once when the Nitro CLI package is installed.
+# Its purpose is to configure the udev rule required by the NE device
+# and to make sure the driver is inserted.
+
+set -eu
+
+#The name of the Nitro Enclaves driver.
+DRIVER_NAME="nitro_enclaves"
+
+# The name of Nitro Enclaves resource directories.
+RES_DIR_NAME="nitro_enclaves"
+
+# The name of the NE group that will own the device file.
+NE_GROUP_NAME="ne"
+
+# The name of the udev rules file for the device file.
+UDEV_RULES_FILE="99-nitro-enclaves.rules"
+
+# Flag for deciding whether to print stdout messages or not.
+VERBOSE="0"
+
+# Error codes.
+ERR_EMPTY_CPU_POOL=200
+ERR_MISSING_NODE=201
+ERR_INVALID_NODE=202
+ERR_CLEAR_PAGE=203
+ERR_SET_PAGE=204
+ERR_ROLLBACK_PAGE=205
+ERR_INSUFFICIENT_MEMORY=206
+
+function check_usage {
+	if [ "$1" != "1" ]; then
+		echo "Usage: $0 <driver_path>"
+		exit 1
+	fi
+}
+
+function print {
+	if [ "$VERBOSE" -eq 1 ]; then
+		echo "$@"
+	fi
+}
+
+function check_if_number {
+	[[ "$1" =~ ^[0-9]+$ ]]
+}
+
+# Print an error message and fail. The argument may be:
+# - A string, which is printed as-is.
+# - An error code, which indicates a specific error message.
+function fail {
+    local rc
+    
+    # Check if the argument is a numeric error code or a message string.
+    set +e
+    check_if_number "$1"
+    rc=$?
+    set +e
+    
+    if [ "$rc" -eq 0 ]; then
+        echo -n "Error: "
+        case "$1" in
+            "$ERR_EMPTY_CPU_POOL")
+                echo "No CPUs are off-line. Please configure the CPU pool first."
+                ;;
+            "$ERR_MISSING_NODE")
+                echo "Failed to find NUMA node for a CPU. This indicates an invalid SysFS configuration."
+                ;;
+            "$ERR_INVALID_NODE")
+                echo "Invalid NUMA node for a CPU. This indicates an invalid CPU ID."
+                ;;
+            "$ERR_CLEAR_PAGE")
+                echo "Failed to clear huge page(s). Some pages may be in use."
+                ;;
+            "$ERR_SET_PAGE")
+                echo "Failed to set a number of huge pages. This may indicate insufficient system resources."
+                ;;
+            "$ERR_ROLLBACK_PAGE")
+                echo "Failed to roll back a number of huge pages. Some pages may be in use."
+                ;;
+            "$ERR_INSUFFICIENT_MEMORY")
+                echo "Failed to configure entire amount of requested memory. This indicates insufficient system resources."
+                ;;
+            \?)
+                echo "An unknown error has occurred: $1"
+                ;;
+        esac
+    else
+        echo "Error: $1"
+    fi
+
+    exit 1
+}
+
+# Remove the driver.
+function driver_remove {
+    print "Removing the driver..."
+
+    # Attempt to remove the driver.
+    rmmod $DRIVER_NAME &> /dev/null || fail "Failed to remove driver."
+
+    # Verify that the driver has indeed been removed.
+    [ "$(lsmod | grep -cw $DRIVER_NAME)" -eq 0 ] || fail "The driver is still visible."
+
+    print "Done."
+}
+
+# Insert the driver and configure udev after it is inserted.
+function driver_insert {
+    local log_file="/var/log/$RES_DIR_NAME/nitro_enclaves.log"
+    local loop_idx=0
+
+    # Check if an older driver is inserted.
+    if [ "$(lsmod | grep -cw $DRIVER_NAME)" -gt 0 ]; then
+        print "The driver is already inserted"
+    fi
+
+    print "Inserting the driver..."
+    modprobe $DRIVER_NAME
+
+    # Verify that the new driver has been inserted.
+    [ "$(lsmod | grep -cw $DRIVER_NAME)" -eq 1 ] || fail "The driver is not visible."
+
+    print "Configuring the device file..."
+
+    # Create the NE group if it doesn't already exist.
+    if [ "$(grep -cw $NE_GROUP_NAME /etc/group)" -eq 0 ]; then
+	groupadd $NE_GROUP_NAME
+    fi
+
+    # Check that the group exists.
+    getent group $NE_GROUP_NAME &> /dev/null || fail "The group '$NE_GROUP_NAME' is not present."
+
+    # Define the udev rules file. The string will be expanded twice (once below and the second time when it is
+    # passed as an argument to $SHELL) and we need the double-quotes to make it into the rules file; hence, we
+    # need to provide them pre-pre-expanded, i.e <\\\"> (since these expand to <\"> which expands to <">).
+    echo KERNEL==\"$DRIVER_NAME\", SUBSYSTEM==\"misc\", OWNER=\"root\", GROUP=\"$NE_GROUP_NAME\", MODE=\"0660\", TAG+=\"systemd\" > /usr/lib/udev/rules.d/$UDEV_RULES_FILE || fail "Could not write udev rules file."
+
+    # Trigger the udev rule.
+    udevadm control --reload
+    udevadm trigger /dev/$DRIVER_NAME || fail "Could not apply the NE udev rule."
+
+    # The previous operation may need some time to complete.
+    while [ "$NE_GROUP_NAME" != "$(stat -c '%G' /dev/$DRIVER_NAME)" ] && [ "$loop_idx" -lt 3 ]; do
+        sleep 1
+	loop_idx=$((loop_idx+1))
+    done
+}
+
+check_usage $#
+
+DRIVER_PATH="$1"
+
+driver_insert $DRIVER_PATH

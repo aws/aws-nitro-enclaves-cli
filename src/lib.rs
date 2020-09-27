@@ -5,6 +5,11 @@
 
 //! This crate provides the functionality for the Nitro CLI process.
 
+/// Numeric traits for generic mathematics
+extern crate num_traits;
+/// Provides a custom derive Primitive with native Rust bindings to C
+extern crate enum_primitive_derive;
+
 /// The common module (shared between the CLI and enclave process).
 pub mod common;
 /// The enclave process module.

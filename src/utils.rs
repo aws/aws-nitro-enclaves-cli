@@ -16,8 +16,11 @@ use std::os::unix::io::RawFd;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
-use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
-use crate::new_nitro_cli_failure;
+use enclave_api::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use enclave_api::new_nitro_cli_failure;
+
+/// The CID for the vsock device of the parent VM.
+pub const VMADDR_CID_PARENT: u32 = 3;
 
 /// The size of the buffers used for reading console data.
 const BUFFER_SIZE: usize = 1024;

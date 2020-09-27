@@ -5,31 +5,21 @@
 
 //! This crate provides the functionality for the Nitro CLI process.
 
-/// The common module (shared between the CLI and enclave process).
-pub mod common;
-/// The enclave process module.
-pub mod enclave_proc;
-/// The module covering the communication between a CLI instance and enclave processes.
-pub mod enclave_proc_comm;
+/// The command parser module (used by CLI to parse command line arguments).
+pub mod commands_parser;
 /// The CLI-specific utilities module.
 pub mod utils;
 
+use enclave_api::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use enclave_api::new_nitro_cli_failure;
 use log::debug;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
 
-use common::commands_parser::{BuildEnclavesArgs, EmptyArgs};
-use common::json_output::EnclaveTerminateInfo;
-use common::{enclave_proc_command_send_single, get_sockets_dir_path};
-use common::{EnclaveProcessCommandType, NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
-use enclave_proc_comm::enclave_process_handle_all_replies;
-use log::info;
-
+use commands_parser::BuildEnclavesArgs;
 use utils::Console;
 
 /// Hypervisor CID as defined by <http://man7.org/linux/man-pages/man7/vsock.7.html>.
@@ -235,69 +225,6 @@ pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
         .map_err(|e| e.add_subaction("Connect to enclave console".to_string()))?;
 
     Ok(())
-}
-
-/// Terminates all enclave instances belonging to the current user (or all
-/// instances, if the current user has `root` permissions).
-pub fn terminate_all_enclaves() -> NitroCliResult<()> {
-    let sockets_dir = get_sockets_dir_path();
-    let mut replies: Vec<UnixStream> = vec![];
-    let sockets = std::fs::read_dir(sockets_dir.as_path()).map_err(|e| {
-        new_nitro_cli_failure!(
-            &format!("Error while accessing sockets directory: {:?}", e),
-            NitroCliErrorEnum::FileOperationFailure
-        )
-    })?;
-
-    let mut err_socket_files: usize = 0;
-    let mut failed_connections: Vec<PathBuf> = Vec::new();
-    for socket in sockets {
-        let entry = match socket {
-            Ok(value) => value,
-            Err(_) => {
-                err_socket_files += 1;
-                continue;
-            }
-        };
-
-        // Send a `terminate-enclave` command through each socket,
-        // irrespective of the enclave process owner. The security policy
-        // inside the enclave process is responsible with checking the
-        // command's permissions.
-        let mut stream = match UnixStream::connect(entry.path()) {
-            Ok(value) => value,
-            Err(_) => {
-                failed_connections.push(entry.path());
-                continue;
-            }
-        };
-
-        if enclave_proc_command_send_single::<EmptyArgs>(
-            EnclaveProcessCommandType::Terminate,
-            None,
-            &mut stream,
-        )
-        .is_err()
-        {
-            failed_connections.push(entry.path());
-        } else {
-            replies.push(stream);
-        }
-    }
-
-    // Remove stale socket files.
-    for stale_socket in &failed_connections {
-        info!("Deleting stale socket: {:?}", stale_socket);
-        let _ = std::fs::remove_file(stale_socket);
-    }
-
-    enclave_process_handle_all_replies::<EnclaveTerminateInfo>(
-        &mut replies,
-        failed_connections.len() + err_socket_files,
-        false,
-        vec![0, libc::EACCES],
-    )
-    .map_err(|e| e.add_subaction("Failed to handle all enclave processes replies".to_string()))
 }
 
 /// Macro defining the arguments configuration for a *Nitro CLI* application.

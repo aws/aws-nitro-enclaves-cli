@@ -43,6 +43,15 @@ bitflags! {
     }
 }
 
+impl Into<String> for EnclaveFlags {
+    fn into(self) -> String {
+        match self {
+            EnclaveFlags::DEBUG_MODE => "DEBUG_MODE".to_string(),
+            _ => "NONE".to_string(),
+        }
+    }
+}
+
 /// Enclave configuration structure
 #[derive(Clone)]
 pub struct EnclaveConf {
@@ -111,6 +120,34 @@ impl From<EnclaveDescribeInfo> for Enclave {
             memory_size: info.memory_mib,
             state,
             flags,
+        }
+    }
+}
+
+impl Into<EnclaveRunInfo> for Enclave {
+    fn into(self) -> EnclaveRunInfo {
+        EnclaveRunInfo {
+            enclave_id: self.enclave_id,
+            process_id: self.process_id,
+            enclave_cid: self.enclave_cid,
+            cpu_count: self.cpu_count as usize,
+            cpu_ids: self.cpu_ids,
+            memory_mib: self.memory_size,
+        }
+    }
+}
+
+impl Into<EnclaveDescribeInfo> for Enclave {
+    fn into(self) -> EnclaveDescribeInfo {
+        EnclaveDescribeInfo {
+            enclave_id: self.enclave_id,
+            process_id: self.process_id,
+            enclave_cid: self.enclave_cid,
+            cpu_count: self.cpu_count,
+            cpu_ids: self.cpu_ids,
+            memory_mib: self.memory_size,
+            state: self.state.into(),
+            flags: self.flags.into(),
         }
     }
 }

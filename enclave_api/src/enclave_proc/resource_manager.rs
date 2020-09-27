@@ -69,6 +69,16 @@ pub enum EnclaveState {
     Terminating,
 }
 
+impl Into<String> for EnclaveState {
+    fn into(self) -> String {
+        match self {
+            EnclaveState::Running => "RUNNING".to_string(),
+            EnclaveState::Terminating => "TERMINATING".to_string(),
+            _ => "EMPTY".to_string(),
+        }
+    }
+}
+
 /// Helper structure to allocate memory resources needed by an enclave.
 #[derive(Clone, Default)]
 struct ResourceAllocator {

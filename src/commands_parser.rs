@@ -10,8 +10,8 @@ use libc::VMADDR_CID_LOCAL;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
-use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_CID_PARENT};
-use crate::new_nitro_cli_failure;
+use enclave_api::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_CID_PARENT};
+use enclave_api::new_nitro_cli_failure;
 
 /// The arguments used by the `run-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -392,8 +392,8 @@ fn parse_error_code_str(args: &ArgMatches) -> NitroCliResult<String> {
 mod tests {
     use super::*;
 
-    use crate::common::construct_error_message;
     use crate::create_app;
+    use enclave_api::common::construct_error_message;
 
     use clap::{App, AppSettings, Arg, SubCommand};
 

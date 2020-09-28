@@ -3,19 +3,6 @@
 #![deny(warnings)]
 #![allow(missing_docs)]
 
-#[macro_use]
-extern crate enum_primitive_derive;
-extern crate num_traits;
-
-pub mod cli_dev;
-pub mod commands_parser;
-pub mod cpu_info;
-pub mod json_output;
-pub mod resource_allocator_driver;
-pub mod resource_manager;
-pub mod testing_commands;
-pub mod utils;
-
 use log::debug;
 use std::fs::File;
 

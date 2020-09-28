@@ -6,7 +6,7 @@
 
 obj-m += nitro_enclaves.o
 
-nitro_enclaves-y := ne_pci_dev.o ne_misc_dev.o
+nitro_enclaves-y := ne_pci_dev.o ne_misc_dev.o resource_allocator.o
 
 ccflags-y += -Wall -I$(src)/../../../include
 

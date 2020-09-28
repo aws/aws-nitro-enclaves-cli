@@ -30,6 +30,7 @@
 
 #include "ne_misc_dev.h"
 #include "ne_pci_dev.h"
+#include "resource_allocator.h"
 
 /**
  * NE_CPUS_SIZE - Size for max 128 CPUs, for now, in a cpu-list string, comma
@@ -1395,6 +1396,13 @@ static long ne_enclave_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		return 0;
 	}
 
+	case NITRO_CLI_SLOT_ALLOC_MEMORY:
+	case NITRO_CLI_SLOT_SET_CPU_MAPPING:
+	case NITRO_CLI_SLOT_FREE_RESOURCES:{
+		nitro_cli_resource_allocator_ioctl(file, cmd, arg);
+		break;
+	}
+
 	default:
 		return -ENOTTY;
 	}
@@ -1793,12 +1801,16 @@ static int __init ne_init(void)
 {
 	mutex_init(&ne_cpu_pool.mutex);
 
+	nitro_cli_resource_allocator_init();
+
 	return pci_register_driver(&ne_pci_driver);
 }
 
 static void __exit ne_exit(void)
 {
 	pci_unregister_driver(&ne_pci_driver);
+
+	nitro_cli_resource_allocator_exit();
 
 	ne_teardown_cpu_pool();
 }

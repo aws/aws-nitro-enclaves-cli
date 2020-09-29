@@ -4,9 +4,17 @@
 
 # Enclave lifetime management support for Nitro Enclaves (NE).
 
+# If the environment variable MERGE_DRIVERS is set, then 
+# the functionalities of the resource_allocator driver
+# will be added to the current cli driver.
+ifdef MERGE_DRIVERS
+ccflags-y = -DMERGE_DRIVERS
+nitro_enclaves-y := ne_pci_dev.o ne_misc_dev.o resource_allocator.o
+endif
+
 obj-m += nitro_enclaves.o
 
-nitro_enclaves-y := ne_pci_dev.o ne_misc_dev.o resource_allocator.o
+nitro_enclaves-y ?= ne_pci_dev.o ne_misc_dev.o
 
 ccflags-y += -Wall -I$(src)/../../../include
 

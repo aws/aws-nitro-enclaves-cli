@@ -22,6 +22,7 @@ pub enum DockerError {
     RuntimeError,
     TempfileError,
     CredentialsError(String),
+    UnsupportedEntryPoint,
 }
 
 /// Struct exposing the Docker functionalities to the EIF builder
@@ -245,6 +246,73 @@ impl DockerUtil {
     }
 
     fn inspect_image(&self) -> Result<(Vec<String>, Vec<String>), DockerError> {
+        // First try to find CMD parameters (together with potential ENV bindings)
+        let act_cmd = self
+            .docker
+            .images()
+            .get(&self.docker_image)
+            .inspect()
+            .map(|image| image.config.cmd.ok_or(DockerError::UnsupportedEntryPoint));
+        let act_env = self
+            .docker
+            .images()
+            .get(&self.docker_image)
+            .inspect()
+            .map(|image| image.config.env.ok_or(DockerError::UnsupportedEntryPoint));
+
+        let check_cmd_runtime = tokio::runtime::Runtime::new()
+            .map_err(|_| DockerError::RuntimeError)?
+            .block_on(act_cmd)
+            .map_err(|_| DockerError::RuntimeError)?;
+        let check_env_runtime = tokio::runtime::Runtime::new()
+            .map_err(|_| DockerError::RuntimeError)?
+            .block_on(act_env)
+            .map_err(|_| DockerError::RuntimeError)?;
+
+        // If no CMD instructions are found, try to locate an ENTRYPOINT command
+        if check_cmd_runtime.is_err() || check_env_runtime.is_err() {
+            let act_entrypoint =
+                self.docker
+                    .images()
+                    .get(&self.docker_image)
+                    .inspect()
+                    .map(|image| {
+                        image
+                            .config
+                            .entrypoint
+                            .ok_or(DockerError::UnsupportedEntryPoint)
+                    });
+
+            let check_entrypoint_runtime = tokio::runtime::Runtime::new()
+                .map_err(|_| DockerError::RuntimeError)?
+                .block_on(act_entrypoint)
+                .map_err(|_| DockerError::RuntimeError)?;
+
+            if check_entrypoint_runtime.is_err() {
+                return Err(DockerError::UnsupportedEntryPoint);
+            }
+
+            let act = self
+                .docker
+                .images()
+                .get(&self.docker_image)
+                .inspect()
+                .map(|image| {
+                    (
+                        image.config.entrypoint.unwrap(),
+                        image.config.env.ok_or(Vec::<String>::new()).unwrap(),
+                    )
+                })
+                .map_err(|e| {
+                    error!("{:?}", e);
+                    DockerError::InspectError
+                });
+            let mut runtime =
+                tokio::runtime::Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+
+            return runtime.block_on(act);
+        }
+
         let act = self
             .docker
             .images()

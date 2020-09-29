@@ -18,6 +18,8 @@ pub mod enclave_proc;
 pub mod enclave_proc_comm;
 /// The CLI-specific utilities module.
 pub mod utils;
+/// The functionalities from the old cli
+pub mod poweruser;
 
 use log::debug;
 use serde::Serialize;

@@ -21,6 +21,7 @@ serde_cbor = "0.10"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
 enclave_api = { path = "./enclave_api" }
+enclave_driver = { path = "./enclave_driver" }
 openssl = "0.10"
 nitro-cli-poweruser = { path = "./cli_poweruser" }
 vsock = "0.1.5"

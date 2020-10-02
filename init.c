@@ -378,6 +378,9 @@ void init_nsm_driver() {
     int rc;
 
     fd = open(NSM_PATH, O_RDONLY | O_CLOEXEC);
+    if (fd < 0 && errno == ENOENT) {
+        return;
+    }
     die_on(fd < 0, "failed to open nsm fd");
     rc = finit_module(fd, "", 0);
     die_on(rc < 0, "failed to insert nsm driver");

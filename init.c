@@ -356,6 +356,7 @@ void enclave_ready() {
         .svm_family = AF_VSOCK,
         .svm_cid = VSOCK_CID,
         .svm_port = VSOCK_PORT,
+        .svm_reserved1 = 0,
     };
 
     uint8_t buf[1];

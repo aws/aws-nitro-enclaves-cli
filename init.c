@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <sys/reboot.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -425,5 +426,6 @@ int main() {
     pid_t pid = launch(cmd, env);
 
     //// Reap until the initial child process dies.
-    return reap_until(pid);
+    reap_until(pid);
+    reboot(RB_AUTOBOOT);
 }

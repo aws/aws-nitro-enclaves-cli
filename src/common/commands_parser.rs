@@ -241,7 +241,7 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
         // Note: 0 is used as a placeholder to auto-generate a CID.
         // <http://man7.org/linux/man-pages/man7/vsock.7.html>
         if enclave_cid == 0 {
-            println!("The enclave CID will be auto-generated as the provided CID is 0");
+            eprintln!("The enclave CID will be auto-generated as the provided CID is 0");
         }
 
         if enclave_cid > 0 && enclave_cid <= VMADDR_CID_HOST as u64 {

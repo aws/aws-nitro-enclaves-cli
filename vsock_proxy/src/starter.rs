@@ -22,21 +22,8 @@ const BUFF_SIZE: usize = 8192;
 pub const VSOCK_PROXY_CID: u32 = 3;
 pub const VSOCK_PROXY_PORT: u32 = 8000;
 
-#[derive(Debug, PartialEq)]
-/// Internal errors while setting up proxy
-pub enum ProxyError {
-    SocketTypeNotImplemented,
-    BindError,
-    AcceptError,
-    ConnectError,
-    WhitelistError,
-    NoValidIPError,
-    OpenFileError,
-    ReadFileError,
-    YamlFormatError,
-    RemoteAddressError,
-    DomainError,
-}
+/// The most common result type provided by VsockProxy operations.
+pub type VsockProxyResult<T> = Result<T, String>;
 
 /// Checks if the forwarded server is whitelisted
 pub fn check_whitelist(
@@ -45,33 +32,29 @@ pub fn check_whitelist(
     config_file: Option<&str>,
     only_4: bool,
     only_6: bool,
-) -> Result<(), ProxyError> {
+) -> VsockProxyResult<()> {
     if let Some(config_file) = config_file {
-        let mut f = File::open(config_file).map_err(|_err| ProxyError::OpenFileError)?;
+        let mut f = File::open(config_file).map_err(|_| "Could not open the file")?;
 
         let mut content = String::new();
         f.read_to_string(&mut content)
-            .map_err(|_err| ProxyError::ReadFileError)?;
+            .map_err(|_| "Could not read the file")?;
 
-        let docs =
-            YamlLoader::load_from_str(&content).map_err(|_err| ProxyError::YamlFormatError)?;
+        let docs = YamlLoader::load_from_str(&content).map_err(|_| "Bad yaml format")?;
         let services = (&docs[0])["whitelist"]
             .as_vec()
-            .ok_or_else(|| ProxyError::YamlFormatError)?;
+            .ok_or_else(|| "No whitelist field")?;
 
         for raw_service in services {
             let port = raw_service["port"]
                 .as_i64()
-                .ok_or_else(|| ProxyError::YamlFormatError)?;
+                .ok_or_else(|| "No port field or invalid type")?;
             let port = port as u16;
 
             let addr = raw_service["address"]
                 .as_str()
-                .ok_or_else(|| ProxyError::YamlFormatError)?;
-            let addrs = match Proxy::parse_addr(addr, only_4, only_6) {
-                Err(ProxyError::RemoteAddressError) => Ok(vec![]),
-                any => any,
-            }?;
+                .ok_or_else(|| "No address field")?;
+            let addrs = Proxy::parse_addr(addr, only_4, only_6)?;
             for addr in addrs.into_iter() {
                 if addr == remote_addr && port == remote_port {
                     return Ok(());
@@ -79,7 +62,7 @@ pub fn check_whitelist(
             }
         }
     }
-    Err(ProxyError::WhitelistError)
+    Err("The given address and port are not whitelisted".to_string())
 }
 
 /// Configuration parameters for port listening and remote destination
@@ -100,34 +83,43 @@ impl Proxy {
         config_file: Option<&str>,
         only_4: bool,
         only_6: bool,
-    ) -> Self {
+    ) -> VsockProxyResult<Self> {
+        if num_workers == 0 {
+            return Err("Number of workers must not be 0".to_string());
+        }
         info!("Checking whitelist configuration");
         check_whitelist(remote_addr, remote_port, config_file, only_4, only_6)
-            .expect("The service provided is not whitelisted");
+            .map_err(|err| format!("Error at checking the whitelist: {}", err))?;
 
         let pool = ThreadPool::new(num_workers);
         let sock_type = SockType::Stream;
-        Proxy {
+        Ok(Proxy {
             local_port,
             remote_addr,
             remote_port,
             pool,
             sock_type,
-        }
+        })
     }
 
     /// Resolve a DNS name (IDNA format) into an IP address (v4 or v6)
-    pub fn parse_addr(addr: &str, only_4: bool, only_6: bool) -> Result<Vec<IpAddr>, ProxyError> {
+    pub fn parse_addr(addr: &str, only_4: bool, only_6: bool) -> VsockProxyResult<Vec<IpAddr>> {
         // IDNA parsing
-        let addr = idna::domain_to_ascii(&addr).map_err(|_err| ProxyError::DomainError)?;
+        let addr = idna::domain_to_ascii(&addr).map_err(|_| "Could not parse domain name")?;
 
         // DNS lookup
         // It results in a vector of IPs (V4 and V6)
-        let ips = lookup_host(&addr).map_err(|_err| ProxyError::RemoteAddressError)?;
-
-        if ips.is_empty() {
-            return Err(ProxyError::NoValidIPError);
-        }
+        let ips = match lookup_host(&addr) {
+            Err(_) => {
+                return Ok(vec![]);
+            }
+            Ok(v) => {
+                if v.is_empty() {
+                    return Ok(v);
+                }
+                v
+            }
+        };
 
         // If there is no restriction, choose randomly
         if !only_4 && !only_6 {
@@ -142,16 +134,17 @@ impl Proxy {
         } else if only_6 && !ips_v6.is_empty() {
             Ok(ips_v6.into_iter().collect())
         } else {
-            Err(ProxyError::NoValidIPError)
+            Err("No accepted IP was found".to_string())
         }
     }
 
     /// Creates a listening socket
     /// Returns the file descriptor for it or the appropriate error
-    pub fn sock_listen(&self) -> Result<VsockListener, ProxyError> {
+    pub fn sock_listen(&self) -> VsockProxyResult<VsockListener> {
         let sockaddr = SockAddr::new_vsock(VSOCK_PROXY_CID, self.local_port);
-        let listener = VsockListener::bind(&sockaddr).map_err(|_e| ProxyError::BindError)?;
-        info!("Binded to {:?}", sockaddr);
+        let listener = VsockListener::bind(&sockaddr)
+            .map_err(|_| format!("Could not bind to {:?}", sockaddr))?;
+        info!("Bound to {:?}", sockaddr);
 
         Ok(listener)
     }
@@ -159,19 +152,19 @@ impl Proxy {
     /// Accepts an incoming connection coming on listener and handles it on a
     /// different thread
     /// Returns the handle for the new thread or the appropriate error
-    pub fn sock_accept(&self, listener: &VsockListener) -> Result<(), ProxyError> {
-        let (mut client, client_addr) =
-            listener.accept().map_err(|_err| ProxyError::AcceptError)?;
+    pub fn sock_accept(&self, listener: &VsockListener) -> VsockProxyResult<()> {
+        let (mut client, client_addr) = listener
+            .accept()
+            .map_err(|_| "Could not accept connection")?;
         info!("Accepted connection on {:?}", client_addr);
 
         let sockaddr = SocketAddr::new(self.remote_addr, self.remote_port);
         let sock_type = self.sock_type;
         self.pool.execute(move || {
             let mut server = match sock_type {
-                SockType::Stream => {
-                    TcpStream::connect(sockaddr).map_err(|_e| ProxyError::ConnectError)
-                }
-                _ => Err(ProxyError::SocketTypeNotImplemented),
+                SockType::Stream => TcpStream::connect(sockaddr)
+                    .map_err(|_| format!("Could not connect to {:?}", sockaddr)),
+                _ => Err("Socket type not implemented".to_string()),
             }
             .expect("Could not create connection");
             info!("Connected client from {:?} to {:?}", client_addr, sockaddr);

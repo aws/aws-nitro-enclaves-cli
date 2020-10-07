@@ -26,7 +26,7 @@ fn test_tcp_connection() {
     let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
     let mut file = NamedTempFile::new().unwrap();
     file.write_all(
-        b"whitelist:\n\
+        b"allowlist:\n\
             - {address: 127.0.0.1, port: 9000}",
     )
     .unwrap();

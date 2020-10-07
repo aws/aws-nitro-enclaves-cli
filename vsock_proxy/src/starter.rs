@@ -25,8 +25,8 @@ pub const VSOCK_PROXY_PORT: u32 = 8000;
 /// The most common result type provided by VsockProxy operations.
 pub type VsockProxyResult<T> = Result<T, String>;
 
-/// Checks if the forwarded server is whitelisted
-pub fn check_whitelist(
+/// Checks if the forwarded server is allowed
+pub fn check_allowlist(
     remote_addr: IpAddr,
     remote_port: u16,
     config_file: Option<&str>,
@@ -41,9 +41,9 @@ pub fn check_whitelist(
             .map_err(|_| "Could not read the file")?;
 
         let docs = YamlLoader::load_from_str(&content).map_err(|_| "Bad yaml format")?;
-        let services = (&docs[0])["whitelist"]
+        let services = (&docs[0])["allowlist"]
             .as_vec()
-            .ok_or_else(|| "No whitelist field")?;
+            .ok_or_else(|| "No allowlist field")?;
 
         for raw_service in services {
             let port = raw_service["port"]
@@ -62,7 +62,7 @@ pub fn check_whitelist(
             }
         }
     }
-    Err("The given address and port are not whitelisted".to_string())
+    Err("The given address and port are not allowed".to_string())
 }
 
 /// Configuration parameters for port listening and remote destination
@@ -87,9 +87,9 @@ impl Proxy {
         if num_workers == 0 {
             return Err("Number of workers must not be 0".to_string());
         }
-        info!("Checking whitelist configuration");
-        check_whitelist(remote_addr, remote_port, config_file, only_4, only_6)
-            .map_err(|err| format!("Error at checking the whitelist: {}", err))?;
+        info!("Checking allowlist configuration");
+        check_allowlist(remote_addr, remote_port, config_file, only_4, only_6)
+            .map_err(|err| format!("Error at checking the allowlist: {}", err))?;
 
         let pool = ThreadPool::new(num_workers);
         let sock_type = SockType::Stream;

@@ -413,16 +413,23 @@ impl CliDev {
         command: C,
     ) -> NitroCliResult<NitroEnclavesCmdReply> {
         debug!("submit: {:?}", command);
-        let past_reply = self.read_u32(NITRO_ENCLAVES_RPLY_PENDING)? & 0xFFFF;
+        let past_reply = self.read_u32(NITRO_ENCLAVES_RPLY_PENDING)?.wrapping_shl(16);
 
         self.submit_command(cmd_type, command)?;
 
         let mut num_trys = 20000;
         let mut warn_trys = 200;
         let err_prefix = sanitize_command(cmd_type);
-        while past_reply == (self.read_u32(NITRO_ENCLAVES_RPLY_PENDING)? & 0xFFFF) && num_trys > 0 {
-            sleep(time::Duration::from_millis(10));
+
+        loop {
+            let new_reply = self.read_u32(NITRO_ENCLAVES_RPLY_PENDING)?.wrapping_shl(16);
+            if past_reply != new_reply {
+                break;
+            }
             num_trys -= 1;
+            if num_trys == 0 {
+                return Err("Did not receive a reply from the device".to_string());
+            }
             warn_trys -= 1;
             if warn_trys == 0 {
                 warn_trys = 200;
@@ -431,10 +438,7 @@ impl CliDev {
                     format!("{:?} is pending a reply from the device ...", err_prefix)
                 );
             }
-        }
-
-        if num_trys == 0 {
-            return Err("Did not receive a reply from the device".to_string());
+            sleep(time::Duration::from_millis(10));
         }
 
         let reply = self.read_reply()?;

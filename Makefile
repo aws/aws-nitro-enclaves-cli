@@ -286,6 +286,10 @@ install-command-executer:
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}
 	$(INSTALL) -D -m 0755 $(OBJ_PATH)/command-executer/release/command-executer ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/command-executer
 
+.PHONY: install-nitro-cli-poweruser
+install-nitro-cli-poweruser:
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/cli_poweruser/x86_64-unknown-linux-musl/release/nitro-cli-poweruser ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/nitro-cli-poweruser
 
 # Target for installing only the binaries available to the end-user
 .PHONY: install-tools

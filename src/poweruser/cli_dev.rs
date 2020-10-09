@@ -8,13 +8,16 @@
 /// The definitions need to be kept in sync with the device API.
 use log::debug;
 use memmap::{MmapMut, MmapOptions};
+use nix::fcntl::{flock, FlockArg};
 use std::ffi::CStr;
 use std::fmt::Debug;
+use std::fs::File;
 use std::fs::read_to_string;
 use std::fs::OpenOptions;
 use std::io::Result as IoResult;
 use std::io::{Error, ErrorKind};
 use std::mem::size_of;
+use std::os::unix::io::AsRawFd;
 use std::slice;
 use std::thread::sleep;
 use std::time;
@@ -24,6 +27,35 @@ use enum_primitive_derive::Primitive;
 
 use crate::new_nitro_cli_failure;
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+
+pub struct FileLock {
+    pub _file: File,
+}
+
+impl FileLock {
+    pub fn new(path: &str) -> NitroCliResult<Self> {
+        let _file = File::open(path).map_err(|err| {
+            new_nitro_cli_failure!(
+                format!("{}", err),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+        })?;
+        let fd = _file.as_raw_fd();
+        flock(fd, FlockArg::LockExclusiveNonblock).map_err(|_err| {
+            new_nitro_cli_failure!({
+                    let executable = match std::env::args().next() {
+                        Some(name) => name,
+                        None => String::from("./nitro-cli"),
+                    };
+                    format!("{} is already running", executable)
+                },
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })?;
+
+        Ok(FileLock { _file })
+    }
+}
 
 // Command types for sending requests to the NitroEnclaves device.
 #[derive(Debug, Copy, Clone, Primitive)]

@@ -12,6 +12,7 @@ inotify = "0.7"
 memmap = "0.7"
 serde_json = "1.0"
 nix = "0.15"
+lazy_static = "1.4.0"
 log = "0.4"
 libc = { version = ">=0.2.69" }
 flexi_logger = "0.15"

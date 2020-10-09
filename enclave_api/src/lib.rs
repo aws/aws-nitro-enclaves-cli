@@ -16,8 +16,8 @@ use bitflags::*;
 use common::commands_parser::{EmptyArgs, RunEnclavesArgs};
 use common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
 use common::{
-    enclave_proc_command_send_single, get_sockets_dir_path, read_u64_le,
-    EnclaveProcessCommandType, NitroCliErrorEnum, NitroCliFailure, MSG_ENCLAVE_CONFIRM,
+    enclave_proc_command_send_single, get_sockets_dir_path, read_u64_le, EnclaveErrorEnum,
+    EnclaveFailure, EnclaveProcessCommandType, EnclaveResult, MSG_ENCLAVE_CONFIRM,
 };
 use enclave_proc::resource_manager::EnclaveState;
 use enclave_proc::utils::generate_enclave_id;
@@ -29,9 +29,6 @@ use std::fs;
 use std::io::ErrorKind;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::net::UnixStream;
-
-/// The result returned by almost all operations.
-pub type EnclaveResult<T> = Result<T, NitroCliFailure>;
 
 bitflags! {
     /// Structure for describing enclave flags.
@@ -229,9 +226,9 @@ impl Enclave {
         })?;
 
         if reply != MSG_ENCLAVE_CONFIRM {
-            return Err(new_nitro_cli_failure!(
+            return Err(new_enclave_failure!(
                 "Failed to communicate with enclave procces.".to_string(),
-                NitroCliErrorEnum::UnusableConnectionError
+                EnclaveErrorEnum::UnusableConnectionError
             ));
         }
 
@@ -324,9 +321,9 @@ impl Enclave {
     /// List all running enclaves
     pub fn list() -> EnclaveResult<Vec<String>> {
         let paths = fs::read_dir(get_sockets_dir_path()).map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Failed to access sockets directory: {:?}", e),
-                NitroCliErrorEnum::ReadFromDiskFailure
+                EnclaveErrorEnum::ReadFromDiskFailure
             )
         })?;
 
@@ -361,9 +358,9 @@ impl Enclave {
                             if e.kind() != ErrorKind::PermissionDenied {
                                 // Delete only stale sockets.
                                 let _ = fs::remove_file(path_str).map_err(|e| {
-                                    new_nitro_cli_failure!(
+                                    new_enclave_failure!(
                                         &format!("Failed to delete socket: {:?}", e),
-                                        NitroCliErrorEnum::FileOperationFailure
+                                        EnclaveErrorEnum::FileOperationFailure
                                     )
                                 });
                             }

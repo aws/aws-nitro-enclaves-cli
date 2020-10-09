@@ -10,8 +10,10 @@ use libc::VMADDR_CID_LOCAL;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
-use enclave_api::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_CID_PARENT};
-use enclave_api::new_nitro_cli_failure;
+use crate::document_errors::{NitroCliErrorEnum, NitroCliFailure};
+use crate::new_nitro_cli_failure;
+use crate::utils::NitroCliResult;
+use enclave_api::common::VMADDR_CID_PARENT;
 
 /// The arguments used by the `run-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -393,7 +395,7 @@ mod tests {
     use super::*;
 
     use crate::create_app;
-    use enclave_api::common::construct_error_message;
+    use crate::document_errors::ErrorMessageConstructor;
 
     use clap::{App, AppSettings, Arg, SubCommand};
 
@@ -432,7 +434,7 @@ mod tests {
         );
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
+            let err_str = err_info.construct_error_message();
             assert!(err_str.contains("Invalid argument provided"))
         }
     }
@@ -582,7 +584,7 @@ mod tests {
         );
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
+            let err_str = err_info.construct_error_message();
             assert!(err_str.contains("Invalid argument provided"))
         }
     }
@@ -615,7 +617,7 @@ mod tests {
         );
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
+            let err_str = err_info.construct_error_message();
             assert!(err_str.contains("Invalid argument provided"));
         }
     }
@@ -648,7 +650,7 @@ mod tests {
         );
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
+            let err_str = err_info.construct_error_message();
             assert!(err_str.contains("Invalid argument provided"));
         }
     }
@@ -681,7 +683,7 @@ mod tests {
         );
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
+            let err_str = err_info.construct_error_message();
             assert!(err_str.contains("Invalid argument provided"));
         }
     }
@@ -833,7 +835,7 @@ mod tests {
         );
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
+            let err_str = err_info.construct_error_message();
             assert!(err_str.contains("Invalid argument provided"));
         }
     }
@@ -893,7 +895,7 @@ mod tests {
         );
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
+            let err_str = err_info.construct_error_message();
             assert!(err_str.contains("Invalid argument provided"));
         }
     }

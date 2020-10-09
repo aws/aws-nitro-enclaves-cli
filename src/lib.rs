@@ -7,11 +7,11 @@
 
 /// The command parser module (used by CLI to parse command line arguments).
 pub mod commands_parser;
+/// The module which provides mappings between EnclaveCliErrors and their corresponding code.
+pub mod document_errors;
 /// The CLI-specific utilities module.
 pub mod utils;
 
-use enclave_api::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
-use enclave_api::new_nitro_cli_failure;
 use log::debug;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -20,7 +20,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 
 use commands_parser::BuildEnclavesArgs;
-use utils::Console;
+use document_errors::{NitroCliErrorEnum, NitroCliFailure};
+use utils::{Console, NitroCliResult};
 
 /// Hypervisor CID as defined by <http://man7.org/linux/man-pages/man7/vsock.7.html>.
 pub const VMADDR_CID_HYPERVISOR: u32 = 0;

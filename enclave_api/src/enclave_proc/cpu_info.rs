@@ -8,8 +8,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::common::commands_parser::RunEnclavesArgs;
-use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
-use crate::new_nitro_cli_failure;
+use crate::common::{EnclaveErrorEnum, EnclaveFailure, EnclaveResult};
+use crate::new_enclave_failure;
 
 /// The CPU configuration requested by the user.
 #[derive(Clone, PartialEq)]
@@ -35,14 +35,14 @@ impl Default for EnclaveCpuConfig {
 
 impl CpuInfo {
     /// Create a new `CpuInfo` instance from the current system configuration.
-    pub fn new() -> NitroCliResult<Self> {
+    pub fn new() -> EnclaveResult<Self> {
         Ok(CpuInfo {
             cpu_ids: CpuInfo::get_cpu_info()?,
         })
     }
 
     /// Get the CPU configuration from the command-line arguments.
-    pub fn get_cpu_config(&self, args: &RunEnclavesArgs) -> NitroCliResult<EnclaveCpuConfig> {
+    pub fn get_cpu_config(&self, args: &RunEnclavesArgs) -> EnclaveResult<EnclaveCpuConfig> {
         if let Some(cpu_ids) = args.cpu_ids.clone() {
             self.check_cpu_ids(&cpu_ids).map_err(|e| {
                 e.add_subaction("Failed to check whether CPU list is valid".to_string())
@@ -50,28 +50,28 @@ impl CpuInfo {
             Ok(EnclaveCpuConfig::List(cpu_ids))
         } else if let Some(cpu_count) = args.cpu_count {
             if self.cpu_ids.len() < cpu_count as usize {
-                return Err(new_nitro_cli_failure!(
+                return Err(new_enclave_failure!(
                     &format!(
                         "Insufficient CPUs available (requested {}, but maximum is {})",
                         cpu_count,
                         self.cpu_ids.len()
                     ),
-                    NitroCliErrorEnum::InsufficientCpus
+                    EnclaveErrorEnum::InsufficientCpus
                 )
                 .add_info(vec!["cpu-count", &cpu_count.to_string()]));
             }
             Ok(EnclaveCpuConfig::Count(cpu_count))
         } else {
             // Should not happen.
-            Err(new_nitro_cli_failure!(
+            Err(new_enclave_failure!(
                 "Invalid CPU configuration argument",
-                NitroCliErrorEnum::InvalidArgument
+                EnclaveErrorEnum::InvalidArgument
             ))
         }
     }
 
     /// Verify that a provided list of CPU IDs is valid.
-    pub fn check_cpu_ids(&self, cpu_ids: &[u32]) -> NitroCliResult<()> {
+    pub fn check_cpu_ids(&self, cpu_ids: &[u32]) -> EnclaveResult<()> {
         // Ensure there are no duplicate IDs.
         let mut unique_ids = BTreeSet::new();
 
@@ -82,12 +82,12 @@ impl CpuInfo {
         if unique_ids.len() < cpu_ids.len() {
             let duplicate_cpus = CpuInfo::get_duplicate_cpus(&unique_ids, cpu_ids);
 
-            return Err(new_nitro_cli_failure!(
+            return Err(new_enclave_failure!(
                 &format!(
                     "CPU IDs list contains {} duplicate(s)",
                     cpu_ids.len() - unique_ids.len()
                 ),
-                NitroCliErrorEnum::InvalidCpuConfiguration
+                EnclaveErrorEnum::InvalidCpuConfiguration
             )
             .add_info(vec!["cpu-ids", duplicate_cpus.as_str()]));
         }
@@ -95,12 +95,12 @@ impl CpuInfo {
         // Ensure the requested CPUs are available in the CPU pool.
         for cpu_id in unique_ids {
             if !self.cpu_ids.contains(cpu_id) {
-                return Err(new_nitro_cli_failure!(
+                return Err(new_enclave_failure!(
                     &format!(
                         "The CPU with ID {} is not available in the NE CPU pool",
                         cpu_id
                     ),
-                    NitroCliErrorEnum::NoSuchCpuAvailableInPool
+                    EnclaveErrorEnum::NoSuchCpuAvailableInPool
                 )
                 .add_info(vec!["cpu-ids", &cpu_id.to_string()]));
             }
@@ -116,18 +116,18 @@ impl CpuInfo {
     }
 
     /// Parse a `lscpu` line to obtain a numeric value.
-    pub fn get_value(line: &str) -> NitroCliResult<u32> {
+    pub fn get_value(line: &str) -> EnclaveResult<u32> {
         let mut line_str = line.to_string();
         line_str.retain(|c| !c.is_whitespace());
         line_str.parse::<u32>().map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Failed to parse CPU ID: {}", e),
-                NitroCliErrorEnum::MalformedCpuId
+                EnclaveErrorEnum::MalformedCpuId
             )
         })
     }
 
-    fn parse_cpu_pool_line(line_str: &str) -> NitroCliResult<Vec<u32>> {
+    fn parse_cpu_pool_line(line_str: &str) -> EnclaveResult<Vec<u32>> {
         let mut result: Vec<u32> = Vec::new();
 
         // The CPU pool format is: "id1-id2,id3-id4,..."
@@ -144,9 +144,9 @@ impl CpuInfo {
                     }
                 }
                 _ => {
-                    return Err(new_nitro_cli_failure!(
+                    return Err(new_enclave_failure!(
                         &format!("Invalid CPU ID interval ({})", interval),
-                        NitroCliErrorEnum::CpuError
+                        EnclaveErrorEnum::CpuError
                     ))
                 }
             }
@@ -156,12 +156,12 @@ impl CpuInfo {
     }
 
     /// Parse the CPU pool and build the list of off-line CPUs.
-    fn get_cpu_info() -> NitroCliResult<Vec<u32>> {
+    fn get_cpu_info() -> EnclaveResult<Vec<u32>> {
         let pool_file =
             File::open("/sys/module/nitro_enclaves/parameters/ne_cpus").map_err(|e| {
-                new_nitro_cli_failure!(
+                new_enclave_failure!(
                     &format!("Failed to open CPU pool file: {}", e),
-                    NitroCliErrorEnum::FileOperationFailure
+                    EnclaveErrorEnum::FileOperationFailure
                 )
             })?;
         let file_reader = BufReader::new(pool_file);
@@ -169,9 +169,9 @@ impl CpuInfo {
 
         for line in file_reader.lines() {
             let line_str = line.map_err(|e| {
-                new_nitro_cli_failure!(
+                new_enclave_failure!(
                     &format!("Failed to read line from CPU pool file: {}", e),
-                    NitroCliErrorEnum::FileOperationFailure
+                    EnclaveErrorEnum::FileOperationFailure
                 )
             })?;
             if line_str.trim().is_empty() {
@@ -200,8 +200,6 @@ impl CpuInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use crate::common::construct_error_message;
 
     #[test]
     fn test_parse_cpu_pool_line() {
@@ -244,22 +242,19 @@ mod tests {
         let result0 = CpuInfo::get_value("\t-2");
         assert!(result0.is_err());
         if let Err(err_info) = result0 {
-            let err_str = construct_error_message(&err_info);
-            assert!(err_str.contains("Malformed CPU ID error"));
+            assert!(err_info.error_code == EnclaveErrorEnum::MalformedCpuId);
         }
 
         let result1 = CpuInfo::get_value("\n\n0x06");
         assert!(result1.is_err());
         if let Err(err_info) = result1 {
-            let err_str = construct_error_message(&err_info);
-            assert!(err_str.contains("Malformed CPU ID error"));
+            assert!(err_info.error_code == EnclaveErrorEnum::MalformedCpuId);
         }
 
         let result2 = CpuInfo::get_value("     processor");
         assert!(result2.is_err());
         if let Err(err_info) = result2 {
-            let err_str = construct_error_message(&err_info);
-            assert!(err_str.contains("Malformed CPU ID error"));
+            assert!(err_info.error_code == EnclaveErrorEnum::MalformedCpuId);
         }
     }
 
@@ -279,8 +274,7 @@ mod tests {
         assert!(result.is_err());
 
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
-            assert!(err_str.contains("Insufficient CPUs available"));
+            assert!(err_info.error_code == EnclaveErrorEnum::InsufficientCpus);
         }
 
         run_args.cpu_count = None;
@@ -289,8 +283,7 @@ mod tests {
         assert!(result.is_err());
 
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
-            assert!(err_str.contains("No such CPU available in the pool"));
+            assert!(err_info.error_code == EnclaveErrorEnum::NoSuchCpuAvailableInPool);
         }
     }
 
@@ -338,8 +331,7 @@ mod tests {
         result = cpu_info.check_cpu_ids(&cpu_ids);
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
-            assert!(err_str.contains("Invalid CPU configuration"));
+            assert!(err_info.error_code == EnclaveErrorEnum::InvalidCpuConfiguration);
         }
 
         cpu_ids = vec![1, 3];
@@ -350,8 +342,7 @@ mod tests {
         result = cpu_info.check_cpu_ids(&cpu_ids);
         assert!(result.is_err());
         if let Err(err_info) = result {
-            let err_str = construct_error_message(&err_info);
-            assert!(err_str.contains("No such CPU available in the pool"));
+            assert!(err_info.error_code == EnclaveErrorEnum::NoSuchCpuAvailableInPool);
         }
     }
 }

@@ -8,16 +8,16 @@
 
 use clap::{App, AppSettings, Arg, SubCommand};
 
-use enclave_api::common::document_errors::explain_error;
 use enclave_api::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
-use enclave_api::common::{ExitGracefully, NitroCliErrorEnum, NitroCliFailure};
+use enclave_api::common::{EnclaveErrorEnum, EnclaveFailure};
 use enclave_api::enclave_proc_comm::enclave_proc_get_cid;
-use enclave_api::new_nitro_cli_failure;
+use enclave_api::new_enclave_failure;
 use enclave_api::{Enclave, EnclaveConf, EnclaveCpuConfig, EnclaveFlags};
 
 use nitro_cli::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, ExplainArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
+use nitro_cli::document_errors::{explain_error, ExitWithMessage};
 use nitro_cli::{build_enclaves, console_enclaves, create_app};
 
 fn terminate_enclave_print(enclave_id: &str) {
@@ -26,23 +26,23 @@ fn terminate_enclave_print(enclave_id: &str) {
             e.add_subaction("Failed to terminate enclave".to_string())
                 .set_action(TERMINATE_ENCLAVE_STR.to_string())
         })
-        .ok_or_exit_with_errno(None);
+        .ok_or_exit_with_message();
     let enclave_terminate_info = EnclaveTerminateInfo {
         enclave_id: enclave_id.to_string(),
         terminated: true,
     };
     let enclave_terminate_info_string = serde_json::to_string_pretty(&enclave_terminate_info)
         .map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!(
                     "Failed to parse terminate enclave message from enclave process: {:}",
                     e
                 ),
-                NitroCliErrorEnum::SerdeError
+                EnclaveErrorEnum::SerdeError
             )
             .set_action(TERMINATE_ENCLAVE_STR.to_string())
         })
-        .ok_or_exit_with_errno(None);
+        .ok_or_exit_with_message();
     println!("{}", enclave_terminate_info_string);
 }
 
@@ -79,7 +79,7 @@ fn main() {
                     err.add_subaction("Failed to construct RunEnclave arguments".to_string())
                         .set_action(RUN_ENCLAVE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
             let conf = EnclaveConf {
                 eif_path: run_args.eif_path,
                 mem_size: run_args.memory_mib,
@@ -105,20 +105,20 @@ fn main() {
                     e.add_subaction("Failed to run enclave".to_string())
                         .set_action(RUN_ENCLAVE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
             let enclave_run_info: EnclaveRunInfo = enclave.into();
             let run_info_string = serde_json::to_string_pretty(&enclave_run_info)
                 .map_err(|e| {
-                    new_nitro_cli_failure!(
+                    new_enclave_failure!(
                         &format!(
                             "Failed to parse run enclave message from enclave process: {:}",
                             e
                         ),
-                        NitroCliErrorEnum::SerdeError
+                        EnclaveErrorEnum::SerdeError
                     )
                     .set_action(RUN_ENCLAVE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
             println!("{}", run_info_string);
         }
         ("terminate-enclave", Some(args)) => {
@@ -128,7 +128,7 @@ fn main() {
                         e.add_subaction("Failed to fetch list of all running enclaves".to_string())
                             .set_action(TERMINATE_ALL_ENCLAVES_STR.to_string())
                     })
-                    .ok_or_exit_with_errno(None);
+                    .ok_or_exit_with_message();
 
                 for enclave_id in enclave_ids {
                     terminate_enclave_print(&enclave_id);
@@ -141,7 +141,7 @@ fn main() {
                         )
                         .set_action(TERMINATE_ENCLAVE_STR.to_string())
                     })
-                    .ok_or_exit_with_errno(None);
+                    .ok_or_exit_with_message();
 
                 terminate_enclave_print(&terminate_args.enclave_id);
             }
@@ -152,7 +152,7 @@ fn main() {
                     e.add_subaction("Failed to fetch list of all running enclaves".to_string())
                         .set_action(DESCRIBE_ENCLAVE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
 
             let enclave_describe_infos: Vec<EnclaveDescribeInfo> = enclave_ids
                 .iter()
@@ -162,16 +162,16 @@ fn main() {
 
             let describe_info_string = serde_json::to_string_pretty(&enclave_describe_infos)
                 .map_err(|e| {
-                    new_nitro_cli_failure!(
+                    new_enclave_failure!(
                         &format!(
                             "Failed to parse run enclave message from enclave process: {:}",
                             e
                         ),
-                        NitroCliErrorEnum::SerdeError
+                        EnclaveErrorEnum::SerdeError
                     )
                     .set_action(DESCRIBE_ENCLAVE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
             println!("{}", describe_info_string);
         }
         ("build-enclave", Some(args)) => {
@@ -180,13 +180,13 @@ fn main() {
                     e.add_subaction("Failed to construct BuildEnclave arguments".to_string())
                         .set_action(BUILD_ENCLAVE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
             build_enclaves(build_args)
                 .map_err(|e| {
                     e.add_subaction("Failed to build enclave".to_string())
                         .set_action(BUILD_ENCLAVE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
         }
         ("console", Some(args)) => {
             let console_args = ConsoleArgs::new_with(args)
@@ -194,19 +194,19 @@ fn main() {
                     e.add_subaction("Failed to construct Console arguments".to_string())
                         .set_action(ENCLAVE_CONSOLE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
             let enclave_cid = enclave_proc_get_cid(&console_args.enclave_id)
                 .map_err(|e| {
                     e.add_subaction("Failed to retrieve enclave CID".to_string())
                         .set_action(ENCLAVE_CONSOLE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
             console_enclaves(enclave_cid)
                 .map_err(|e| {
                     e.add_subaction("Failed to connect to enclave console".to_string())
                         .set_action(ENCLAVE_CONSOLE_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
         }
         ("explain", Some(args)) => {
             let explain_args = ExplainArgs::new_with(args)
@@ -214,7 +214,7 @@ fn main() {
                     e.add_subaction("Failed to construct Explain arguments".to_string())
                         .set_action(EXPLAIN_ERR_STR.to_string())
                 })
-                .ok_or_exit_with_errno(None);
+                .ok_or_exit_with_message();
             explain_error(explain_args.error_code_str);
         }
         (&_, _) => {}

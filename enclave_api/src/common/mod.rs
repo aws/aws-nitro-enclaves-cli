@@ -5,8 +5,6 @@
 
 /// The module which parses command parameters from command-line arguments.
 pub mod commands_parser;
-/// The module which provides mappings between NitroCliErrors and their corresponding code.
-pub mod document_errors;
 /// The module which provides JSON-ready information structures.
 pub mod json_output;
 /// The module which provides signal handling.
@@ -20,10 +18,8 @@ use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
-use document_errors::ERROR_CODES;
-
-/// The most common result type provided by Nitro CLI operations.
-pub type NitroCliResult<T> = Result<T, NitroCliFailure>;
+/// The most common result type provided by Enclave API operations.
+pub type EnclaveResult<T> = Result<T, EnclaveFailure>;
 
 /// The CID for the vsock device of the parent VM.
 pub const VMADDR_CID_PARENT: u32 = 3;
@@ -48,8 +44,8 @@ const SOCKETS_DIR_PATH: &str = "/run/nitro_enclaves";
 const BACKTRACE_VAR: &str = "BACKTRACE";
 
 /// All possible errors which may occur.
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
-pub enum NitroCliErrorEnum {
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Serialize, Deserialize)]
+pub enum EnclaveErrorEnum {
     /// Unspecified error (should avoid using it thoughout the code).
     UnspecifiedError = 0,
     /// Error for handling missing arguments.
@@ -162,15 +158,19 @@ pub enum NitroCliErrorEnum {
     SignalMaskingError,
     /// Signal unmasking error.
     SignalUnmaskingError,
+    /// Already running enclave proc received an Run command
+    EnclaveAlreadyRunning,
+    /// User does not have enough permissions
+    NoPermissions,
 }
 
-impl Default for NitroCliErrorEnum {
-    fn default() -> NitroCliErrorEnum {
-        NitroCliErrorEnum::UnspecifiedError
+impl Default for EnclaveErrorEnum {
+    fn default() -> EnclaveErrorEnum {
+        EnclaveErrorEnum::UnspecifiedError
     }
 }
 
-impl Eq for NitroCliErrorEnum {}
+impl Eq for EnclaveErrorEnum {}
 
 /// The type of commands that can be sent to an enclave process.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -199,18 +199,18 @@ pub enum EnclaveProcessReply {
     /// A messge which must be printed to the CLI's standard error.
     StdErrMessage(String),
     /// The status of the operation that the enclave process has performed.
-    Status(i32),
+    Status(Option<EnclaveFailure>),
 }
 
 /// Struct that is passed along the backtrace and accumulates error messages.
-#[derive(Debug, Default)]
-pub struct NitroCliFailure {
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct EnclaveFailure {
     /// Main action which was attempted and failed.
     pub action: String,
     /// (Possibly) more subactions which lead to the root cause of the failure.
     pub subactions: Vec<String>,
     /// Computer-readable error code.
-    pub error_code: NitroCliErrorEnum,
+    pub error_code: EnclaveErrorEnum,
     /// File in which the root error occurred.
     pub file: String,
     /// Line at which the root error occurred.
@@ -219,13 +219,13 @@ pub struct NitroCliFailure {
     pub additional_info: Vec<String>,
 }
 
-impl NitroCliFailure {
-    /// Returns an empty `NitroCliFailure` object.
+impl EnclaveFailure {
+    /// Returns an empty `EnclaveFailure` object.
     pub fn new() -> Self {
-        NitroCliFailure {
+        EnclaveFailure {
             action: String::new(),
             subactions: vec![],
-            error_code: NitroCliErrorEnum::default(),
+            error_code: EnclaveErrorEnum::default(),
             file: String::new(),
             line: 0,
             additional_info: vec![],
@@ -245,7 +245,7 @@ impl NitroCliFailure {
     }
 
     /// Sets the error code.
-    pub fn set_error_code(mut self, error_code: NitroCliErrorEnum) -> Self {
+    pub fn set_error_code(mut self, error_code: EnclaveErrorEnum) -> Self {
         self.error_code = error_code;
         self
     }
@@ -278,44 +278,49 @@ impl NitroCliFailure {
     }
 }
 
-/// Macro used for constructing a NitroCliFailure in a more convenient manner.
+/// Macro used for constructing a EnclaveFailure in a more convenient manner.
 #[macro_export]
-macro_rules! new_nitro_cli_failure {
+macro_rules! new_enclave_failure {
     ($subaction:expr, $error_code:expr) => {
-        NitroCliFailure::new()
+        EnclaveFailure::new()
             .add_subaction(($subaction).to_string())
             .set_error_code($error_code)
             .set_file_and_line(file!(), line!())
     };
 }
 
-/// Assembles the error message which gets displayed to the user.
-pub fn construct_error_message(failure: &NitroCliFailure) -> String {
-    // Suggestive error description comes first.
-    let error_info: String = document_errors::get_detailed_info(
-        (*ERROR_CODES.get(&failure.error_code).unwrap_or(&"E00")).to_string(),
-        &failure.additional_info,
-    );
+/// A trait used by errors to construct a backtrace
+pub trait BacktraceConstructor {
+    /// Assembles the backtrace which gets displayed to the user.
+    fn construct_backtrace(&self) -> String;
+}
 
-    // Include a link to the documentation page.
-    let help_link: String = document_errors::construct_help_link(
-        (*ERROR_CODES.get(&failure.error_code).unwrap_or(&"E00")).to_string(),
-    );
-    let backtrace: String = document_errors::construct_backtrace(&failure);
+impl BacktraceConstructor for EnclaveFailure {
+    fn construct_backtrace(&self) -> String {
+        match std::env::var(BACKTRACE_VAR).unwrap_or_default().as_str() {
+            "1" => {
+                // Construct the backtrace
+                let mut ret = String::new();
+                let commit_id = env!("COMMIT_ID");
 
-    // Return final output, depending on whether the user requested the backtrace or not.
-    match std::env::var(BACKTRACE_VAR).unwrap_or_default().as_str() {
-        "1" => {
-            format!(
-                "{}\n\nFor more details, please visit {}\n\nBacktrace:\n{}",
-                error_info, help_link, backtrace
-            )
-        }
-        _ => {
-            format!(
-                "{}\n\nFor more details, please visit {}",
-                error_info, help_link
-            )
+                ret.push_str(&format!("  Action: {}\n  Subactions:", self.action));
+                for subaction in self.subactions.iter().rev() {
+                    ret.push_str(&format!("\n    {}", subaction));
+                }
+                ret.push_str(&format!("\n  Root error file: {}", self.file));
+                ret.push_str(&format!("\n  Root error line: {}", self.line));
+
+                ret.push_str(&format!(
+                    "\n  Build commit: {}",
+                    match commit_id.len() {
+                        0 => "not available",
+                        _ => commit_id,
+                    }
+                ));
+
+                format!("Backtrace:\n{}", ret)
+            }
+            _ => "".to_string(),
         }
     }
 }
@@ -327,13 +332,13 @@ pub trait ExitGracefully<T> {
     fn ok_or_exit_with_errno(self, additional_info: Option<&str>) -> T;
 }
 
-impl<T> ExitGracefully<T> for NitroCliResult<T> {
+impl<T> ExitGracefully<T> for EnclaveResult<T> {
     /// Provide the inner value of a `Result` or exit gracefully with a message and custom errno.
     fn ok_or_exit_with_errno(self, additional_info: Option<&str>) -> T {
         match self {
             Ok(val) => val,
             Err(err) => {
-                let err_str = construct_error_message(&err);
+                let err_str = err.construct_backtrace();
                 if let Some(additional_info_str) = additional_info {
                     notify_error(&format!("{} | {}", additional_info_str, err_str));
                 } else {
@@ -352,16 +357,16 @@ pub fn notify_error(err_msg: &str) {
 }
 
 /// Read a LE-encoded 64-bit unsigned value from a socket.
-pub fn read_u64_le(socket: &mut dyn Read) -> NitroCliResult<u64> {
+pub fn read_u64_le(socket: &mut dyn Read) -> EnclaveResult<u64> {
     let mut bytes = [0u8; std::mem::size_of::<u64>()];
     socket.read_exact(&mut bytes).map_err(|e| {
-        new_nitro_cli_failure!(
+        new_enclave_failure!(
             &format!(
                 "Failed to read {} bytes from the given socket: {:?}",
                 std::mem::size_of::<u64>(),
                 e
             ),
-            NitroCliErrorEnum::SocketError
+            EnclaveErrorEnum::SocketError
         )
     })?;
 
@@ -369,16 +374,16 @@ pub fn read_u64_le(socket: &mut dyn Read) -> NitroCliResult<u64> {
 }
 
 /// Write a LE-encoded 64-bit unsigned value to a socket.
-pub fn write_u64_le(socket: &mut dyn Write, value: u64) -> NitroCliResult<()> {
+pub fn write_u64_le(socket: &mut dyn Write, value: u64) -> EnclaveResult<()> {
     let bytes = value.to_le_bytes();
     socket.write_all(&bytes).map_err(|e| {
-        new_nitro_cli_failure!(
+        new_enclave_failure!(
             &format!(
                 "Failed to write {} bytes to the given socket: {:?}",
                 std::mem::size_of::<u64>(),
                 e
             ),
-            NitroCliErrorEnum::SocketError
+            EnclaveErrorEnum::SocketError
         )
     })
 }
@@ -388,15 +393,15 @@ pub fn enclave_proc_command_send_single<T>(
     cmd: EnclaveProcessCommandType,
     args: Option<&T>,
     mut socket: &mut UnixStream,
-) -> NitroCliResult<()>
+) -> EnclaveResult<()>
 where
     T: Serialize,
 {
     // Serialize the command type.
     let cmd_bytes = serde_cbor::to_vec(&cmd).map_err(|e| {
-        new_nitro_cli_failure!(
+        new_enclave_failure!(
             &format!("Invalid command format: {:?}", e),
-            NitroCliErrorEnum::InvalidCommand
+            EnclaveErrorEnum::InvalidCommand
         )
     })?;
 
@@ -406,9 +411,9 @@ where
         write_u64_le(&mut socket, cmd_bytes.len() as u64)
             .map_err(|e| e.add_subaction("Failed to send single command size".to_string()))?;
         socket.write_all(&cmd_bytes[..]).map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Failed to send single command: {:?}", e),
-                NitroCliErrorEnum::SocketError
+                EnclaveErrorEnum::SocketError
             )
         })?;
     }
@@ -416,9 +421,9 @@ where
     // Serialize the command arguments.
     if let Some(args) = args {
         let arg_bytes = serde_cbor::to_vec(args).map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Invalid single command arguments: {:?}", e),
-                NitroCliErrorEnum::InvalidCommand
+                EnclaveErrorEnum::InvalidCommand
             )
         })?;
 
@@ -426,9 +431,9 @@ where
         write_u64_le(&mut socket, arg_bytes.len() as u64)
             .map_err(|e| e.add_subaction("Failed to send arguments size".to_string()))?;
         socket.write_all(&arg_bytes).map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Failed to send arguments: {:?}", e),
-                NitroCliErrorEnum::SocketError
+                EnclaveErrorEnum::SocketError
             )
         })?;
     }
@@ -437,7 +442,7 @@ where
 }
 
 /// Receive an object of a specified type from an input stream.
-pub fn receive_from_stream<T>(input_stream: &mut dyn Read) -> NitroCliResult<T>
+pub fn receive_from_stream<T>(input_stream: &mut dyn Read) -> EnclaveResult<T>
 where
     T: DeserializeOwned,
 {
@@ -446,15 +451,15 @@ where
         as usize;
     let mut raw_data: Vec<u8> = vec![0; size];
     input_stream.read_exact(&mut raw_data[..]).map_err(|e| {
-        new_nitro_cli_failure!(
+        new_enclave_failure!(
             &format!("Failed to receive data: {:?}", e),
-            NitroCliErrorEnum::SocketError
+            EnclaveErrorEnum::SocketError
         )
     })?;
     let data: T = serde_cbor::from_slice(&raw_data[..]).map_err(|e| {
-        new_nitro_cli_failure!(
+        new_enclave_failure!(
             &format!("Failed to decode received data: {:?}", e),
-            NitroCliErrorEnum::SerdeError
+            EnclaveErrorEnum::SerdeError
         )
     })?;
     Ok(data)
@@ -470,7 +475,7 @@ pub fn get_sockets_dir_path() -> PathBuf {
 }
 
 /// Get the path to the Unix socket owned by an enclave process which also owns the enclave with the given ID.
-pub fn get_socket_path(enclave_id: &str) -> NitroCliResult<PathBuf> {
+pub fn get_socket_path(enclave_id: &str) -> EnclaveResult<PathBuf> {
     // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
     let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
     let sockets_path = get_sockets_dir_path();

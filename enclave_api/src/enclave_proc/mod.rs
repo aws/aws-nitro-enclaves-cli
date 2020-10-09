@@ -28,13 +28,13 @@ use std::process;
 use std::thread::{self, JoinHandle};
 
 use super::common::MSG_ENCLAVE_CONFIRM;
-use super::common::{construct_error_message, enclave_proc_command_send_single, notify_error};
+use super::common::{enclave_proc_command_send_single, notify_error, BacktraceConstructor};
 use super::common::{
-    EnclaveProcessCommandType, ExitGracefully, NitroCliErrorEnum, NitroCliFailure, NitroCliResult,
+    EnclaveErrorEnum, EnclaveFailure, EnclaveProcessCommandType, EnclaveResult, ExitGracefully,
 };
 use crate::common::commands_parser::{EmptyArgs, RunEnclavesArgs};
 use crate::common::signal_handler::SignalHandler;
-use crate::new_nitro_cli_failure;
+use crate::new_enclave_failure;
 
 use commands::{describe_enclaves, run_enclaves, terminate_enclaves};
 use connection::Connection;
@@ -74,9 +74,9 @@ fn send_command_and_close(cmd: EnclaveProcessCommandType, stream: &mut UnixStrea
     stream
         .shutdown(std::net::Shutdown::Both)
         .map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Failed to close stream after sending command: {:?}", e),
-                NitroCliErrorEnum::SocketCloseError
+                EnclaveErrorEnum::SocketCloseError
             )
             .set_action(action_str.to_string())
         })
@@ -101,7 +101,7 @@ fn run_terminate(
 ) {
     terminate_enclaves(&mut enclave_manager, Some(&connection)).unwrap_or_else(|e| {
         notify_error_with_conn(
-            construct_error_message(&e).as_str(),
+            e.construct_backtrace().as_str(),
             &connection,
             EnclaveProcessCommandType::Terminate,
         );
@@ -119,11 +119,11 @@ fn notify_terminate(
     connection: Connection,
     conn_listener: &ConnectionListener,
     enclave_manager: EnclaveManager,
-) -> NitroCliResult<JoinHandle<()>> {
+) -> EnclaveResult<JoinHandle<()>> {
     let (local_stream, thread_stream) = UnixStream::pair().map_err(|e| {
-        new_nitro_cli_failure!(
+        new_enclave_failure!(
             &format!("Could not create stream pair: {:?}", e),
-            NitroCliErrorEnum::SocketPairCreationFailure
+            EnclaveErrorEnum::SocketPairCreationFailure
         )
     })?;
 
@@ -134,15 +134,15 @@ fn notify_terminate(
 }
 
 /// Launch the POSIX signal handler on a dedicated thread and ensure its events are accessible.
-fn enclave_proc_configure_signal_handler(conn_listener: &ConnectionListener) -> NitroCliResult<()> {
+fn enclave_proc_configure_signal_handler(conn_listener: &ConnectionListener) -> EnclaveResult<()> {
     let mut signal_handler = SignalHandler::new_with_defaults()
         .mask_all()
         .map_err(|e| e.add_subaction("Failed to configure signal handler".to_string()))?;
     let (local_stream, thread_stream) = UnixStream::pair()
         .map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Failed to create stream pair: {:?}", e),
-                NitroCliErrorEnum::SocketPairCreationFailure
+                EnclaveErrorEnum::SocketPairCreationFailure
             )
             .set_action("Run Enclave".to_string())
         })
@@ -177,7 +177,7 @@ fn enclave_proc_handle_signals(comm_fd: RawFd, signal: Signal) -> bool {
 }
 
 /// Handle an event coming from an enclave.
-fn try_handle_enclave_event(connection: &Connection) -> NitroCliResult<HandledEnclaveEvent> {
+fn try_handle_enclave_event(connection: &Connection) -> EnclaveResult<HandledEnclaveEvent> {
     // Check if this is an enclave connection.
     if let Some(mut enc_events) = connection
         .get_enclave_event_flags()
@@ -211,12 +211,15 @@ fn handle_command(
     conn_listener: &mut ConnectionListener,
     enclave_manager: &mut EnclaveManager,
     terminate_thread: &mut Option<std::thread::JoinHandle<()>>,
-) -> NitroCliResult<(i32, bool)> {
+) -> EnclaveResult<bool> {
     Ok(match cmd {
         EnclaveProcessCommandType::Run => {
             // We should never receive a Run command if we are already running.
             if !enclave_manager.enclave_id.is_empty() {
-                (libc::EEXIST, false)
+                return Err(new_enclave_failure!(
+                    "An enclave process can handle only one command".to_string(),
+                    EnclaveErrorEnum::EnclaveAlreadyRunning
+                ));
             } else {
                 let run_args = connection.read::<RunEnclavesArgs>().map_err(|e| {
                     e.add_subaction("Failed to get run arguments".to_string())
@@ -245,7 +248,7 @@ fn handle_command(
                     .map_err(|e| {
                         e.set_action("Failed to register enclave descriptor".to_string())
                     })?;
-                (0, false)
+                false
             }
         }
 
@@ -256,12 +259,12 @@ fn handle_command(
                         e.set_action("Failed to send enclave termination request".to_string())
                     })?,
             );
-            (0, false)
+            false
         }
 
         EnclaveProcessCommandType::TerminateComplete => {
             info!("Enclave has completed termination.");
-            (0, true)
+            true
         }
 
         EnclaveProcessCommandType::GetEnclaveCID => {
@@ -272,7 +275,7 @@ fn handle_command(
                 e.add_subaction("Failed to write enclave CID to connection".to_string())
                     .set_action("Get Enclave CID".to_string())
             })?;
-            (0, false)
+            false
         }
 
         EnclaveProcessCommandType::Describe => {
@@ -285,19 +288,22 @@ fn handle_command(
                 e.add_subaction("Failed to describe enclave".to_string())
                     .set_action("Describe Enclaves".to_string())
             })?;
-            (0, false)
+            false
         }
 
-        EnclaveProcessCommandType::ConnectionListenerStop => (0, true),
+        EnclaveProcessCommandType::ConnectionListenerStop => true,
 
-        EnclaveProcessCommandType::NotPermitted => (libc::EACCES, false),
+        EnclaveProcessCommandType::NotPermitted => {
+            return Err(new_enclave_failure!(
+                "Failed to execute command due to lack of permissions.",
+                EnclaveErrorEnum::NoPermissions
+            ));
+        }
     })
 }
 
 /// The main event loop of the enclave process.
-fn process_event_loop(
-    comm_stream: UnixStream,
-) -> NitroCliResult<()> {
+fn process_event_loop(comm_stream: UnixStream) -> EnclaveResult<()> {
     let mut conn_listener = ConnectionListener::new()?;
     let mut enclave_manager = EnclaveManager::default();
     let mut terminate_thread: Option<std::thread::JoinHandle<()>> = None;
@@ -344,7 +350,7 @@ fn process_event_loop(
                     .add_subaction("Failed to read command".to_string())
                     .set_action("Run Enclave".to_string());
                 notify_error_with_conn(
-                    &construct_error_message(&error_info),
+                    &error_info.construct_backtrace(),
                     &connection,
                     EnclaveProcessCommandType::NotPermitted,
                 );
@@ -361,16 +367,19 @@ fn process_event_loop(
             &mut terminate_thread,
         );
 
+        let mut err: Option<EnclaveFailure> = None;
+
         // Obtain the status code and whether the event loop must be exited.
-        let (status_code, do_break) = match status {
+        let do_break = match status {
             Ok(value) => value,
-            Err(mut error_info) => {
+            Err(error_info) => {
                 // Any encountered error is both logged and send to the other side of the connection.
-                error_info = error_info
-                    .add_subaction(format!("Failed to execute command `{:?}`", cmd))
-                    .set_action("Run Enclave".to_string());
-                notify_error_with_conn(&construct_error_message(&error_info), &connection, cmd);
-                (libc::EINVAL, true)
+                err = Some(
+                    error_info
+                        .add_subaction(format!("Failed to execute command `{:?}`", cmd))
+                        .set_action("Run Enclave".to_string()),
+                );
+                true
             }
         };
 
@@ -386,9 +395,9 @@ fn process_event_loop(
             // Wait for the termination thread, if any.
             if terminate_thread.is_some() {
                 terminate_thread.take().unwrap().join().map_err(|e| {
-                    new_nitro_cli_failure!(
+                    new_enclave_failure!(
                         &format!("Termination thread join failed: {:?}", e),
-                        NitroCliErrorEnum::ThreadJoinFailure
+                        EnclaveErrorEnum::ThreadJoinFailure
                     )
                 })?;
             };
@@ -399,10 +408,10 @@ fn process_event_loop(
             EnclaveProcessCommandType::Run
             | EnclaveProcessCommandType::Terminate
             | EnclaveProcessCommandType::Describe => {
-                connection.write_status(status_code).map_err(|_| {
-                    new_nitro_cli_failure!(
+                connection.write_status(err).map_err(|_| {
+                    new_enclave_failure!(
                         "Process event loop failed",
-                        NitroCliErrorEnum::EnclaveProcessSendReplyFailure
+                        EnclaveErrorEnum::EnclaveProcessSendReplyFailure
                     )
                 })?
             }
@@ -416,7 +425,7 @@ fn process_event_loop(
 }
 
 /// Create the enclave process.
-fn create_enclave_process() -> NitroCliResult<()> {
+fn create_enclave_process() -> EnclaveResult<()> {
     // To get a detached process, we first:
     // (1) Temporarily ignore specific signals (SIGHUP).
     // (2) Daemonize the current process.
@@ -430,9 +439,9 @@ fn create_enclave_process() -> NitroCliResult<()> {
     // Daemonize the current process. The working directory remains
     // unchanged and the standard descriptors are routed to '/dev/null'.
     daemon(true, false).map_err(|e| {
-        new_nitro_cli_failure!(
+        new_enclave_failure!(
             &format!("Failed to daemonize enclave process: {:?}", e),
-            NitroCliErrorEnum::DaemonizeProcessFailure
+            EnclaveErrorEnum::DaemonizeProcessFailure
         )
     })?;
 
@@ -463,7 +472,7 @@ pub fn enclave_process_run(comm_stream: UnixStream) {
     let res = process_event_loop(comm_stream);
     if let Err(mut error_info) = res {
         error_info = error_info.set_action("Run Enclave".to_string());
-        notify_error(construct_error_message(&error_info).as_str());
+        notify_error(error_info.construct_backtrace().as_str());
         process::exit(error_info.error_code as i32);
     }
     process::exit(0);

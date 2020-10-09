@@ -7,7 +7,7 @@ use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::Command;
 
-use enclave_api::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use enclave_api::common::{EnclaveErrorEnum, EnclaveFailure, EnclaveResult};
 use enclave_api::enclave_proc::cpu_info::CpuInfo;
 use enclave_api::enclave_proc::resource_manager::MemoryRegion;
 use enclave_api::enclave_proc::utils::MiB;
@@ -55,38 +55,38 @@ pub struct NitroEnclavesDeviceDriver {
 
 impl NitroEnclavesDeviceDriver {
     /// Open the file descriptor for communicating with the NE driver.
-    pub fn new() -> NitroCliResult<Self> {
+    pub fn new() -> EnclaveResult<Self> {
         Ok(NitroEnclavesDeviceDriver {
             file: File::open(NE_DEVICE_PATH).map_err(|e| {
-                NitroCliFailure::new()
+                EnclaveFailure::new()
                     .add_subaction(format!("Could not open {}: {}", NE_DEVICE_PATH, e))
-                    .set_error_code(NitroCliErrorEnum::FileOperationFailure)
+                    .set_error_code(EnclaveErrorEnum::FileOperationFailure)
                     .set_file_and_line(file!(), line!())
             })?,
         })
     }
 
     /// Allocate an enclave slot and return an enclave fd.
-    pub fn create_enclave(&mut self) -> NitroCliResult<NitroEnclave> {
+    pub fn create_enclave(&mut self) -> EnclaveResult<NitroEnclave> {
         let mut slot_uid: u64 = 0;
         // This is safe because we are providing valid values.
         let enc_fd =
             unsafe { libc::ioctl(self.file.as_raw_fd(), NE_CREATE_VM as _, &mut slot_uid) };
 
         if enc_fd < 0 {
-            return Err(NitroCliFailure::new()
+            return Err(EnclaveFailure::new()
                 .add_subaction(format!(
                     "Could not create an enclave descriptor: {}",
                     enc_fd
                 ))
-                .set_error_code(NitroCliErrorEnum::IoctlFailure)
+                .set_error_code(EnclaveErrorEnum::IoctlFailure)
                 .set_file_and_line(file!(), line!()));
         }
 
         if slot_uid == 0 {
-            return Err(NitroCliFailure::new()
+            return Err(EnclaveFailure::new()
                 .add_subaction("Obtained invalid slot ID".to_string())
-                .set_error_code(NitroCliErrorEnum::IoctlFailure)
+                .set_error_code(EnclaveErrorEnum::IoctlFailure)
                 .set_file_and_line(file!(), line!()));
         }
 
@@ -100,7 +100,7 @@ pub struct NitroEnclave {
 }
 
 impl NitroEnclave {
-    pub fn new(enc_fd: RawFd) -> NitroCliResult<Self> {
+    pub fn new(enc_fd: RawFd) -> EnclaveResult<Self> {
         Ok(NitroEnclave { enc_fd })
     }
 
@@ -112,37 +112,37 @@ impl NitroEnclave {
         }
     }
 
-    pub fn add_mem_region(&mut self, mem_region: EnclaveMemoryRegion) -> NitroCliResult<()> {
+    pub fn add_mem_region(&mut self, mem_region: EnclaveMemoryRegion) -> EnclaveResult<()> {
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_SET_USER_MEMORY_REGION as _, &mem_region) };
         if rc < 0 {
-            return Err(NitroCliFailure::new()
+            return Err(EnclaveFailure::new()
                 .add_subaction(format!("Could not add memory region: {}", rc))
-                .set_error_code(NitroCliErrorEnum::IoctlSetMemoryRegionFailure)
+                .set_error_code(EnclaveErrorEnum::IoctlSetMemoryRegionFailure)
                 .set_file_and_line(file!(), line!()));
         }
 
         Ok(())
     }
 
-    pub fn add_cpu(&mut self, cpu_id: u32) -> NitroCliResult<()> {
+    pub fn add_cpu(&mut self, cpu_id: u32) -> EnclaveResult<()> {
         let mut actual_cpu_id: u32 = cpu_id;
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_ADD_VCPU as _, &mut actual_cpu_id) };
         if rc < 0 {
-            return Err(NitroCliFailure::new()
+            return Err(EnclaveFailure::new()
                 .add_subaction(format!("Could not add vCPU: {}", rc))
-                .set_error_code(NitroCliErrorEnum::IoctlAddVcpuFailure)
+                .set_error_code(EnclaveErrorEnum::IoctlAddVcpuFailure)
                 .set_file_and_line(file!(), line!()));
         }
 
         Ok(())
     }
 
-    pub fn start(&mut self, start_info: EnclaveStartInfo) -> NitroCliResult<()> {
+    pub fn start(&mut self, start_info: EnclaveStartInfo) -> EnclaveResult<()> {
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_START_ENCLAVE as _, &start_info) };
         if rc < 0 {
-            return Err(NitroCliFailure::new()
+            return Err(EnclaveFailure::new()
                 .add_subaction(format!("Could not start enclave: {}", rc))
-                .set_error_code(NitroCliErrorEnum::IoctlEnclaveStartFailure)
+                .set_error_code(EnclaveErrorEnum::IoctlEnclaveStartFailure)
                 .set_file_and_line(file!(), line!()));
         }
 
@@ -165,12 +165,12 @@ pub struct CheckDmesg {
 }
 
 impl CheckDmesg {
-    pub fn new() -> NitroCliResult<Self> {
+    pub fn new() -> EnclaveResult<Self> {
         Ok(CheckDmesg { recorded_line: 0 })
     }
 
     /// Obtain the log lines from dmesg.
-    fn get_dmesg_lines(&mut self) -> NitroCliResult<Vec<String>> {
+    fn get_dmesg_lines(&mut self) -> EnclaveResult<Vec<String>> {
         let dmesg = Command::new("dmesg")
             .output()
             .expect("Failed to execute dmesg process");
@@ -180,13 +180,13 @@ impl CheckDmesg {
     }
 
     /// Record the current number of lines from dmesg.
-    pub fn record_current_line(&mut self) -> NitroCliResult<()> {
+    pub fn record_current_line(&mut self) -> EnclaveResult<()> {
         self.recorded_line = self.get_dmesg_lines().unwrap().len();
         Ok(())
     }
 
     /// Verify if dmesg number of lines changed from the last recorded line.
-    pub fn expect_no_changes(&mut self) -> NitroCliResult<()> {
+    pub fn expect_no_changes(&mut self) -> EnclaveResult<()> {
         let checks = vec![
             "WARNING",
             "BUG",
@@ -202,9 +202,9 @@ impl CheckDmesg {
             let upper_line = lines[i].to_uppercase();
             for word in checks.iter() {
                 if upper_line.contains(&word.to_uppercase()) {
-                    return Err(NitroCliFailure::new()
+                    return Err(EnclaveFailure::new()
                         .add_subaction(format!("Dmesg line: {} contains: {}", lines[i], word))
-                        .set_error_code(NitroCliErrorEnum::IoctlFailure)
+                        .set_error_code(EnclaveErrorEnum::IoctlFailure)
                         .set_file_and_line(file!(), line!()));
                 }
             }

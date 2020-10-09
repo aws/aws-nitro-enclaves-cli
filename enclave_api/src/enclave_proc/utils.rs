@@ -8,9 +8,9 @@ use std::fs::File;
 use std::io::Read;
 
 use crate::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo};
-use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use crate::common::{EnclaveErrorEnum, EnclaveFailure, EnclaveResult};
 use crate::enclave_proc::resource_manager::EnclaveManager;
-use crate::new_nitro_cli_failure;
+use crate::new_enclave_failure;
 use enclave_driver::NE_ENCLAVE_DEBUG_MODE;
 
 /// Kibibytes.
@@ -38,7 +38,7 @@ pub fn flags_to_string(flags: u64) -> String {
 /// Obtain the enclave information requested by the `describe-enclaves` command.
 pub fn get_enclave_describe_info(
     enclave_manager: &EnclaveManager,
-) -> NitroCliResult<EnclaveDescribeInfo> {
+) -> EnclaveResult<EnclaveDescribeInfo> {
     let (slot_uid, enclave_cid, cpus_count, cpu_ids, memory_mib, flags, state) =
         enclave_manager.get_description_resources()?;
     let info = EnclaveDescribeInfo::new(
@@ -59,7 +59,7 @@ pub fn get_run_enclaves_info(
     slot_id: u64,
     cpu_ids: Vec<u32>,
     memory: u64,
-) -> NitroCliResult<EnclaveRunInfo> {
+) -> EnclaveResult<EnclaveRunInfo> {
     let info = EnclaveRunInfo::new(
         generate_enclave_id(slot_id)?,
         enclave_cid,
@@ -71,20 +71,20 @@ pub fn get_run_enclaves_info(
 }
 
 /// Generate a unique ID for a new enclave with the specified slot ID.
-pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
+pub fn generate_enclave_id(slot_id: u64) -> EnclaveResult<String> {
     let file_path = "/sys/devices/virtual/dmi/id/board_asset_tag";
     if metadata(file_path).is_ok() {
         let mut file = File::open(file_path).map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Failed to open file: {:?}", e),
-                NitroCliErrorEnum::FileOperationFailure
+                EnclaveErrorEnum::FileOperationFailure
             )
         })?;
         let mut contents = String::new();
         file.read_to_string(&mut contents).map_err(|e| {
-            new_nitro_cli_failure!(
+            new_enclave_failure!(
                 &format!("Failed to read from file: {:?}", e),
-                NitroCliErrorEnum::FileOperationFailure
+                EnclaveErrorEnum::FileOperationFailure
             )
         })?;
         contents.retain(|c| !c.is_whitespace());

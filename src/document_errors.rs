@@ -1,57 +1,162 @@
 use lazy_static::lazy_static;
 
+use enclave_api::common::{BacktraceConstructor, EnclaveErrorEnum};
+use enclave_api::common::{EnclaveFailure, EnclaveResult};
 use std::collections::HashMap;
 
-use crate::common::{NitroCliErrorEnum, NitroCliFailure};
+use crate::utils::NitroCliResult;
+
+/// Constant used for identifying the backtrace environment variable.
+const BACKTRACE_VAR: &str = "BACKTRACE";
+
+/// All possible errors which may occur.
+#[derive(Debug, Clone, Copy, Hash, PartialEq)]
+pub enum NitroCliErrorEnum {
+    /// Unspecified error (should avoid using it thoughout the code).
+    UnspecifiedError = 0,
+    /// Error for handling missing arguments.
+    MissingArgument,
+    /// Error for handling conflicting arguments.
+    ConflictingArgument,
+    /// Invalid type argument.
+    InvalidArgument,
+    /// Socket connect timeout error.
+    SocketConnectTimeoutError,
+    /// General error for handling socket-related errors.
+    SocketError,
+    /// General error for handling serde-related errors.
+    SerdeError,
+    /// File operation failure.
+    FileOperationFailure,
+    /// Enclave connection to console failed.
+    EnclaveConsoleConnectionFailure,
+    /// Error when reading from the console.
+    EnclaveConsoleReadError,
+    /// Error when writing console output to stream.
+    EnclaveConsoleWriteOutputError,
+    /// Integer parsing error.
+    IntegerParsingError,
+    /// Could not build EIF file.
+    EifBuildingError,
+    /// Could not build Docker image.
+    DockerImageBuildError,
+    /// Could not pull Docker image.
+    DockerImagePullError,
+    /// Artifacts path environment variable not set.
+    ArtifactsPathNotSet,
+    /// Blobs path environment variable not set.
+    BlobsPathNotSet,
+    /// Clock skew error.
+    ClockSkewError,
+}
+
+impl Default for NitroCliErrorEnum {
+    fn default() -> NitroCliErrorEnum {
+        NitroCliErrorEnum::UnspecifiedError
+    }
+}
+
+impl Eq for NitroCliErrorEnum {}
+
+/// Struct that is passed along the backtrace and accumulates error messages.
+#[derive(Debug, Default)]
+pub struct NitroCliFailure {
+    /// Main action which was attempted and failed.
+    pub action: String,
+    /// (Possibly) more subactions which lead to the root cause of the failure.
+    pub subactions: Vec<String>,
+    /// Computer-readable error code.
+    pub error_code: NitroCliErrorEnum,
+    /// File in which the root error occurred.
+    pub file: String,
+    /// Line at which the root error occurred.
+    pub line: u32,
+    /// Additional info regarding the error, passed as individual components (for easier parsing).
+    pub additional_info: Vec<String>,
+}
+
+impl NitroCliFailure {
+    /// Returns an empty `NitroCliFailure` object.
+    pub fn new() -> Self {
+        NitroCliFailure {
+            action: String::new(),
+            subactions: vec![],
+            error_code: NitroCliErrorEnum::default(),
+            file: String::new(),
+            line: 0,
+            additional_info: vec![],
+        }
+    }
+
+    /// Sets the main action which failed (i.e. RUN_ENCLAVE).
+    pub fn set_action(mut self, action: String) -> Self {
+        self.action = action;
+        self
+    }
+
+    /// Adds a new layer into the backtrace, corresponding to a failing subaction (i.e. NOT_ENOUGH_MEM).
+    pub fn add_subaction(mut self, subaction: String) -> Self {
+        self.subactions.push(subaction);
+        self
+    }
+
+    /// Sets the error code.
+    pub fn set_error_code(mut self, error_code: NitroCliErrorEnum) -> Self {
+        self.error_code = error_code;
+        self
+    }
+
+    /// Sets the name of the file the error occurred in.
+    pub fn set_file(mut self, file: &str) -> Self {
+        self.file = file.to_string();
+        self
+    }
+
+    /// Sets the number of the line the error occurred on.
+    pub fn set_line(mut self, line: u32) -> Self {
+        self.line = line;
+        self
+    }
+
+    /// Sets both error file and error line.
+    pub fn set_file_and_line(mut self, file: &str, line: u32) -> Self {
+        self.file = file.to_string();
+        self.line = line;
+        self
+    }
+
+    /// Include additional error information.
+    pub fn add_info(mut self, info: Vec<&str>) -> Self {
+        for info_ in info {
+            self.additional_info.push(info_.to_string());
+        }
+        self
+    }
+}
+
+/// Macro used for constructing a NitroCliFailure in a more convenient manner.
+#[macro_export]
+macro_rules! new_nitro_cli_failure {
+    ($subaction:expr, $error_code:expr) => {
+        NitroCliFailure::new()
+            .add_subaction(($subaction).to_string())
+            .set_error_code($error_code)
+            .set_file_and_line(file!(), line!())
+    };
+}
 
 lazy_static! {
-    /// Structure mapping enum Errors to a specific error code.
-    pub static ref ERROR_CODES: HashMap<NitroCliErrorEnum, &'static str> =
+    /// Structure mapping enum cli Errors to a specific error code.
+    pub static ref CLI_ERROR_CODES: HashMap<NitroCliErrorEnum, &'static str> =
         [
             (NitroCliErrorEnum::UnspecifiedError, "E00"),
             (NitroCliErrorEnum::MissingArgument, "E01"),
             (NitroCliErrorEnum::ConflictingArgument, "E02"),
             (NitroCliErrorEnum::InvalidArgument, "E03"),
-            (NitroCliErrorEnum::SocketPairCreationFailure, "E04"),
-            (NitroCliErrorEnum::ProcessSpawnFailure, "E05"),
-            (NitroCliErrorEnum::DaemonizeProcessFailure, "E06"),
-            (NitroCliErrorEnum::ReadFromDiskFailure, "E07"),
-            (NitroCliErrorEnum::UnusableConnectionError, "E08"),
-            (NitroCliErrorEnum::SocketCloseError, "E09"),
             (NitroCliErrorEnum::SocketConnectTimeoutError, "E10"),
             (NitroCliErrorEnum::SocketError, "E11"),
-            (NitroCliErrorEnum::EpollError, "E12"),
-            (NitroCliErrorEnum::InotifyError, "E13"),
-            (NitroCliErrorEnum::InvalidCommand, "E14"),
-            (NitroCliErrorEnum::LockAcquireFailure, "E15"),
-            (NitroCliErrorEnum::ThreadJoinFailure, "E16"),
             (NitroCliErrorEnum::SerdeError, "E17"),
-            (NitroCliErrorEnum::FilePermissionsError, "E18"),
             (NitroCliErrorEnum::FileOperationFailure, "E19"),
-            (NitroCliErrorEnum::InvalidCpuConfiguration, "E20"),
-            (NitroCliErrorEnum::NoSuchCpuAvailableInPool, "E21"),
-            (NitroCliErrorEnum::InsufficientCpus, "E22"),
-            (NitroCliErrorEnum::MalformedCpuId, "E23"),
-            (NitroCliErrorEnum::CpuError, "E24"),
-            (NitroCliErrorEnum::NoSuchHugepageFlag, "E25"),
-            (NitroCliErrorEnum::InsufficientMemoryRequested, "E26"),
-            (NitroCliErrorEnum::InsufficientMemoryAvailable, "E27"),
-            (NitroCliErrorEnum::InvalidEnclaveFd, "E28"),
-            (NitroCliErrorEnum::IoctlFailure, "E29"),
-            (NitroCliErrorEnum::IoctlImageLoadInfoFailure, "E30"),
-            (NitroCliErrorEnum::IoctlSetMemoryRegionFailure, "E31"),
-            (NitroCliErrorEnum::IoctlAddVcpuFailure, "E32"),
-            (NitroCliErrorEnum::IoctlEnclaveStartFailure, "E33"),
-            (NitroCliErrorEnum::MemoryOverflow, "E34"),
-            (NitroCliErrorEnum::EifParsingError, "E35"),
-            (NitroCliErrorEnum::EnclaveBootFailure, "E36"),
-            (NitroCliErrorEnum::EnclaveEventWaitError, "E37"),
-            (NitroCliErrorEnum::EnclaveProcessCommandNotExecuted, "E38"),
-            (NitroCliErrorEnum::EnclaveProcessConnectionFailure, "E39"),
-            (NitroCliErrorEnum::SocketPathNotFound, "E40"),
-            (NitroCliErrorEnum::EnclaveProcessSendReplyFailure, "E41"),
-            (NitroCliErrorEnum::EnclaveMmapError, "E42"),
-            (NitroCliErrorEnum::EnclaveMunmapError, "E43"),
             (NitroCliErrorEnum::EnclaveConsoleConnectionFailure, "E44"),
             (NitroCliErrorEnum::EnclaveConsoleReadError, "E45"),
             (NitroCliErrorEnum::EnclaveConsoleWriteOutputError, "E46"),
@@ -62,8 +167,56 @@ lazy_static! {
             (NitroCliErrorEnum::ArtifactsPathNotSet, "E51"),
             (NitroCliErrorEnum::BlobsPathNotSet, "E52"),
             (NitroCliErrorEnum::ClockSkewError, "E53"),
-            (NitroCliErrorEnum::SignalMaskingError, "E54"),
-            (NitroCliErrorEnum::SignalUnmaskingError, "E55"),
+        ].iter().cloned().collect();
+
+    /// Structure mapping enum api Errors to a specific error code.
+    pub static ref API_ERROR_CODES: HashMap<EnclaveErrorEnum, &'static  str> =
+        [
+            (EnclaveErrorEnum::UnspecifiedError, "E00"),
+            (EnclaveErrorEnum::InvalidArgument, "E03"),
+            (EnclaveErrorEnum::SocketPairCreationFailure, "E04"),
+            (EnclaveErrorEnum::ProcessSpawnFailure, "E05"),
+            (EnclaveErrorEnum::DaemonizeProcessFailure, "E06"),
+            (EnclaveErrorEnum::ReadFromDiskFailure, "E07"),
+            (EnclaveErrorEnum::UnusableConnectionError, "E08"),
+            (EnclaveErrorEnum::SocketCloseError, "E09"),
+            (EnclaveErrorEnum::SocketError, "E11"),
+            (EnclaveErrorEnum::EpollError, "E12"),
+            (EnclaveErrorEnum::InotifyError, "E13"),
+            (EnclaveErrorEnum::InvalidCommand, "E14"),
+            (EnclaveErrorEnum::LockAcquireFailure, "E15"),
+            (EnclaveErrorEnum::ThreadJoinFailure, "E16"),
+            (EnclaveErrorEnum::SerdeError, "E17"),
+            (EnclaveErrorEnum::FilePermissionsError, "E18"),
+            (EnclaveErrorEnum::FileOperationFailure, "E19"),
+            (EnclaveErrorEnum::InvalidCpuConfiguration, "E20"),
+            (EnclaveErrorEnum::NoSuchCpuAvailableInPool, "E21"),
+            (EnclaveErrorEnum::InsufficientCpus, "E22"),
+            (EnclaveErrorEnum::MalformedCpuId, "E23"),
+            (EnclaveErrorEnum::CpuError, "E24"),
+            (EnclaveErrorEnum::NoSuchHugepageFlag, "E25"),
+            (EnclaveErrorEnum::InsufficientMemoryRequested, "E26"),
+            (EnclaveErrorEnum::InsufficientMemoryAvailable, "E27"),
+            (EnclaveErrorEnum::InvalidEnclaveFd, "E28"),
+            (EnclaveErrorEnum::IoctlFailure, "E29"),
+            (EnclaveErrorEnum::IoctlImageLoadInfoFailure, "E30"),
+            (EnclaveErrorEnum::IoctlSetMemoryRegionFailure, "E31"),
+            (EnclaveErrorEnum::IoctlAddVcpuFailure, "E32"),
+            (EnclaveErrorEnum::IoctlEnclaveStartFailure, "E33"),
+            (EnclaveErrorEnum::MemoryOverflow, "E34"),
+            (EnclaveErrorEnum::EifParsingError, "E35"),
+            (EnclaveErrorEnum::EnclaveBootFailure, "E36"),
+            (EnclaveErrorEnum::EnclaveEventWaitError, "E37"),
+            (EnclaveErrorEnum::EnclaveProcessCommandNotExecuted, "E38"),
+            (EnclaveErrorEnum::EnclaveProcessConnectionFailure, "E39"),
+            (EnclaveErrorEnum::SocketPathNotFound, "E40"),
+            (EnclaveErrorEnum::EnclaveProcessSendReplyFailure, "E41"),
+            (EnclaveErrorEnum::EnclaveMmapError, "E42"),
+            (EnclaveErrorEnum::EnclaveMunmapError, "E43"),
+            (EnclaveErrorEnum::SignalMaskingError, "E54"),
+            (EnclaveErrorEnum::SignalUnmaskingError, "E55"),
+            (EnclaveErrorEnum::EnclaveAlreadyRunning, "E56"),
+            (EnclaveErrorEnum::NoPermissions, "E57")
         ].iter().cloned().collect();
 }
 
@@ -308,6 +461,12 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         "E55" => {
             ret.push_str("Signal unmasking error. Such error appears if attempting to unmask specific signals after creating an enclave process fails.");
         }
+        "E56" => {
+            ret.push_str("Enclave proc error. Such error appears when an already running enclave process receives another run command.");
+        }
+        "E57" => {
+            ret.push_str("User permissions error. Such error appears when an unauthorized user sends a terminate command to an enclave not owned by they.");
+        }
         _ => {
             ret.push_str(format!("No such error code {}", error_code_str).as_str());
         }
@@ -322,29 +481,6 @@ pub fn construct_help_link(error_code_str: String) -> String {
         "http://enclaves.aws.amazon.com/nitro-cli/errors#{}",
         error_code_str
     )
-}
-
-/// Returns a string containing the backtrace recorded during propagating an error message
-pub fn construct_backtrace(failure_info: &NitroCliFailure) -> String {
-    let mut ret = String::new();
-    let commit_id = env!("COMMIT_ID");
-
-    ret.push_str(&format!("  Action: {}\n  Subactions:", failure_info.action));
-    for subaction in failure_info.subactions.iter().rev() {
-        ret.push_str(&format!("\n    {}", subaction));
-    }
-    ret.push_str(&format!("\n  Root error file: {}", failure_info.file));
-    ret.push_str(&format!("\n  Root error line: {}", failure_info.line));
-
-    ret.push_str(&format!(
-        "\n  Build commit: {}",
-        match commit_id.len() {
-            0 => "not available",
-            _ => commit_id,
-        }
-    ));
-
-    ret
 }
 
 /// Detailed information based on user-provided error code.
@@ -518,8 +654,142 @@ pub fn explain_error(error_code_str: String) {
         "E55" => {
             eprintln!("Signal unmasking error. Such error appears if attempting to unmask specific signals after creating an enclave process fails.");
         },
+        "E56" => {
+            eprintln!("Enclave proc error. Such error appears when an already running enclave process receives another run command.");
+        }
+        "E57" => {
+            eprintln!("User permissions error. Such error appears when an unauthorized user sends a terminate command to an enclave not owned by they.");
+        }
         _ => {
             eprintln!("No such error code {}", error_code_str);
+        }
+    }
+}
+
+impl BacktraceConstructor for NitroCliFailure {
+    fn construct_backtrace(&self) -> String {
+        let mut ret = String::new();
+        let commit_id = env!("COMMIT_ID");
+
+        ret.push_str(&format!("  Action: {}\n  Subactions:", self.action));
+        for subaction in self.subactions.iter().rev() {
+            ret.push_str(&format!("\n    {}", subaction));
+        }
+        ret.push_str(&format!("\n  Root error file: {}", self.file));
+        ret.push_str(&format!("\n  Root error line: {}", self.line));
+
+        ret.push_str(&format!(
+            "\n  Build commit: {}",
+            match commit_id.len() {
+                0 => "not available",
+                _ => commit_id,
+            }
+        ));
+
+        ret
+    }
+}
+
+/// A trait used by errors to construct a error message
+pub trait ErrorMessageConstructor {
+    /// Assembles an error message.
+    fn construct_error_message(&self) -> String;
+}
+
+impl ErrorMessageConstructor for EnclaveFailure {
+    fn construct_error_message(&self) -> String {
+        let error_info: String = get_detailed_info(
+            (*API_ERROR_CODES.get(&self.error_code).unwrap_or(&"E00")).to_string(),
+            &self.additional_info,
+        );
+
+        // Include a link to the documentation page.
+        let help_link: String = construct_help_link(
+            (*API_ERROR_CODES.get(&self.error_code).unwrap_or(&"E00")).to_string(),
+        );
+        let backtrace: String = self.construct_backtrace();
+
+        // Return final output, depending on whether the user requested the backtrace or not.
+        match std::env::var(BACKTRACE_VAR) {
+            Ok(display_backtrace) => match display_backtrace.as_str() {
+                "1" => format!(
+                    "{}\n\nFor more details, please visit {}\n\nBacktrace:\n{}",
+                    error_info, help_link, backtrace
+                ),
+                _ => format!(
+                    "{}\n\nFor more details, please visit {}",
+                    error_info, help_link
+                ),
+            },
+            _ => format!(
+                "{}\n\nFor more details, please visit {}",
+                error_info, help_link
+            ),
+        }
+    }
+}
+
+impl ErrorMessageConstructor for NitroCliFailure {
+    fn construct_error_message(&self) -> String {
+        let error_info: String = get_detailed_info(
+            (*CLI_ERROR_CODES.get(&self.error_code).unwrap_or(&"E00")).to_string(),
+            &self.additional_info,
+        );
+
+        // Include a link to the documentation page.
+        let help_link: String = construct_help_link(
+            (*CLI_ERROR_CODES.get(&self.error_code).unwrap_or(&"E00")).to_string(),
+        );
+        let backtrace: String = self.construct_backtrace();
+
+        // Return final output, depending on whether the user requested the backtrace or not.
+        match std::env::var(BACKTRACE_VAR) {
+            Ok(display_backtrace) => match display_backtrace.as_str() {
+                "1" => format!(
+                    "{}\n\nFor more details, please visit {}\n\nBacktrace:\n{}",
+                    error_info, help_link, backtrace
+                ),
+                _ => format!(
+                    "{}\n\nFor more details, please visit {}",
+                    error_info, help_link
+                ),
+            },
+            _ => format!(
+                "{}\n\nFor more details, please visit {}",
+                error_info, help_link
+            ),
+        }
+    }
+}
+
+/// A trait used by errors to exit displaying an error message
+pub trait ExitWithMessage<T> {
+    /// Exit on error and return the value on success
+    fn ok_or_exit_with_message(self) -> T;
+}
+
+impl<T> ExitWithMessage<T> for EnclaveResult<T> {
+    fn ok_or_exit_with_message(self) -> T {
+        match self {
+            Ok(val) => val,
+            Err(err) => {
+                let err_str = err.construct_error_message();
+                eprintln!("{}", err_str);
+                std::process::exit(err.error_code as i32);
+            }
+        }
+    }
+}
+
+impl<T> ExitWithMessage<T> for NitroCliResult<T> {
+    fn ok_or_exit_with_message(self) -> T {
+        match self {
+            Ok(val) => val,
+            Err(err) => {
+                let err_str = err.construct_error_message();
+                eprintln!("{}", err_str);
+                std::process::exit(err.error_code as i32);
+            }
         }
     }
 }

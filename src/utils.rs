@@ -16,8 +16,18 @@ use std::os::unix::io::RawFd;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
-use enclave_api::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
-use enclave_api::new_nitro_cli_failure;
+use crate::document_errors::{NitroCliErrorEnum, NitroCliFailure};
+use crate::new_nitro_cli_failure;
+
+/// The most common result type provided by Nitro CLI operations.
+pub type NitroCliResult<T> = Result<T, NitroCliFailure>;
+
+/// A trait which allows a more graceful program exit instead of the standard `panic`.
+/// Provides a custom exit code.
+pub trait ExitGracefullyCli<T> {
+    /// Provide the inner value of a `Result` or exit gracefully with a message and custom errno.
+    fn ok_or_exit_with_errno(self, additional_info: Option<&str>) -> T;
+}
 
 /// The CID for the vsock device of the parent VM.
 pub const VMADDR_CID_PARENT: u32 = 3;

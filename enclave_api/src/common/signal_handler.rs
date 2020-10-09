@@ -9,8 +9,8 @@ use nix::sys::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use std::os::unix::io::RawFd;
 use std::thread;
 
-use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
-use crate::new_nitro_cli_failure;
+use crate::common::{EnclaveErrorEnum, EnclaveFailure, EnclaveResult};
+use crate::new_enclave_failure;
 
 /// The custom handler of POSIX signals.
 pub struct SignalHandler {
@@ -36,12 +36,12 @@ impl SignalHandler {
     }
 
     /// Mask (block) all signals covered by the handler.
-    pub fn mask_all(self) -> NitroCliResult<Self> {
+    pub fn mask_all(self) -> EnclaveResult<Self> {
         for set in self.sig_set.iter() {
             set.thread_block().map_err(|e| {
-                new_nitro_cli_failure!(
+                new_enclave_failure!(
                     &format!("Masking signals covered by handler failed: {:?}", e),
-                    NitroCliErrorEnum::SignalMaskingError
+                    EnclaveErrorEnum::SignalMaskingError
                 )
             })?;
         }
@@ -50,12 +50,12 @@ impl SignalHandler {
     }
 
     /// Unmask (unblock) all signals covered by the handler.
-    pub fn unmask_all(self) -> NitroCliResult<Self> {
+    pub fn unmask_all(self) -> EnclaveResult<Self> {
         for set in self.sig_set.iter() {
             set.thread_unblock().map_err(|e| {
-                new_nitro_cli_failure!(
+                new_enclave_failure!(
                     &format!("Unmasking signals covered by handler failed: {:?}", e),
-                    NitroCliErrorEnum::SignalUnmaskingError
+                    EnclaveErrorEnum::SignalUnmaskingError
                 )
             })?;
         }

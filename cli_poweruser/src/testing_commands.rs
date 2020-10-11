@@ -13,7 +13,7 @@ use crate::ENCLAVE_READY_VSOCK_PORT;
 use crate::VMADDR_CID_PARENT;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
-use eif_loader;
+use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
 use log::debug;
 use nix::sys::socket::SockAddr;
 use num_traits::FromPrimitive;
@@ -274,7 +274,8 @@ pub fn execute_command(args: &ArgMatches) -> NitroCliResult<()> {
 
     match cmd_id {
         NitroEnclavesCmdType::NitroEnclavesEnclaveStart => {
-            eif_loader::enclave_ready(listener.unwrap()).map_err(|err| {
+            // Use the default 1 minute timeout as there is no info about the enclave memory size.
+            enclave_ready(listener.unwrap(), TIMEOUT_MINUTE_MS).map_err(|err| {
                 format!(
                     "Failed to receive 'ready' signal from the enclave: {:?}",
                     err

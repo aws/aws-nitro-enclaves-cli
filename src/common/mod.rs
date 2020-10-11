@@ -309,7 +309,7 @@ fn log_backtrace(backtrace: String) -> Result<String, &'static str> {
     }
 
     let utc_time_now = Utc::now().to_rfc3339();
-    let log_path_str = format!("{}err{}.log", &log_path_base, utc_time_now);
+    let log_path_str = format!("{}/err{}.log", &log_path_base, utc_time_now);
     let log_path = Path::new(&log_path_str);
     let log_file = std::fs::File::create(log_path);
     if log_file.is_err() {

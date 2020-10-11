@@ -94,6 +94,9 @@ cp -r drivers/ %{buildroot}%{_datadir}/nitro_enclaves/
 cp -r include/ %{buildroot}%{_datadir}/nitro_enclaves/
 
 
+%pre
+groupadd -f ne
+
 %post
 # Manually perform log file initialization steps
 mkdir -p %{_ne_log_path}
@@ -116,10 +119,8 @@ systemctl --system daemon-reload
 
 %systemd_post %{_config_enclave_resources}.service
 
-systemctl enable %{_vsock_proxy_bin}.service
-systemctl start %{_vsock_proxy_bin}.service
-systemctl enable %{_config_enclave_resources}.service
-systemctl start %{_config_enclave_resources}.service
+echo -e " * In order to successfully run Nitro Enclaves, please add your user to group 'ne'"
+echo -e " * To configure memory and CPUs for future enclaves, edit '/etc/ne_conf' and run 'systemctl start config-enclave-resources.service' or \nuse the default configuration and only restart the service"
 
 %post devel
 chown root:ne /usr/share/nitro_enclaves/blobs

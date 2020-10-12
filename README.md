@@ -9,13 +9,20 @@ This repository contains a collection of tools and commands used for managing th
 ### Driver information
   The Nitro Enclaves kernel driver is currently at version 0.9. Out-of-tree driver build is supported.
 
-### How to install:
+### How to install (Git):
   1. Clone the repository.
   2. Set NITRO_CLI_INSTALL_DIR to the desired location, by default everything will be installed in build/install
   3. Run 'make nitro-cli && make vsock-proxy && make install'.
   4. Source the script ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.sh.
   5. [Optional] You could add ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.shenv.sh in you local shell configuration.
   6. You are now ready to go.
+
+### How to install (Repository):
+  1. Install the main Nitro CLI package from the AL2 repository: `sudo yum install -y aws-nitro-enclaves-cli`.
+  2. [Optional] In case you want to build EIF images, install additional Nitro Enclaves resources: `sudo yum install -y aws-nitro-enclaves-cli-devel`.
+  3. Reserve resources (memory and CPUs) for future enclaves, by editing '/etc/ne_conf' (or use the default configuration - 512MB and 2 CPUs) and then starting the resource reservation service: `sudo systemctl start config-enclave-resources.service`.
+  4. [Optional] If you want your resources configuration to persist across reboots, enable the service: `sudo systemctl enable config-enclave-resources.service`.
+  5. You are now ready to go.
 
 ### How to use nitro-cli
  TODO: link to official AWS documentation

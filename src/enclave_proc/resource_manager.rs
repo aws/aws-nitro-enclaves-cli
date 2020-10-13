@@ -11,6 +11,8 @@ mod bindings {
 }
 
 use bindings::*;
+use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
+use libc::c_int;
 use log::{debug, info};
 use nix::sys::socket::SockAddr;
 use std::collections::BTreeMap;
@@ -550,7 +552,12 @@ impl EnclaveHandle {
             .start(connection)
             .map_err(|e| e.add_subaction("Enclave start issue".to_string()))?;
 
-        eif_loader::enclave_ready(listener).map_err(|err| {
+        // Update the poll timeout to be 1 minute per 100 GiB of enclave memory.
+        let poll_timeout: c_int = ((1 + (self.allocated_memory_mib * MiB - 1) / (100 * GiB))
+            as i32)
+            .saturating_mul(TIMEOUT_MINUTE_MS);
+
+        enclave_ready(listener, poll_timeout).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
             self.terminate_enclave_error(&err_msg);
             new_nitro_cli_failure!(&err_msg, NitroCliErrorEnum::EnclaveBootFailure)

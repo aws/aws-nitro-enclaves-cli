@@ -10,9 +10,9 @@ use clap::{App, AppSettings, Arg};
 use env_logger;
 use log::info;
 
-use vsock_proxy::starter::Proxy;
+use vsock_proxy::starter::{Proxy, VsockProxyResult};
 
-fn main() {
+fn main() -> VsockProxyResult<()> {
     env_logger::init();
 
     let matches = App::new("Vsock-TCP proxy")
@@ -69,32 +69,38 @@ fn main() {
 
     let local_port = matches
         .value_of("local_port")
-        .expect("No local port provided");
-    let local_port = local_port.parse::<u32>().expect("Local port is not valid");
+        // This argument is required, so clap ensures it's available
+        .unwrap();
+    let local_port = local_port
+        .parse::<u32>()
+        .map_err(|_| "Local port is not valid")?;
 
     let only_4 = matches.is_present("ipv4");
     let only_6 = matches.is_present("ipv6");
     let remote_addr = matches
         .value_of("remote_addr")
-        .expect("No remote address provided");
-    let remote_addrs =
-        Proxy::parse_addr(&remote_addr, only_4, only_6).expect("Could not parse remote address");
-    let remote_addr = remote_addrs[0];
+        // This argument is required, so clap ensures it's available
+        .unwrap();
+    let remote_addrs = Proxy::parse_addr(&remote_addr, only_4, only_6)
+        .map_err(|err| format!("Could not parse remote address: {}", err))?;
+    let remote_addr = *remote_addrs.get(0).ok_or("No IP address found")?;
     info!("Using IP {:?} for the given server", remote_addr);
 
     let remote_port = matches
         .value_of("remote_port")
-        .expect("No remote_port provided");
+        // This argument is required, so clap ensures it's available
+        .unwrap();
     let remote_port = remote_port
         .parse::<u16>()
-        .expect("Remote port is not valid");
+        .map_err(|_| "Remote port is not valid")?;
 
     let num_workers = matches
         .value_of("workers")
-        .expect("No number of workers provided");
+        // This argument has a default value, so it is available
+        .unwrap();
     let num_workers = num_workers
         .parse::<usize>()
-        .expect("Number of workers is not valid");
+        .map_err(|_| "Number of workers is not valid")?;
 
     let config_file = matches.value_of("config_file");
 
@@ -106,15 +112,16 @@ fn main() {
         config_file,
         only_4,
         only_6,
-    );
+    )
+    .map_err(|err| format!("Could not create proxy: {}", err))?;
 
     let listener = proxy
         .sock_listen()
-        .expect("Could not listen for connections");
+        .map_err(|err| format!("Could not listen for connections: {}", err))?;
     info!("Proxy is now in listening state");
     loop {
         proxy
             .sock_accept(&listener)
-            .expect("Could not accept connection");
+            .map_err(|err| format!("Could not accept connection: {}", err))?;
     }
 }

@@ -18,6 +18,8 @@ use crate::commands_parser::TerminateEnclavesArgs;
 use crate::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
 use crate::utils::generate_enclave_id;
 use crate::utils::ExitGracefully;
+use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
+use libc::c_int;
 use nix::fcntl::{flock, FlockArg};
 use nix::sys::socket::SockAddr;
 use std::fs::File;
@@ -35,7 +37,13 @@ const CPU_ONLINE_PATTERN: &str = "/sys/devices/system/cpu/cpu%/online";
 const MIN_MEM_REGION_SIZE_MIB: u64 = 2;
 
 #[allow(non_upper_case_globals)]
-const MiB: u64 = 1024 * 1024;
+const KiB: u64 = 1024;
+
+#[allow(non_upper_case_globals)]
+const MiB: u64 = 1024 * KiB;
+
+#[allow(non_upper_case_globals)]
+const GiB: u64 = 1024 * MiB;
 
 const OFFSET_IMGFORMAT: u64 = 8 * MiB;
 
@@ -199,7 +207,12 @@ impl EnclaveResourceManager {
 
         let enclave_cid = self.start()?;
 
-        eif_loader::enclave_ready(listener).map_err(|err| {
+        // Update the poll timeout to be 1 minute per 100 GiB of enclave memory.
+        let poll_timeout: c_int = ((1 + (self.allocated_memory_mib * MiB - 1) / (100 * GiB))
+            as i32)
+            .saturating_mul(TIMEOUT_MINUTE_MS);
+
+        enclave_ready(listener, poll_timeout).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
             self.terminate_enclave_error(&err_msg);
             err_msg

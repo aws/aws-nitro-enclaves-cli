@@ -8,15 +8,15 @@ use std::net::TcpListener;
 use std::net::{IpAddr, Ipv4Addr};
 use std::str;
 use std::sync::mpsc;
-use std::{process, thread};
+use std::thread;
 use tempfile::NamedTempFile;
 use vsock::VsockStream;
 
-use vsock_proxy::starter::{Proxy, ProxyError};
+use vsock_proxy::starter::Proxy;
 
-fn vsock_connect(port: u32) -> Result<VsockStream, ProxyError> {
+fn vsock_connect(port: u32) -> VsockStream {
     let sockaddr = SockAddr::new_vsock(vsock_proxy::starter::VSOCK_PROXY_CID, port);
-    VsockStream::connect(&sockaddr).map_err(|_e| ProxyError::ConnectError)
+    VsockStream::connect(&sockaddr).expect("Could not connect")
 }
 
 /// Test connection with both client and server sending each other messages
@@ -26,7 +26,7 @@ fn test_tcp_connection() {
     let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
     let mut file = NamedTempFile::new().unwrap();
     file.write_all(
-        b"whitelist:\n\
+        b"allowlist:\n\
             - {address: 127.0.0.1, port: 9000}",
     )
     .unwrap();
@@ -38,7 +38,8 @@ fn test_tcp_connection() {
         file.path().to_str(),
         false,
         false,
-    );
+    )
+    .unwrap();
 
     let (tx, rx) = mpsc::channel();
 
@@ -73,12 +74,7 @@ fn test_tcp_connection() {
 
     // Start client that connects to proxy on port 8000 vsock
     let client_handle = thread::spawn(move || {
-        let ret = vsock_connect(vsock_proxy::starter::VSOCK_PROXY_PORT);
-        if ret.is_err() {
-            eprintln!("{:?}", ret.err());
-            process::exit(1);
-        }
-        let mut stream = ret.unwrap();
+        let mut stream = vsock_connect(vsock_proxy::starter::VSOCK_PROXY_PORT);
 
         // Write request
         stream.write_all(b"client2server").expect("client write");

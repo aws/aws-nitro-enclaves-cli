@@ -1,4 +1,4 @@
-whitelist:
+allowlist:
 - {address: kms.us-east-2.amazonaws.com, port: 443}
 - {address: kms-fips.us-east-2.amazonaws.com, port: 443}
 - {address: kms.us-east-1.amazonaws.com, port: 443}

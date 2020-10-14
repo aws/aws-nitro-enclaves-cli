@@ -26,7 +26,7 @@ const BUFFER_SIZE: usize = 1024;
 const CONSOLE_CONNECT_TIMEOUT: i64 = 20000;
 
 /// The `poll` time-out, in milliseconds.
-const POLL_TIMEOUT: i32 = 10000;
+pub const POLL_TIMEOUT: i32 = 10000;
 
 /// The socket connection time-out flag.
 const SO_VM_SOCKETS_CONNECT_TIMEOUT: i32 = 6;

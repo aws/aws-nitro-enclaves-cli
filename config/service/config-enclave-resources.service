@@ -11,11 +11,6 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=config-enclave-resources
 ExecStart=/bin/bash /usr/sbin/config-enclave-resources
-ExecStartPost=/usr/bin/chown root:ne /dev/nitro_enclaves
-ExecStartPost=/usr/bin/chmod 660 /dev/nitro_enclaves
-ExecStartPost=/usr/bin/mkdir -p /run/nitro_enclaves
-ExecStartPost=/usr/bin/chown root:ne /run/nitro_enclaves/
-ExecStartPost=/usr/bin/chmod 775 /run/nitro_enclaves/
 RemainAfterExit=false
 TimeoutSec=0
 

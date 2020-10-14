@@ -11,7 +11,6 @@ use std::os::unix::net::UnixStream;
 use std::u64;
 
 use crate::common::commands_parser::EmptyArgs;
-use crate::common::logger::EnclaveProcLogWriter;
 use crate::common::{
     enclave_proc_command_send_single, get_socket_path, read_u64_le, receive_from_stream,
 };
@@ -24,7 +23,7 @@ use crate::new_nitro_cli_failure;
 
 /// Spawn an enclave process and wait until it has detached and has
 /// taken ownership of its communication socket.
-pub fn enclave_proc_spawn(logger: &EnclaveProcLogWriter) -> NitroCliResult<UnixStream> {
+pub fn enclave_proc_spawn() -> NitroCliResult<UnixStream> {
     let (cli_socket, enclave_proc_socket) = UnixStream::pair().map_err(|e| {
         new_nitro_cli_failure!(
             &format!("Could not create a socket pair: {:?}", e),
@@ -45,7 +44,7 @@ pub fn enclave_proc_spawn(logger: &EnclaveProcLogWriter) -> NitroCliResult<UnixS
 
     if let Ok(ForkResult::Child) = fork_status {
         // This is our intermediate child process.
-        enclave_process_run(enclave_proc_socket, logger);
+        enclave_process_run(enclave_proc_socket);
     } else {
         fork_status.map_err(|e| {
             new_nitro_cli_failure!(

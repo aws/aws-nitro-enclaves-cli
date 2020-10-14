@@ -64,7 +64,6 @@ lazy_static! {
             (NitroCliErrorEnum::ClockSkewError, "E53"),
             (NitroCliErrorEnum::SignalMaskingError, "E54"),
             (NitroCliErrorEnum::SignalUnmaskingError, "E55"),
-            (NitroCliErrorEnum::LoggerError, "E56"),
         ].iter().cloned().collect();
 }
 
@@ -309,9 +308,6 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         "E55" => {
             ret.push_str("Signal unmasking error. Such error appears if attempting to unmask specific signals after creating an enclave process fails.");
         }
-        "E56" => {
-            ret.push_str("Logger error. Such error appears when attempting to initialize the underlying logging system fails.");
-        }
         _ => {
             ret.push_str(format!("No such error code {}", error_code_str).as_str());
         }
@@ -521,9 +517,6 @@ pub fn explain_error(error_code_str: String) {
         },
         "E55" => {
             eprintln!("Signal unmasking error. Such error appears if attempting to unmask specific signals after creating an enclave process fails.");
-        },
-        "E56" => {
-            eprintln!("Logger error. Such error appears when attempting to initialize the underlying logging system fails.");
         },
         _ => {
             eprintln!("No such error code {}", error_code_str);

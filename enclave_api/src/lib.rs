@@ -16,7 +16,7 @@ use bitflags::*;
 use common::commands_parser::{EmptyArgs, RunEnclavesArgs};
 use common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
 use common::{
-    enclave_proc_command_send_single, get_sockets_dir_path, logger, read_u64_le,
+    enclave_proc_command_send_single, get_sockets_dir_path, read_u64_le,
     EnclaveProcessCommandType, NitroCliErrorEnum, NitroCliFailure, MSG_ENCLAVE_CONFIRM,
 };
 use enclave_proc::resource_manager::EnclaveState;
@@ -246,13 +246,7 @@ impl Enclave {
 
     /// Runs a new enclave given a configuration
     pub fn run(conf: EnclaveConf) -> EnclaveResult<Self> {
-        let logger =
-            logger::init_logger().map_err(|e| e.set_action("Logger initialization".to_string()))?;
-        logger
-            .update_logger_id(format!("enclave-api:{}", std::process::id()).as_str())
-            .map_err(|e| e.set_action("Update Enclave Process Logger ID".to_string()))?;
-
-        let mut comm = enclave_proc_spawn(&logger).map_err(|err| {
+        let mut comm = enclave_proc_spawn().map_err(|err| {
             err.add_subaction("Failed to spawn enclave process".to_string())
                 .set_action("Run enclave".to_string())
         })?;

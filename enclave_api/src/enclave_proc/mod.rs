@@ -33,7 +33,6 @@ use super::common::{
     EnclaveProcessCommandType, ExitGracefully, NitroCliErrorEnum, NitroCliFailure, NitroCliResult,
 };
 use crate::common::commands_parser::{EmptyArgs, RunEnclavesArgs};
-use crate::common::logger::EnclaveProcLogWriter;
 use crate::common::signal_handler::SignalHandler;
 use crate::new_nitro_cli_failure;
 
@@ -50,13 +49,6 @@ enum HandledEnclaveEvent {
     Unexpected,
     /// There was no event that needed handling.
     None,
-}
-
-/// Obtain the logger ID from the full enclave ID.
-fn get_logger_id(enclave_id: &str) -> String {
-    // The full enclave ID is "i-(...)-enc<enc_id>" and we want to extract only <enc_id>.
-    let tokens: Vec<_> = enclave_id.rsplit("-enc").collect();
-    format!("enc-{}:{}", tokens[0], std::process::id())
 }
 
 /// Get the action associated with `cmd` as a String.
@@ -215,7 +207,6 @@ fn try_handle_enclave_event(connection: &Connection) -> NitroCliResult<HandledEn
 /// Handle a single command, returning whenever an error occurs.
 fn handle_command(
     cmd: EnclaveProcessCommandType,
-    logger: &EnclaveProcLogWriter,
     connection: &Connection,
     conn_listener: &mut ConnectionListener,
     enclave_manager: &mut EnclaveManager,
@@ -239,9 +230,6 @@ fn handle_command(
                 })?;
 
                 info!("Enclave ID = {}", enclave_manager.enclave_id);
-                logger
-                    .update_logger_id(&get_logger_id(&enclave_manager.enclave_id))
-                    .map_err(|e| e.set_action("Failed to update logger ID".to_string()))?;
                 conn_listener
                     .start(&enclave_manager.enclave_id)
                     .map_err(|e| {
@@ -309,7 +297,6 @@ fn handle_command(
 /// The main event loop of the enclave process.
 fn process_event_loop(
     comm_stream: UnixStream,
-    logger: &EnclaveProcLogWriter,
 ) -> NitroCliResult<()> {
     let mut conn_listener = ConnectionListener::new()?;
     let mut enclave_manager = EnclaveManager::default();
@@ -368,7 +355,6 @@ fn process_event_loop(
         info!("Received command: {:?}", cmd);
         let status = handle_command(
             cmd,
-            logger,
             &connection,
             &mut conn_listener,
             &mut enclave_manager,
@@ -430,7 +416,7 @@ fn process_event_loop(
 }
 
 /// Create the enclave process.
-fn create_enclave_process(logger: &EnclaveProcLogWriter) -> NitroCliResult<()> {
+fn create_enclave_process() -> NitroCliResult<()> {
     // To get a detached process, we first:
     // (1) Temporarily ignore specific signals (SIGHUP).
     // (2) Daemonize the current process.
@@ -451,9 +437,6 @@ fn create_enclave_process(logger: &EnclaveProcLogWriter) -> NitroCliResult<()> {
     })?;
 
     // This is our detached process.
-    logger
-        .update_logger_id(format!("enc-xxxxxxx:{}", std::process::id()).as_str())
-        .map_err(|e| e.add_subaction("Failed to update logger id".to_string()))?;
     info!("Enclave process PID: {}", process::id());
 
     // We must wait until we're 100% orphaned. That is, our parent must
@@ -473,12 +456,11 @@ fn create_enclave_process(logger: &EnclaveProcLogWriter) -> NitroCliResult<()> {
 /// Launch the enclave process.
 ///
 /// * `comm_fd` - A descriptor used for initial communication with the parent Nitro CLI instance.
-/// * `logger` - The current log writer, whose ID gets updated when an enclave is launched.
-pub fn enclave_process_run(comm_stream: UnixStream, logger: &EnclaveProcLogWriter) {
-    create_enclave_process(logger)
+pub fn enclave_process_run(comm_stream: UnixStream) {
+    create_enclave_process()
         .map_err(|e| e.set_action("Run Enclave".to_string()))
         .ok_or_exit_with_errno(None);
-    let res = process_event_loop(comm_stream, logger);
+    let res = process_event_loop(comm_stream);
     if let Err(mut error_info) = res {
         error_info = error_info.set_action("Run Enclave".to_string());
         notify_error(construct_error_message(&error_info).as_str());

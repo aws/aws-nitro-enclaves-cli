@@ -9,12 +9,9 @@ pub mod commands_parser;
 pub mod document_errors;
 /// The module which provides JSON-ready information structures.
 pub mod json_output;
-/// The module which provides the per-process logger.
-pub mod logger;
 /// The module which provides signal handling.
 pub mod signal_handler;
 
-use chrono::offset::Utc;
 use log::error;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -24,7 +21,6 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
 use document_errors::ERROR_CODES;
-use logger::get_log_file_base_path;
 
 /// The most common result type provided by Nitro CLI operations.
 pub type NitroCliResult<T> = Result<T, NitroCliFailure>;
@@ -166,8 +162,6 @@ pub enum NitroCliErrorEnum {
     SignalMaskingError,
     /// Signal unmasking error.
     SignalUnmaskingError,
-    /// General error for handling logger-related errors.
-    LoggerError,
 }
 
 impl Default for NitroCliErrorEnum {
@@ -295,38 +289,6 @@ macro_rules! new_nitro_cli_failure {
     };
 }
 
-/// Logs the given backtrace string to a separate, backtrace-specific file.
-/// Returns a string denoting the path to the corresponding log file.
-fn log_backtrace(backtrace: String) -> Result<String, &'static str> {
-    let log_path_base = get_log_file_base_path();
-
-    // Check if backtrace logs location exists and create it if necessary.
-    if !Path::new(&log_path_base).exists() {
-        let create_logs_dir = std::fs::create_dir_all(&log_path_base);
-        if create_logs_dir.is_err() {
-            return Err("Could not create backtrace logs directory");
-        }
-    }
-
-    let utc_time_now = Utc::now().to_rfc3339();
-    let log_path_str = format!("{}/err{}.log", &log_path_base, utc_time_now);
-    let log_path = Path::new(&log_path_str);
-    let log_file = std::fs::File::create(log_path);
-    if log_file.is_err() {
-        return Err("Could not create backtrace log file");
-    }
-
-    let write_result = log_file.unwrap().write_all(&backtrace.as_bytes());
-    if write_result.is_err() {
-        return Err("Could not write to backtrace log file");
-    }
-
-    match log_path.to_str() {
-        Some(log_path) => Ok(log_path.to_string()),
-        None => Err("Could not return log file path"),
-    }
-}
-
 /// Assembles the error message which gets displayed to the user.
 pub fn construct_error_message(failure: &NitroCliFailure) -> String {
     // Suggestive error description comes first.
@@ -341,51 +303,19 @@ pub fn construct_error_message(failure: &NitroCliFailure) -> String {
     );
     let backtrace: String = document_errors::construct_backtrace(&failure);
 
-    // Write backtrace to a log file.
-    let log_path = log_backtrace(backtrace.clone());
-
     // Return final output, depending on whether the user requested the backtrace or not.
-    match std::env::var(BACKTRACE_VAR) {
-        Ok(display_backtrace) => match display_backtrace.as_str() {
-            "1" => {
-                if let Ok(log_path) = log_path {
-                    format!(
-                        "{}\n\nFor more details, please visit {}\n\nBacktrace:\n{}\n\nIf you open a support ticket, please provide the error log found at \"{}\"",
-                        error_info, help_link, backtrace, log_path
-                    )
-                } else {
-                    format!(
-                        "{}\n\nFor more details, please visit {}\n\nBacktrace:\n{}",
-                        error_info, help_link, backtrace
-                    )
-                }
-            }
-            _ => {
-                if let Ok(log_path) = log_path {
-                    format!(
-                        "{}\n\nFor more details, please visit {}\n\nIf you open a support ticket, please provide the error log found at \"{}\"",
-                        error_info, help_link, log_path
-                    )
-                } else {
-                    format!(
-                        "{}\n\nFor more details, please visit {}",
-                        error_info, help_link
-                    )
-                }
-            }
-        },
+    match std::env::var(BACKTRACE_VAR).unwrap_or_default().as_str() {
+        "1" => {
+            format!(
+                "{}\n\nFor more details, please visit {}\n\nBacktrace:\n{}",
+                error_info, help_link, backtrace
+            )
+        }
         _ => {
-            if let Ok(log_path) = log_path {
-                format!(
-                    "{}\n\nFor more details, please visit {}\n\nIf you open a support ticket, please provide the error log found at \"{}\"",
-                    error_info, help_link, log_path
-                )
-            } else {
-                format!(
-                    "{}\n\nFor more details, please visit {}",
-                    error_info, help_link
-                )
-            }
+            format!(
+                "{}\n\nFor more details, please visit {}",
+                error_info, help_link
+            )
         }
     }
 }

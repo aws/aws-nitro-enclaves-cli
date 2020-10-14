@@ -6,7 +6,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    0.1
+Version:    1.0
 Release:    1%{?dist}
 
 License:    Amazon Proprietary
@@ -105,12 +105,20 @@ chmod 775 %{_ne_log_path}
 
 touch %{_ne_log_path}/%{_ne_log_file}
 chown root:ne %{_ne_log_path}/%{_ne_log_file}
-chmod 766 %{_ne_log_path}/%{_ne_log_file}
+chmod 664 %{_ne_log_path}/%{_ne_log_file}
+
+# Create tmpfs directory
+echo "d /run/nitro_enclaves 0775 root ne" > /usr/lib/tmpfiles.d/nitro_enclaves.conf
+# Make directory available even without rebooting the system
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/nitro_enclaves.conf
 
 # Configure setup steps for the Nitro Enclaves driver (groups & udev rule)
 # Configure NE driver configuration file in order to auto load it
 echo "install nitro_enclaves insmod nitro_enclaves.ko" > /usr/lib/modules-load.d/nitro_enclaves.conf
 /etc/install /usr/share/nitro_enclaves/
+
+chown root:ne /dev/nitro_enclaves
+chmod 660 /dev/nitro_enclaves
 
 # Configure vsock-proxy & config-enclave-resources services
 systemctl --system daemon-reload
@@ -169,5 +177,8 @@ rm -rf /var/log/nitro_enclaves/
 %attr(0644,root,ne) %{_datadir}/nitro_enclaves/blobs/nsm.ko
 
 %changelog
+* Wed Oct 14 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0-0
+- Include resources reservation service
+
 * Wed Mar 25 2020 Alexandru Gheorghe <aggh@amazon.com> - 0.1-0
 - Initial draft

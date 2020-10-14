@@ -19,10 +19,11 @@
 
 /*
  * The type '__poll_t' is not available in kernels older than 4.16.0
- * so for these we define it here.
+ * so for these we define it here. Also define EPOLLHUP.
  */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0)
-#define __poll_t unsigned int
+#define __poll_t	unsigned int
+#define EPOLLHUP	(__force __poll_t)0x00000010
 #endif
 
 /**

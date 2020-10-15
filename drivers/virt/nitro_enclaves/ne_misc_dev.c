@@ -1586,7 +1586,7 @@ static __poll_t ne_enclave_poll(struct file *file, poll_table *wait)
 	if (!ne_enclave->has_event)
 		return mask;
 
-	mask = POLLHUP;
+	mask = EPOLLHUP;
 
 	return mask;
 }

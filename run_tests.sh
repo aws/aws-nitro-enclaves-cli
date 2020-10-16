@@ -84,7 +84,7 @@ insmod drivers/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko || t
 configure_ne_driver
 
 # Create directories for enclave process sockets and logs
-mkdir -p /var/run/nitro_enclaves || test_failed
+mkdir -p /run/nitro_enclaves || test_failed
 mkdir -p /var/log/nitro_enclaves || test_failed
 
 # Build EIFS for testing

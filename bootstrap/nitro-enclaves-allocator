@@ -79,7 +79,7 @@ function fail {
     exit 1
 }
 
-NE_CONF_FILE_PATH="/etc/ne_conf"
+NE_CONF_FILE_PATH="/etc/nitro_enclaves/allocator.conf"
 
 mem=""
 cpu_count=""

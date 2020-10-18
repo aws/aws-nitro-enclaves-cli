@@ -11,6 +11,15 @@ CPU_POOL_FILE="/sys/module/nitro_enclaves/parameters/ne_cpus"
 # Flag for deciding whether to print stdout messages or not.
 VERBOSE="1"
 
+# Path to the allocator config file.
+CONFIG_FILE_PATH="/etc/nitro_enclaves/allocator.yaml"
+
+# Config variables to be populated when parsing the config file.
+declare -A CONFIG
+CONFIG[memory_mib]=
+CONFIG[cpu_count]=
+CONFIG[cpu_pool]=
+
 # Error codes.
 ERR_EMPTY_CPU_POOL=200
 ERR_MISSING_NODE=201
@@ -79,23 +88,41 @@ function fail {
     exit 1
 }
 
-NE_CONF_FILE_PATH="/etc/nitro_enclaves/allocator.conf"
+# Parse the NE allocator configuration file and populate $CONFIG[]
+# Note: this is a trivial yaml parser, able to recognize only a
+#       root-level object with key-value pairs.
+function parse_config {
+    local count=0
+    local skip=true
 
-mem=""
-cpu_count=""
-cpu_ids=""
+    while read line; do
+        count=$((count+1))
 
-# Parse the NE resources configuration file and set memory and CPUs
-function parse_ne_resources {
-    x=$(cat ${NE_CONF_FILE_PATH} | grep "^[^#]")
+        # Skip comment lines
+        echo "$line" | egrep -q "^\\s*#" && continue
 
-    while IFS= read -r line; do
-        if [[ "$line" == Memory* ]]; then
-            mem=$(echo $line | tr " \n\t" " " | cut -d' ' -f2)
-        elif [[ "$line" == CPUs* ]]; then
-            cpu_count=$(echo $line | tr " \n\t" " " | cut -d' ' -f2)
-        fi
-    done <<< "${x}"
+        # Skip everything before the YAML data start.
+        [[ "$line" = "---" ]] && { skip=false; continue; }
+        [[ $skip = false ]] || continue
+
+        local key
+        key=$(echo "$line" | cut -d: -f1 | egrep -io "^([-_a-z0-9])+")
+        [[ -z ${CONFIG[$key]+x} ]] && fail "Error in $CONFIG_FILE_PATH:$count - unexpected: $key"
+
+        local value
+        value=$(echo "$line" | sed -E "s/^.+://" | sed -E "s/\\s+\"?//" | sed -E "s/\"?\$//")
+        [[ -z $value ]] && fail "Error in $CONFIG_FILE_PATH:$count - missing value for $key"
+
+        CONFIG[$key]="$value"
+    done < "$CONFIG_FILE_PATH"
+
+    # Some trivial config validation.
+    [[ -z ${CONFIG[memory_mib]} ]] && \
+        fail "Config error: missing memory reservation (\`memory_mib\`)."
+    [[ -z ${CONFIG[cpu_count]} ]] && [[ -z ${CONFIG[cpu_pool]} ]] && \
+        fail "Config error: missing CPU reservation (either \`cpu_count\` or \`cpu_pool\`)."
+    [[ ! -z ${CONFIG[cpu_count]} ]] && [[ ! -z ${CONFIG[cpu_pool]} ]] && \
+        fail "Config error: \`cpu_count\` conflicts with \`cpu_pool\`."
 }
 
 # Set all CPUs online before trying to reconfigure the CPU pool (in case the service is restarted).
@@ -206,7 +233,7 @@ function clear_previous_hugepage_reservations {
 # algorithm allocates as may as possible then proceeds to the next smaller size and tries again.
 function set_required_hugepages {
     declare -A rollback_sizes
-    local remaining_memory=$(($1 * (1 << 20)))
+    local remaining_memory="$(($1 * (1 << 20)))"
     local hugepage_sizes
     local rc
     shift 1
@@ -485,24 +512,22 @@ function configure_cpu_pool_by_cpu_count {
     configure_cpu_pool "$cpu_pool"
 }
 
-parse_ne_resources
+function main() {
+    parse_config
 
-if [[ "$cpu_count" = "" ]] && [[ "$cpu_ids" = "" ]]; then
-    echo "Error: neither CPU count nor CPU IDs have been set. Specify a set of CPUs by writing to $CPU_COUNT_FILE_PATH or $CPU_IDS_FILE_PATH"
-    exit 1
-elif [[ "$cpu_count" != "" ]] && [[ "$cpu_ids" != "" ]]; then
-    echo "Error: both CPU count and CPU IDs have been provided. Write only one of $CPU_COUNT_FILE_PATH or $CPU_IDS_FILE_PATH"
-    exit 2
-fi
+    local cpu_msg
+    if [[ ! -z ${CONFIG[cpu_count]} ]]; then
+        cpu_msg="${CONFIG[cpu_count]} CPUs"
+        configure_cpu_pool_by_cpu_count "${CONFIG[cpu_count]}" "${CONFIG[memory_mib]}"
+    elif [[ ! -z ${CONFIG[cpu_pool]} ]]; then
+        cpu_msg="CPU pool: ${CONFIG[cpu_pool]}"
+        configure_cpu_pool "${CONFIG[cpu_pool]}"
+        configure_huge_pages "${CONFIG[memory_mib]}"
+    else
+        fail "Config error: missing CPU reservation."
+    fi
 
-enable_offline_cpus
-if [ "$cpu_ids" != "" ]; then
-    print "Configuring $mem MB and CPUs with IDs $cpu_ids to be used by Nitro Enclaves"
+    print "Successfully allocated Nitro Enclaves resources: ${CONFIG[memory_mib]} MiB, $cpu_msg"
+}
 
-    configure_cpu_pool "$cpu_ids"
-    configure_huge_pages "$mem"
-else
-    configure_cpu_pool_by_cpu_count "$cpu_count" "$mem"
-fi
-
-print "Successfully configured Nitro Enclaves resources"
+main "$@"

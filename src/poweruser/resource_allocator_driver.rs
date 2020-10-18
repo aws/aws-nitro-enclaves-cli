@@ -179,6 +179,7 @@ impl ResourceAllocatorDriver {
 mod tests {
     use crate::poweruser::resource_allocator_driver::ResourceAllocatorDriver;
 
+    #[cfg(feature = "poweruser")]
     #[test]
     fn test_cpu_mapping() {
         let resource_allocator = ResourceAllocatorDriver::new().expect("Could not create driver");
@@ -224,6 +225,7 @@ mod tests {
         assert_eq!(mapping.cpu_mask, [0, 0, 0, 0]);
     }
 
+    #[cfg(feature = "poweruser")]
     #[test]
     fn test_cpu_mapping_edge() {
         let resource_allocator = ResourceAllocatorDriver::new().expect("Could not create driver");

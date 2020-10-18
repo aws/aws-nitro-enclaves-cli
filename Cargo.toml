@@ -43,3 +43,5 @@ members = [".", "cli_poweruser", "eif_defs", "eif_loader", "eif_utils", "enclave
 [features]
 default = []
 power_user = []
+# This feauture is used for activating the commands from the poweruser cli
+poweruser = []

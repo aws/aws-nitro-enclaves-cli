@@ -24,6 +24,8 @@ use nitro_cli::enclave_proc_comm::{
     enclave_proc_spawn, enclave_process_handle_all_replies,
 };
 use nitro_cli::{build_enclaves, console_enclaves, create_app, terminate_all_enclaves};
+
+#[cfg(feature = "poweruser")]
 use nitro_cli::poweruser::testing_commands;
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
@@ -48,10 +50,21 @@ fn main() {
     };
 
     // Command-line specification for the Nitro CLI.
-    let app = create_app!();
-    let mut app = testing_commands::initialize(app);
+    let mut app = create_app!();
+
+    // Initialize the app with the commands from the poweruser cli
+    #[cfg(feature = "poweruser")] {
+        app = testing_commands::initialize(app);
+    }
+
     app = app.version(&*version_str);
     let args = app.get_matches();
+
+    // Test if a poweruser cli command should be executed
+    #[cfg(feature = "poweruser")] {
+        testing_commands::match_cmd(&args);
+    }
+
     let logger = logger::init_logger()
         .map_err(|e| e.set_action("Logger initialization".to_string()))
         .ok_or_exit_with_errno(None);
@@ -63,7 +76,6 @@ fn main() {
         .ok_or_exit_with_errno(None);
     info!("Start Nitro CLI");
 
-    testing_commands::match_cmd(&args);
     match args.subcommand() {
         ("run-enclave", Some(args)) => {
             let run_args = RunEnclavesArgs::new_with(args)

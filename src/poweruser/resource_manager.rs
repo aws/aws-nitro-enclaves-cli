@@ -541,6 +541,7 @@ mod tests {
     use crate::poweruser::resource_manager::EnclaveResourceManager;
     use tempfile;
 
+    #[cfg(feature = "poweruser")]
     #[test]
     fn test_resources_manager_is_not_leaking() {
         for i in { 0..100 } {

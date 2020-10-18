@@ -302,6 +302,8 @@ install-tools:
 	$(INSTALL) -D -m 0644 bootstrap/nitro-enclaves-allocator.service ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/blobs
 	$(CP) -r blobs/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/blobs/
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples
+	$(CP) -r examples/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples/
 
 .PHONY: install
 install: install-tools nitro_enclaves

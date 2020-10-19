@@ -81,7 +81,7 @@ driver-deps:
 		&& sudo yum install -y kernel-headers-$$(uname -r) \
 		&& sudo yum install -y kernel-devel-$$(uname -r)) || \
 	echo "Warning: kernel-header were not installed") \
-	&& echo "Successfully installed the nitro_cli_resource_allocator deps"
+	&& echo "Successfully installed the nitro_cli driver deps"
 
 # In order to avoid executing the same rule everytime,
 # the build rules are prefixed by dot and are generating
@@ -100,12 +100,9 @@ $(OBJ_PATH):
 # Build the $(OBJ_PATH) directory only if it does not exist.
 build-setup: | $(OBJ_PATH);
 
-nitro_cli_resource_allocator: drivers/nitro_cli_resource_allocator/nitro_cli_resource_allocator.c driver-deps
-	PREV_DIR=$$PWD && cd drivers/nitro_cli_resource_allocator/ && make && cd $$PREV_DIR
-
-.PHONY: nitro_cli_resource_allocator-clean
-nitro_cli_resource_allocator-clean:
-	PREV_DIR=$$PWD && cd drivers/nitro_cli_resource_allocator/ && make clean && cd $$PREV_DIR \
+nitro_enclaves_merge_drivers: drivers/virt/nitro_enclaves/ne_misc_dev.c drivers/virt/nitro_enclaves/ne_pci_dev.c \
+		drivers/virt/nitro_enclaves/resource_allocator.c driver-deps
+	PREV_DIR=$$PWD && cd drivers/virt/nitro_enclaves/ && make MERGE_DRIVERS=1 && cd $$PREV_DIR
 
 nitro_enclaves: drivers/virt/nitro_enclaves/ne_misc_dev.c drivers/virt/nitro_enclaves/ne_pci_dev.c driver-deps
 	PREV_DIR=$$PWD && cd drivers/virt/nitro_enclaves/ && make && cd $$PREV_DIR
@@ -115,7 +112,7 @@ nitro_enclaves-clean:
 	PREV_DIR=$$PWD && cd drivers/virt/nitro_enclaves/ && make clean && cd $$PREV_DIR
 
 .PHONY: driver-clean
-driver-clean: nitro_enclaves-clean nitro_cli_resource_allocator-clean
+driver-clean: nitro_enclaves-clean
 
 .PHONY: init
 init: init.c build-setup
@@ -202,6 +199,7 @@ command-executer: build-setup build-container .build-command-executer-eif
 				--release \
 				--no-run \
 				--all \
+				--features poweruser \
 				--manifest-path=/nitro_src/Cargo.toml \
 				--target=x86_64-unknown-linux-musl \
 				--target-dir=/nitro_build/nitro_cli \
@@ -240,7 +238,7 @@ nitro-audit: build-setup build-container
 			cargo audit -f /nitro_src/Cargo.lock'
 
 # See .build-container rule for explanation.
-.build-nitro-cli-poweruser: $(shell find $(BASE_PATH)/cli_poweruser/src -name "*.rs")
+.build-nitro-cli-poweruser: $(shell find $(BASE_PATH)/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
@@ -248,11 +246,15 @@ nitro-audit: build-setup build-container
 			'source /root/.cargo/env && \
 			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ cargo build \
 				--release \
-				--manifest-path=/nitro_src/cli_poweruser/Cargo.toml \
+				--manifest-path=/nitro_src/Cargo.toml \
+				--features poweruser \
 				--target=x86_64-unknown-linux-musl \
-				--target-dir=/nitro_build/cli_poweruser  && \
+				--target-dir=/nitro_build/nitro_cli  && \
 			chmod -R 777 nitro_build '
+	ln -sf ../x86_64-unknown-linux-musl/release/nitro-cli \
+		${OBJ_PATH}/nitro_cli/release/nitro-cli
 	touch $@
+
 
 nitro-cli-poweruser: build-setup build-container .build-nitro-cli-poweruser
 

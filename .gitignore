@@ -7,10 +7,10 @@ build/
 **/*.rs.bk
 **/*o.cmd
 **/*o.cmd
-**/*o
+**/*.o
 **/*o.mod.o
 **/*mod.c
-**/*ko
+**/*.ko
 !blobs/nsm.ko
 **/*order
 **/*symvers

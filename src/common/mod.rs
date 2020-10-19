@@ -46,7 +46,7 @@ pub const MSG_ENCLAVE_CONFIRM: u64 = 0xEEC0;
 pub const SOCKETS_DIR_PATH_ENV_VAR: &str = "NITRO_CLI_SOCKETS_PATH";
 
 /// The default path to the Unix sockets directory.
-const SOCKETS_DIR_PATH: &str = "/var/run/nitro_enclaves";
+const SOCKETS_DIR_PATH: &str = "/run/nitro_enclaves";
 
 /// Constant used for identifying the backtrace environment variable.
 const BACKTRACE_VAR: &str = "BACKTRACE";

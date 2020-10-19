@@ -26,11 +26,11 @@ BASE_PATH             ?= $(SRC_PATH)
 OBJ_PATH              ?= $(BASE_PATH)/build
 NITRO_CLI_TOOLS_DIR   ?= $(BASE_PATH)/tools
 NITRO_CLI_INSTALL_DIR ?= $(OBJ_PATH)/install
-SBIN_DIR              ?= /usr/sbin/
-UNIT_DIR              ?= /usr/lib/systemd/system/
+BIN_DIR               ?= /usr/bin
+UNIT_DIR              ?= /usr/lib/systemd/system
 CONF_DIR              ?= /etc
-ENV_SETUP_DIR         ?= /etc/profile.d/
-OPT_DIR               ?= /opt
+DATA_DIR              ?= /usr/share
+ENV_SETUP_DIR		  ?= $(CONF_DIR)/profile.d
 
 CONTAINER_TAG = "nitro_cli:1.0"
 
@@ -260,50 +260,48 @@ vsock-proxy-native:
 
 .PHONY: install-command-executer
 install-command-executer:
-	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}
-	$(INSTALL) -D -m 0755 $(OBJ_PATH)/command-executer/release/command-executer ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/command-executer
-
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/command-executer/release/command-executer ${NITRO_CLI_INSTALL_DIR}/${BIN_DIR}/command-executer
 
 # Target for installing only the binaries available to the end-user
 .PHONY: install-tools
 install-tools:
-	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}
-	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${CONF_DIR}/vsock_proxy
-	$(INSTALL) -D -m 0755 $(OBJ_PATH)/nitro_cli/release/nitro-cli ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/nitro-cli
-	$(INSTALL) -D -m 0755 $(OBJ_PATH)/vsock_proxy/release/vsock-proxy ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/vsock-proxy
-	$(INSTALL) -D -m 0644 vsock_proxy/service/vsock-proxy.service ${NITRO_CLI_INSTALL_DIR}/${UNIT_DIR}/vsock-proxy.service
-	$(INSTALL) -D -m 0644 vsock_proxy/configs/config.yaml ${NITRO_CLI_INSTALL_DIR}/${CONF_DIR}/vsock_proxy/config.yaml
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/nitro_cli/release/nitro-cli ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/nitro-cli
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/vsock_proxy/release/vsock-proxy ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/vsock-proxy
+	$(INSTALL) -D -m 0644 vsock_proxy/service/nitro-enclaves-vsock-proxy.service ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-vsock-proxy.service
+	$(INSTALL) -D -m 0644 vsock_proxy/configs/vsock-proxy.yaml ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/vsock-proxy.yaml
+	$(INSTALL) -D -m 0755 bootstrap/nitro-enclaves-allocator ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/nitro-enclaves-allocator
+	$(INSTALL) -D -m 0664 bootstrap/allocator.yaml ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/allocator.yaml
+	$(INSTALL) -D -m 0644 bootstrap/nitro-enclaves-allocator.service ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/blobs
+	$(CP) -r blobs/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/blobs/
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples
+	$(CP) -r examples/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples/
 
 .PHONY: install
 install: install-tools nitro_enclaves
-	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli
-	${MKDIR} -p ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/
-	$(INSTALL) -D -m 0755 blobs/bzImage ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/bzImage
-	$(INSTALL) -D -m 0755 blobs/cmdline ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/cmdline
-	$(INSTALL) -D -m 0755 blobs/init ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/init
-	$(INSTALL) -D -m 0755 blobs/nsm.ko ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/nsm.ko
-	$(INSTALL) -D -m 0755 blobs/linuxkit ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli/linuxkit
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves
 	$(INSTALL) -D -m 0755 drivers/virt/nitro_enclaves/nitro_enclaves.ko \
                ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves/nitro_enclaves.ko
-	$(INSTALL) -m 0644 config/env.sh ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
-	$(INSTALL) -m 0755 config/nitro-cli-config ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-config
+	$(INSTALL) -D -m 0644 bootstrap/env.sh ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-env.sh
+	$(INSTALL) -D -m 0755 bootstrap/nitro-cli-config ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-config
 	sed -i "2 a NITRO_CLI_INSTALL_DIR=$$(readlink -f ${NITRO_CLI_INSTALL_DIR})" \
-		${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
+		${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-env.sh
 	echo "Installation finished"
-	echo "Please run \"source ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh\" to setup the environment or add it your local shell configuration"
+	echo "Please run \"source ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-env.sh\" to setup the environment or add it your local shell configuration"
 
 .PHONY: uninstall
 uninstall:
-	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/nitro-cli
-	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${SBIN_DIR}/vsock-proxy
-	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/nitro_cli
-	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/${OPT_DIR}/vsock_proxy
-	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${UNIT_DIR}/vsock-proxy.service
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/nitro-cli
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/vsock-proxy
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/nitro-enclaves-allocator
+	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-vsock-proxy.service
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/vsock-proxy.yaml
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/allocator.yaml
 	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves
-	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${CONF_DIR}/vsock_proxy/config.yaml
-	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-env.sh
-	$(RM) -f ${NITRO_CLI_INSTALL_DIR}/${ENV_SETUP_DIR}/nitro-cli-config
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-env.sh
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-config
 
 .PHONY: clean
 clean:

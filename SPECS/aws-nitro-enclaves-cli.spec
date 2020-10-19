@@ -13,7 +13,7 @@
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
 Version:    1.0
-Release:    2%{?dist}
+Release:    3%{?dist}
 
 License:    Apache 2.0
 
@@ -159,6 +159,9 @@ rm -rf %{ne_log_dir}
 %{ne_include_dir}/*
 
 %changelog
+* Mon Oct 19 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0-3
+- Updated license string to 'Apache 2.0'
+
 * Sat Oct 17 2020 Dan Horobeanu <dhr@amazon.com> - 1.0-1
 - Updated license to Apache-2.0
 - General cleanup and resync with `make install` output

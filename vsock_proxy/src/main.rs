@@ -63,7 +63,7 @@ fn main() -> VsockProxyResult<()> {
                 .help("YAML file containing the services that\ncan be forwarded.\n")
                 .required(false)
                 .takes_value(true)
-                .default_value("/var/vsock_proxy/config.yaml"),
+                .default_value("/etc/nitro_enclaves/vsock-proxy.yaml"),
         )
         .get_matches();
 

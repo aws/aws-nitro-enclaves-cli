@@ -20,7 +20,7 @@ This repository contains a collection of tools and commands used for managing th
 ### How to install (Repository):
   1. Install the main Nitro CLI package from the AL2 repository: `sudo yum install -y aws-nitro-enclaves-cli`.
   2. [Optional] In case you want to build EIF images, install additional Nitro Enclaves resources: `sudo yum install -y aws-nitro-enclaves-cli-devel`.
-  3. Reserve resources (memory and CPUs) for future enclaves, by editing '/etc/ne_conf' (or use the default configuration - 512MB and 2 CPUs) and then starting the resource reservation service: `sudo systemctl start config-enclave-resources.service`.
+  3. Reserve resources (memory and CPUs) for future enclaves, by editing '/etc/nitro_enclaves/allocator.conf' (or use the default configuration - 512MB and 2 CPUs) and then starting the resource reservation service: `sudo systemctl start ne-allocator.service`.
   4. [Optional] If you want your resources configuration to persist across reboots, enable the service: `sudo systemctl enable config-enclave-resources.service`.
   5. You are now ready to go.
 

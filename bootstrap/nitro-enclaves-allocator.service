@@ -6,11 +6,10 @@ After=sysinit.target dev-nitro_enclaves.device
 
 [Service]
 Type=oneshot
-Group=ne
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=config-enclave-resources
-ExecStart=/bin/bash /usr/sbin/config-enclave-resources
+SyslogIdentifier=nitro-enclaves-allocator
+ExecStart=/usr/bin/nitro-enclaves-allocator
 RemainAfterExit=false
 TimeoutSec=0
 

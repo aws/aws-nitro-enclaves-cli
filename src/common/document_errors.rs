@@ -116,7 +116,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
             ret.push_str("Daemonize process failure. Such error appears when the system fails to daemonize a newly spawned enclave process.");
         }
         "E07" => {
-            ret.push_str("Read from disk failure. Such error appears when the Nitro CLI process fails to read the content of the enclave sockets directory (usually '/var/run/nitro_enclaves/') in order to perform a `describe-enclave` operation. Check that the directory exists and it has proper permissions, or run the Nitro Enclaves configuration script in order to (re)configure the environment.");
+            ret.push_str("Read from disk failure. Such error appears when the Nitro CLI process fails to read the content of the enclave sockets directory (usually '/run/nitro_enclaves/') in order to perform a `describe-enclave` operation. Check that the directory exists and it has proper permissions, or run the Nitro Enclaves configuration script in order to (re)configure the environment.");
         }
         "E08" => {
             ret.push_str("Unusable connection error. Such error appears when the Nitro CLI process attempts to open a connection to a non-existing or previously closed enclave descriptor");
@@ -376,7 +376,7 @@ pub fn explain_error(error_code_str: String) {
             eprintln!("Daemonize process failure. Such error appears when the system fails to daemonize the newly spawned enclave process.")
         },
         "E07" => {
-            eprintln!("Read from disk failure. Such error appears when the Nitro CLI process fails to read the content of the enclave sockets directory (usually '/var/run/nitro_enclaves/') in order to perform a `describe-enclave` operation. Check that the directory exists and it has proper permissions, or run the Nitro Enclaves configuration script in order to (re)configure the environment.");
+            eprintln!("Read from disk failure. Such error appears when the Nitro CLI process fails to read the content of the enclave sockets directory (usually '/run/nitro_enclaves/') in order to perform a `describe-enclave` operation. Check that the directory exists and it has proper permissions, or run the Nitro Enclaves configuration script in order to (re)configure the environment.");
         },
         "E08" => {
             eprintln!("Unusable connection error. Such error appears when the Nitro CLI process attempts to open a connection to a non-existing or previously closed enclave descriptor");

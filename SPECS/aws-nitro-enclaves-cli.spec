@@ -1,15 +1,21 @@
-%define _nitro_cli_bin nitro-cli
-%define _vsock_proxy_bin vsock-proxy
-%define _config_enclave_resources config-enclave-resources
-%define _ne_log_path /var/log/nitro_enclaves
-%define _ne_log_file nitro_enclaves.log
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+%define ne_name nitro_enclaves
+%define ne_group ne
+%define ne_data_dir %{_datadir}/%{ne_name}
+%define ne_include_dir %{_includedir}/%{ne_name}
+%define ne_sysconf_dir %{_sysconfdir}/%{ne_name}
+%define ne_log_dir /var/log/%{ne_name}
+%define ne_log_file %{ne_name}.log
+%define ne_run_dir /run/%{ne_name}
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
 Version:    1.0
 Release:    1%{?dist}
 
-License:    Amazon Proprietary
+License:    Apache-2.0
 
 BuildArch: x86_64
 
@@ -69,114 +75,94 @@ make vsock-proxy-native
 
 %install
 # Main Nitro CLI tools installation
-make NITRO_CLI_INSTALL_DIR=%{buildroot} SBIN_DIR=%{_sbindir} UNIT_DIR=%{_unitdir} VAR_DIR=%{_var} install-tools
+make NITRO_CLI_INSTALL_DIR=%{buildroot} BIN_DIR=%{_bindir} UNIT_DIR=%{_unitdir} VAR_DIR=%{_var} install-tools
 
-# Resource configuration service and files
-install -D -m 0755 config/service/%{_config_enclave_resources} %{buildroot}%{_sbindir}/%{_config_enclave_resources}
-install -D -m 0644 config/service/%{_config_enclave_resources}.service %{buildroot}%{_unitdir}/%{_config_enclave_resources}.service
-cp config/configs/ne_conf %{buildroot}%{_sysconfdir}
-cp config/install %{buildroot}%{_sysconfdir}
+# -devel package: sources and include headers
+mkdir -p %{buildroot}%{ne_include_dir}
+cp -r include/* %{buildroot}%{ne_include_dir}/
 
-# Blob files, needed in order to build EIFs
-mkdir -p %{buildroot}%{_datadir}/nitro_enclaves/blobs/
-cp blobs/* %{buildroot}%{_datadir}/nitro_enclaves/blobs/
-
-# Directories needed by the integration tests subpackage
-mkdir -p %{buildroot}%{_sbindir}
-mkdir -p %{buildroot}%{_datadir}/nitro_enclaves/tests/integration/
-
-install -D -m 0755 run-nitro-cli-integration-tests %{buildroot}%{_sbindir}/run-nitro-cli-integration-tests
-install -D -m 0755 config/nitro-cli-config %{buildroot}%{_sbindir}/nitro-cli-config
-
-cp -r tests/integration/* %{buildroot}%{_datadir}/nitro_enclaves/tests/integration/
-
-cp -r drivers/ %{buildroot}%{_datadir}/nitro_enclaves/
-cp -r include/ %{buildroot}%{_datadir}/nitro_enclaves/
+# -integration-tests package
+install -D -m 0755 run-nitro-cli-integration-tests %{buildroot}%{_bindir}/run-nitro-cli-integration-tests
+mkdir -p %{buildroot}%{ne_data_dir}/tests/integration
+cp -r tests/integration/* %{buildroot}%{ne_data_dir}/tests/integration/
 
 
 %pre
-groupadd -f ne
+groupadd -f %{ne_group}
 
 %post
 # Manually perform log file initialization steps
-mkdir -p %{_ne_log_path}
-chown root:ne %{_ne_log_path}
-chmod 775 %{_ne_log_path}
-
-touch %{_ne_log_path}/%{_ne_log_file}
-chown root:ne %{_ne_log_path}/%{_ne_log_file}
-chmod 664 %{_ne_log_path}/%{_ne_log_file}
+mkdir -p %{ne_log_dir}
+chmod 775 %{ne_log_dir}
+touch %{ne_log_dir}/%{ne_log_file}
+chmod 664 %{ne_log_dir}/%{ne_log_file}
+chown -R root:%{ne_group} %{ne_log_dir}
 
 # Create tmpfs directory
-echo "d /run/nitro_enclaves 0775 root ne" > /usr/lib/tmpfiles.d/nitro_enclaves.conf
+echo "d " %{ne_run_dir} " 0775 root "%{ne_group} > /usr/lib/tmpfiles.d/%{ne_name}.conf
 # Make directory available even without rebooting the system
-systemd-tmpfiles --create /usr/lib/tmpfiles.d/nitro_enclaves.conf
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/%{ne_name}.conf
 
 # Configure setup steps for the Nitro Enclaves driver (groups & udev rule)
-# Configure NE driver configuration file in order to auto load it
-echo "install nitro_enclaves insmod nitro_enclaves.ko" > /usr/lib/modules-load.d/nitro_enclaves.conf
-/etc/install /usr/share/nitro_enclaves/
+echo "KERNEL==\"nitro_enclaves\", SUBSYSTEM==\"misc\", OWNER=\"root\", GROUP=\""%{ne_group}"\", \
+    MODE=\"0660\", TAG+=\"systemd\"" > /usr/lib/udev/rules.d/99-nitro_enclaves.rules
+udevadm trigger -y nitro_enclaves
 
-chown root:ne /dev/nitro_enclaves
-chmod 660 /dev/nitro_enclaves
+echo -e "
+    * In order to successfully run Nitro Enclaves, please add your user to group '"%{ne_group}"'"
+echo -e "
+    * Before being able to run enclaves, the system administrator must reserve the required
+      resources (i.e. CPUs and memory). Edit the allocator configuration file at
+      "%{ne_sysconf_dir}/allocator.yaml" and then start the allocator oneshot service:
+      
+        sudo systemctl start nitro-enclaves-allocator.service
 
-# Configure vsock-proxy & config-enclave-resources services
-systemctl --system daemon-reload
-%systemd_post %{_vsock_proxy_bin}.service
-%systemd_postun_with_restart %{_vsock_proxy_bin}.service
+      Resource allocation can be performed at system boot (recommended), by enabling
+      the allocator service:
 
-%systemd_post %{_config_enclave_resources}.service
-
-echo -e " * In order to successfully run Nitro Enclaves, please add your user to group 'ne'"
-echo -e " * To configure memory and CPUs for future enclaves, edit '/etc/ne_conf' and run 'systemctl start config-enclave-resources.service' or \nuse the default configuration and only restart the service"
-
-%post devel
-chown root:ne /usr/share/nitro_enclaves/blobs
+        sudo systemctl enable nitro-enclaves-allocator.service
+"
 
 %preun
 # Uninstall services
-%systemd_preun %{_vsock_proxy_bin}.service
-
-%systemd_preun %{_config_enclave_resources}.service
+%systemd_preun nitro-enclaves-vsock-proxy.service
+%systemd_preun nitro-enclaves-allocator.service
 
 
 %postun
 # Remove any directory which was created by the driver as well as unload the driver
-rm /usr/lib/modules-load.d/nitro_enclaves.conf
-rm -rf /var/run/nitro_enclaves/
-rm -rf /var/log/nitro_enclaves/
+rm -f /usr/lib/modules-load.d/nitro_enclaves.conf
+rm -f /usr/lib/udev/rules.d/99-nitro_enclaves.rules
+rm -f /usr/lib/tmpfiles.d/nitro_enclaves.conf
+rm -rf %{ne_run_dir}
+rm -rf %{ne_log_dir}
 
 
 %files
-%defattr(0755,root,root,0755)
+%{_bindir}/nitro-cli
+%{_bindir}/vsock-proxy
+%{_bindir}/nitro-enclaves-allocator
+%{_unitdir}/nitro-enclaves-vsock-proxy.service
+%{_unitdir}/nitro-enclaves-allocator.service
+%config(noreplace) %{ne_sysconf_dir}/vsock-proxy.yaml
+%config(noreplace) %{ne_sysconf_dir}/allocator.yaml
 
-%{_sbindir}/%{_nitro_cli_bin}
-%{_sbindir}/%{_vsock_proxy_bin}
-%config(noreplace) %{_sysconfdir}/vsock_proxy/config.yaml
-
-%attr(0644,root,root) %{_unitdir}/%{_vsock_proxy_bin}.service
-
-%attr(0755,root,root) %{_sbindir}/%{_config_enclave_resources}
-%attr(0644,root,root) %{_unitdir}/%{_config_enclave_resources}.service
-%attr(0755,root,root) %{_sysconfdir}/install
-%attr(0766,root,ne) %{_sysconfdir}/ne_conf
 
 %files integration-tests
-%defattr(0755,root,root,0755)
-
-%{_sbindir}/run-nitro-cli-integration-tests
-%{_sbindir}/nitro-cli-config
-%{_datadir}/nitro_enclaves/*
+%{_bindir}/run-nitro-cli-integration-tests
+%{ne_data_dir}/tests/*
 
 
 %files devel
-%attr(0755,root,ne) %{_datadir}/nitro_enclaves/blobs/init
-%attr(0755,root,ne) %{_datadir}/nitro_enclaves/blobs/linuxkit
-%attr(0644,root,ne) %{_datadir}/nitro_enclaves/blobs/bzImage
-%attr(0644,root,ne) %{_datadir}/nitro_enclaves/blobs/cmdline
-%attr(0644,root,ne) %{_datadir}/nitro_enclaves/blobs/nsm.ko
+%{ne_data_dir}/blobs/*
+%{ne_data_dir}/examples/*
+%{ne_include_dir}/*
 
 %changelog
+* Sat Oct 17 2020 Dan Horobeanu <dhr@amazon.com> - 1.0-1
+- Updated license to Apache-2.0
+- General cleanup and resync with `make install` output
+
 * Wed Oct 14 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0-0
 - Include resources reservation service
 

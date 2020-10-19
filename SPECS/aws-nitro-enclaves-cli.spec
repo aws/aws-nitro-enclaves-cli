@@ -15,7 +15,7 @@ Name:       aws-nitro-enclaves-cli
 Version:    1.0
 Release:    2%{?dist}
 
-License:    Apache-2.0
+License:    Apache 2.0
 
 BuildArch: x86_64
 

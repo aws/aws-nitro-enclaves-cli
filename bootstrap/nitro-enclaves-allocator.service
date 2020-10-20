@@ -1,8 +1,7 @@
 [Unit]
-Description=reserve resources (memory and CPUs) for launching enclaves
+Description=Nitro Enclaves Resource Allocator
 DefaultDependencies=no
-Wants=dev-nitro_enclaves.device
-After=sysinit.target dev-nitro_enclaves.device
+After=sysinit.target
 
 [Service]
 Type=oneshot
@@ -10,8 +9,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=nitro-enclaves-allocator
 ExecStart=/usr/bin/nitro-enclaves-allocator
-RemainAfterExit=false
-TimeoutSec=0
+RemainAfterExit=true
 
 [Install]
 WantedBy=multi-user.target

@@ -1,6 +1,6 @@
 [Unit]
-Description=start and stop vsock-proxy service
-After=network.target
+Description=Nitro Enclaves vsock Proxy
+After=network-online.target
 DefaultDependencies=no
 
 [Service]

@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-use nitro_cli_poweruser::cli_dev::*;
-use nitro_cli_poweruser::cpu_info::CpuInfos;
-use nitro_cli_poweruser::json_output::{get_enclave_describe_info, EnclaveDescribeInfo};
-use nitro_cli_poweruser::resource_allocator_driver::ResourceAllocatorDriver;
-use nitro_cli_poweruser::NitroCliResult;
+use nitro_cli::common::json_output::EnclaveDescribeInfo;
+use nitro_cli::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use nitro_cli::enclave_proc::cpu_info::CpuInfo;
+use nitro_cli::poweruser::cli_dev::*;
+use nitro_cli::poweruser::resource_allocator_driver::ResourceAllocatorDriver;
+use nitro_cli::poweruser::poweruser_lib::get_enclave_describe_info;
 
 #[allow(non_upper_case_globals)]
 const MiB: u64 = 1024 * 1024;
@@ -34,7 +35,10 @@ impl NitroEnclaveAllocator {
             cli_dev: CliDev::new()?,
         };
         if !result.cli_dev.enable()? {
-            return Err(String::from("Failed to enable Cli Device."));
+            return Err(NitroCliFailure::new()
+            .add_subaction("Failed to enable the CLI device".to_string())
+            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+            .set_file_and_line(file!(), line!()));
         }
         result.set_default_mem()?;
 
@@ -50,7 +54,10 @@ impl NitroEnclaveAllocator {
             let cmd = NitroEnclavesSlotAddMem::new(reply.slot_uid, reply.mem_gpa, reply.mem_size);
             let error = cmd.submit(&mut self.cli_dev);
             if error.is_err() {
-                return Err(String::from("Memory allocation failed!"));
+                return Err(NitroCliFailure::new()
+                .add_subaction("Memory allocation failed!".to_string())
+                .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+                .set_file_and_line(file!(), line!()));
             }
         }
 
@@ -144,8 +151,6 @@ mod test_pci_device {
     #[test]
     pub fn test_add_same_resources() {
         let mut enclave_allocator = NitroEnclaveAllocator::new().unwrap();
-        let cpu_infos = CpuInfos::new().expect("Cpu info failed!");
-
         let cmd: NitroEnclavesSlotAlloc = NitroEnclavesSlotAlloc::new();
         let reply = cmd.submit(&mut enclave_allocator.cli_dev).unwrap();
         enclave_allocator.slot_uid = reply.slot_uid;
@@ -164,10 +169,8 @@ mod test_pci_device {
             assert_eq!(error.is_err(), true);
         }
 
-        let cpu_ids = cpu_infos
-            .get_cpu_ids(NUM_CPUS as u32)
-            .expect("Cpu info failed!");
-        for id in cpu_ids {
+        let cpu_info = CpuInfo::new().expect("Retrieving the cpu ids failed.");
+        for id in cpu_info.get_cpu_candidates() {
             let cmd = NitroEnclavesSlotAddVcpu::new(enclave_allocator.slot_uid, id);
             cmd.submit(&mut enclave_allocator.cli_dev)
                 .expect("Add vcpu failed!");

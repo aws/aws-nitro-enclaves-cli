@@ -22,7 +22,6 @@ function register_test_fail() {
 
 # Clean up and exit with the current test suite's status
 function clean_up_and_exit() {
-	[ "$(lsmod | grep -cw nitro_cli_resource_allocator)" -eq 0 ] || rmmod nitro_cli_resource_allocator || register_test_fail
 	[ "$(lsmod | grep -cw nitro_enclaves)" -eq 0 ] || rmmod nitro_enclaves || register_test_fail
 	make clean
 	rm -rf test_images
@@ -72,13 +71,11 @@ make nitro-audit || test_failed
 
 # Setup the environement with everything needed to run the integration tests
 make nitro-tests || test_failed
-make nitro_cli_resource_allocator || test_failed
+make nitro_enclaves_merge_drivers || test_failed
 make nitro_enclaves || test_failed
 make nitro-cli || test_failed
 make vsock-proxy || test_failed
 make install || test_failed
-rmmod nitro_cli_resource_allocator
-insmod drivers/nitro_cli_resource_allocator/nitro_cli_resource_allocator.ko || test_failed
 
 # Ensure the Nitro Enclaves driver is inserted at the beginning.
 configure_ne_driver
@@ -96,22 +93,11 @@ nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.co
 while IFS= read -r test_line
 do
 	TEST_SUITES_TOTAL=$((TEST_SUITES_TOTAL + 1))
-	test_module="$(echo ${test_line} | cut -d' ' -f2)"
 	test_exec_name="$(basename $(echo ${test_line} | cut -d' ' -f1))"
-
-	if [[ $test_module == *"nitro-cli-poweruser"* ]] || [[ $test_exec_name == *"test_pci_device"* ]]
-	then
-		remove_ne_driver
-	else
-		configure_ne_driver
-	fi
 
 	./build/nitro_cli/x86_64-unknown-linux-musl/release/"${test_exec_name}" \
 		--test-threads=1 --nocapture || test_failed
 done < <(grep -v '^ *#' < build/test_executables.txt)
-
-# Ensure the Nitro Enclaves driver is inserted for the remaining integration tests.
-configure_ne_driver
 
 # Run integration tests except the instalation test
 pytest-3 tests/integration/ --ignore tests/integration/test_installation.py || test_failed

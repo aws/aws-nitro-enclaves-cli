@@ -419,7 +419,7 @@ function driver_remove {
 # Build the driver.
 function driver_build {
     print "Building the driver..."
-    make &> /dev/null || fail "Failed to build driver."
+    make MERGE_DRIVERS=1 &> /dev/null || fail "Failed to build driver."
     print "Done."
 }
 

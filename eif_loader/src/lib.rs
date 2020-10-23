@@ -13,8 +13,8 @@ use vsock::VsockListener;
 /// Timeout of 1 second in milliseconds
 pub const TIMEOUT_SECOND_MS: i32 = 1000;
 
-/// Timeout of 1 minute in milliseconds
-pub const TIMEOUT_MINUTE_MS: i32 = 60 * TIMEOUT_SECOND_MS;
+/// Timeout of 1 minute 30 seconds in milliseconds
+pub const TIMEOUT_MINUTE_MS: i32 = 90 * TIMEOUT_SECOND_MS;
 
 const HEART_BEAT: u8 = 0xB7;
 

@@ -7,7 +7,11 @@ This repository contains a collection of tools and commands used for managing th
   2. Install gcc, make, git, llvm-dev, libclang-dev, clang.
 
 ### Driver information
-  The Nitro Enclaves kernel driver is currently at version 0.10. Out-of-tree driver build is supported.
+  The Nitro Enclaves kernel driver available in the 'drivers/virt/nitro_enclaves' directory is similar to the one merged into the Linux kernel mainline ( https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=726eb70e0d34dc4bc4dada71f52bba8ed638431e ) and that is available starting with the v5.10 Linux kernel.
+
+  The Nitro Enclaves kernel driver is available in the Amazon Linux 2 v4.14 kernel starting with kernel-4.14.198-152.320.amzn2.
+
+  Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
 
 ### How to install (Git):
   1. Clone the repository.
@@ -33,24 +37,27 @@ This repository contains a collection of tools and commands used for managing th
 ## Source-code components
   The components of the CLI are organized as follows (all paths are relative to the CLI's root directory):
 
-  - 'blobs': binary blobs providing pre-compiled components needed for the building of enclave images:
-      - a kernel image: 'blobs/bzImage'
-      - a kernel boot command line: 'blobs/cmdline'
-      - an init process executable: 'blobs/init'
-      - a LinuxKit-based user-space environment: 'blobs/linuxkit'
-      - the driver which enables the Nitro Secure Module component inside the enclave: 'blobs/nsm.ko'
+  - 'blobs': Binary blobs providing pre-compiled components needed for the building of enclave images:
+      - 'blobs/bzImage': Kernel image
+      - 'blobs/bzImage.config': Kernel config
+      - 'blobs/cmdline': Kernel boot command line
+      - 'blobs/init': Init process executable
+      - 'blobs/linuxkit': LinuxKit-based user-space environment
+      - 'blobs/nsm.ko': The driver which enables the Nitro Secure Module (NSM) component inside the enclave
 
-  - 'build': an automatically-generated directory which stores the build output for various components (the CLI, the command executer etc.)
+  - 'build': An automatically-generated directory which stores the build output for various components (the CLI, the command executer etc.)
 
-- 'config': Various useful scripts for CLI environment configuration, namely:
-      - 'env.sh': A script which inserts the pre-built Nitro Enclaves kernel module, ads the CLI binary directory to $PATH and sets the blobs directory
-      - 'nitro-cli-config': A scripts which can build, configure and install the Nitro Enclaves kernel module, as well as configure the memory
-          and CPUs available for enclave launches (depending on the operation, root privileges may be required)
+  - 'bootstrap': Various useful scripts for CLI environment configuration, namely:
+      - 'allocatior.yaml': Configuration file for enclave memory and CPUs reservation
+      - 'env.sh': A script which inserts the pre-built Nitro Enclaves kernel module, adds the CLI binary directory to $PATH and sets the blobs directory
+      - 'nitro-cli-config': A script which can build, configure and install the Nitro Enclaves kernel module, as well as configure the memory and CPUs available for enclave launches (depending on the operation, root privileges may be required)
+      - 'nitro-enclaves-allocator': Configuration script for enclave memory and CPUs reservation
+      - 'nitro-enclaves-allocator.service': Configuration service for enclave memory and CPUs reservation
 
   - 'docs': Useful documentation
 
   - 'drivers': The source code of the kernel modules used by the CLI in order to control enclave behavior, containing:
-      - The Nitro Enclaves driver used by the normal CLI: 'drivers/virt/nitro_enclaves'
+      - 'drivers/virt/nitro_enclaves': The Nitro Enclaves driver used by the Nitro CLI
 
   - 'eif_defs': The definition of the enclave image format (EIF) file
 
@@ -60,24 +67,22 @@ This repository contains a collection of tools and commands used for managing th
 
   - 'enclave_build': A tool which builds EIF files starting from a Docker image and pre-existing binary blobs (such as those from 'blobs')
 
-  - 'include': The header files exposed by the Nitro Enclaves kernel module used by the normal CLI
+  - 'include': The header files exposed by the Nitro Enclaves kernel module used by the Nitro CLI
 
-  - rust-cose': A Rust-based COSE implementation, needed by the EIF utilities module ('eif_utils')
+  - 'rust-cose': A Rust-based COSE implementation, needed by the EIF utilities module ('eif_utils')
 
-  - 'samples': A collection of CLI-related sample applications. One sample is the command executer - an application that enables a parent
-      instance to issue commands to an enclave (such as transferring a file, executing an application on the enclave etc.)
+  - 'samples': A collection of CLI-related sample applications. One sample is the command executer - an application that enables a parent instance to issue commands to an enclave (such as transferring a file, executing an application on the enclave etc.)
 
   - 'src': The Nitro CLI implementation, divided into 3 components:
       - The implementation of the background enclave process: 'src/enclave_proc'
       - The implementation of the CLI, which takes user commands and communicates with enclave processes: 'src/*.rs'
       - A common module used by both the CLI and the enclave process: 'src/common'
 
-  - 'tests': Various unit and integration tests for the CLI.
+  - 'tests': Various unit and integration tests for the CLI
 
-  - 'tools': Various useful configuration files used for CLI and EIF builds.
+  - 'tools': Various useful configuration files used for CLI and EIF builds
 
-  - 'vsock_proxy': The implementation of the Vsock - TCP proxy application, which is used to allow an enclave to communicate with an external service
-          through the parent instance.
+  - 'vsock_proxy': The implementation of the Vsock - TCP proxy application, which is used to allow an enclave to communicate with an external service through the parent instance
 
   - 'ci_entrypoint.sh': The script which launches the CLI continuous integration tests
 

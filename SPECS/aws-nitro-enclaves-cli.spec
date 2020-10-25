@@ -13,7 +13,7 @@
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
 Version:    1.0
-Release:    4%{?dist}
+Release:    5%{?dist}
 
 License:    Apache 2.0
 
@@ -159,6 +159,9 @@ rm -rf %{ne_log_dir}
 %{ne_include_dir}/*
 
 %changelog
+* Sun Oct 25 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0-5
+- Refactored integration tests main scripts in order to use the allocator service
+
 * Tue Oct 20 2020 Dan Horobeanu <dhr@amazon.com> - 1.0-4
 - Removed dependency on `nitro_enclaves.device` for the allocator service
 - Removed timeout from the allocator oneshot service

@@ -3,14 +3,14 @@
 # Install required packages
 echo "===== Installing required packages ====="
 sudo pip3 install -U pytest > /dev/null 2>&1
-sudo yum install -y kernel-headers-$(uname -r) kernel-devel-$(uname -r) > /dev/null 2>&1
 
 # Configure enclaves environment
 echo "===== Configuring enclaves environment ====="
-PREV_DIR=$(pwd) && cd /usr/share/nitro_enclaves/drivers/virt/nitro_enclaves && sudo make > /dev/null 2>&1 && cd $PREV_DIR
-nitro-cli-config -s -d /usr/share/nitro_enclaves -i
 
-nitro-cli-config -m 2048 -t 2
+TESTS_MEM=2046
+
+sudo sed -Ei "s/^memory_mib:.+\$/memory_mib: $TESTS_MEM/" /etc/nitro_enclaves/allocator.yaml
+sudo systemctl restart nitro-enclaves-allocator.service
 
 # Run integration tests
 echo "===== Running integration tests except for the installation test ====="

@@ -12,6 +12,7 @@ build/
 **/*mod.c
 **/*.ko
 !blobs/nsm.ko
+!samples/command_executer/resources/blobs/nsm.ko
 **/*order
 **/*symvers
 **/*.tmp_versions

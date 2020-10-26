@@ -70,6 +70,7 @@ echo "=================== cargo audit ==========================="
 make nitro-audit || test_failed
 
 # Setup the environement with everything needed to run the integration tests
+make command-executer || test_failed
 make nitro-tests || test_failed
 make nitro_enclaves || test_failed
 make nitro-cli || test_failed

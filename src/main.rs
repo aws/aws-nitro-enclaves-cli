@@ -53,7 +53,8 @@ fn main() {
     let mut app = create_app!();
 
     // Initialize the app with the commands from the poweruser cli
-    #[cfg(feature = "poweruser")] {
+    #[cfg(feature = "poweruser")]
+    {
         app = testing_commands::initialize(app);
     }
 
@@ -61,7 +62,8 @@ fn main() {
     let args = app.get_matches();
 
     // Test if a poweruser cli command should be executed
-    #[cfg(feature = "poweruser")] {
+    #[cfg(feature = "poweruser")]
+    {
         testing_commands::match_cmd(&args);
     }
 

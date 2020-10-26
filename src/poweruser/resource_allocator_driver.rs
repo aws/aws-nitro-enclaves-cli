@@ -12,8 +12,8 @@ use std::fs::File;
 use std::mem::size_of_val;
 use std::os::unix::io::AsRawFd;
 
-use crate::new_nitro_cli_failure;
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use crate::new_nitro_cli_failure;
 
 pub const RESOURCE_ALLOCATOR_PATH: &str = "/dev/nitro_enclaves";
 
@@ -65,13 +65,12 @@ pub struct ResourceAllocatorDriver {
 impl ResourceAllocatorDriver {
     pub fn new() -> NitroCliResult<Self> {
         Ok(ResourceAllocatorDriver {
-            file: File::open(RESOURCE_ALLOCATOR_PATH)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Could not open {}: {}", RESOURCE_ALLOCATOR_PATH, err),
-                        NitroCliErrorEnum::FileOperationFailure
-                    )
-                })?
+            file: File::open(RESOURCE_ALLOCATOR_PATH).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Could not open {}: {}", RESOURCE_ALLOCATOR_PATH, err),
+                    NitroCliErrorEnum::FileOperationFailure
+                )
+            })?,
         })
     }
 
@@ -86,7 +85,7 @@ impl ResourceAllocatorDriver {
                 self.file.as_raw_fd(),
                 &mem_region as *const nitro_cli_slot_mem_region as *mut nitro_cli_slot_mem_region,
             )
-            .map_err(|err| { 
+            .map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Alloc of {} bytes memory ioctl failed: {}", mem_size, err),
                     NitroCliErrorEnum::IoctlFailure
@@ -117,9 +116,9 @@ impl ResourceAllocatorDriver {
         if let Some(cpu_id) = cpu_id {
             if size_of_val(&cpu_mapping.cpu_mask) * 8 <= cpu_id as usize {
                 return Err(NitroCliFailure::new()
-                .add_subaction("CPU id out of bound".to_string())
-                .set_error_code(NitroCliErrorEnum::NoSuchCpuAvailableInPool)
-                .set_file_and_line(file!(), line!()));
+                    .add_subaction("CPU id out of bound".to_string())
+                    .set_error_code(NitroCliErrorEnum::NoSuchCpuAvailableInPool)
+                    .set_file_and_line(file!(), line!()));
             }
             cpu_mapping.cpu_mask[cpu_id as usize / 64] = 1 << (cpu_id % 64);
         }
@@ -142,9 +141,9 @@ impl ResourceAllocatorDriver {
 
         if rc != 0 {
             return Err(NitroCliFailure::new()
-            .add_subaction(format!("Set cpu mapping ioctl failed: {}", rc))
-            .set_error_code(NitroCliErrorEnum::IoctlFailure)
-            .set_file_and_line(file!(), line!()));
+                .add_subaction(format!("Set cpu mapping ioctl failed: {}", rc))
+                .set_error_code(NitroCliErrorEnum::IoctlFailure)
+                .set_file_and_line(file!(), line!()));
         }
 
         Ok(cpu_mapping)
@@ -166,9 +165,9 @@ impl ResourceAllocatorDriver {
 
         if rc != 0 {
             return Err(NitroCliFailure::new()
-            .add_subaction(format!("Free resources ioctl failed: {}", rc))
-            .set_error_code(NitroCliErrorEnum::IoctlFailure)
-            .set_file_and_line(file!(), line!()));
+                .add_subaction(format!("Free resources ioctl failed: {}", rc))
+                .set_error_code(NitroCliErrorEnum::IoctlFailure)
+                .set_file_and_line(file!(), line!()));
         }
 
         Ok(())

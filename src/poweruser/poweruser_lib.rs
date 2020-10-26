@@ -6,9 +6,9 @@
 use log::debug;
 use std::fs::File;
 
-use crate::common::commands_parser::{ConsoleArgs, RunEnclavesArgs, TerminateEnclavesArgs};
 use super::resource_allocator_driver::ResourceAllocatorDriver;
 use super::resource_manager::EnclaveResourceManager;
+use crate::common::commands_parser::{ConsoleArgs, RunEnclavesArgs, TerminateEnclavesArgs};
 use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
 
 use super::cli_dev::{
@@ -18,12 +18,12 @@ use super::cli_dev::{
 use std::io::{self, Write};
 
 use super::resource_manager::online_slot_cpus;
-use std::convert::TryFrom;
-use crate::enclave_proc::utils::get_slot_id;
-use crate::enclave_proc::utils::generate_enclave_id;
 use crate::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo};
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use crate::enclave_proc::utils::generate_enclave_id;
+use crate::enclave_proc::utils::get_slot_id;
 use crate::utils::Console;
+use std::convert::TryFrom;
 
 use crate::enclave_proc::cpu_info::CpuInfo;
 use crate::new_nitro_cli_failure;
@@ -37,18 +37,17 @@ pub const ENCLAVE_READY_VSOCK_PORT: u32 = 9000;
 pub const BUFFER_SIZE: usize = 1024;
 
 pub fn run_enclaves_poweruser(args: &RunEnclavesArgs) -> NitroCliResult<u64> {
-    let eif_file = File::open(&args.eif_path)
-        .map_err(|err| {
-            new_nitro_cli_failure!(
-                &format!("Failed to open the eif file: {:?}", err),
-                NitroCliErrorEnum::FileOperationFailure
-            )
-        })?;
+    let eif_file = File::open(&args.eif_path).map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Failed to open the eif file: {:?}", err),
+            NitroCliErrorEnum::FileOperationFailure
+        )
+    })?;
 
     let cpu_config = CpuInfo::new()?.get_cpu_config(args)?;
     let cpu_ids = match cpu_config {
         EnclaveCpuConfig::List(cpu_ids) => cpu_ids,
-        _ => vec![]
+        _ => vec![],
     };
 
     let mut resource_manager = EnclaveResourceManager::new(
@@ -72,13 +71,9 @@ pub fn run_enclaves_poweruser(args: &RunEnclavesArgs) -> NitroCliResult<u64> {
     let info = get_run_enclaves_info(enclave_cid, slot_id, cpu_ids, memory)?;
     println!(
         "{}",
-        serde_json::to_string_pretty(&info)
-            .map_err(|err| {
-                new_nitro_cli_failure!(
-                    &format!("{:?}", err),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?
+        serde_json::to_string_pretty(&info).map_err(|err| {
+            new_nitro_cli_failure!(&format!("{:?}", err), NitroCliErrorEnum::UnspecifiedError)
+        })?
     );
 
     Ok(enclave_cid)
@@ -90,9 +85,9 @@ pub fn terminate_enclaves_poweruser(terminate_args: TerminateEnclavesArgs) -> Ni
     let mut cli_dev = CliDev::new()?;
     if !cli_dev.enable()? {
         return Err(NitroCliFailure::new()
-        .add_subaction("Failed to enable cli dev".to_string())
-        .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-        .set_file_and_line(file!(), line!()));
+            .add_subaction("Failed to enable cli dev".to_string())
+            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+            .set_file_and_line(file!(), line!()));
     }
 
     let enclave_id = terminate_args.enclave_id.clone();
@@ -125,15 +120,14 @@ pub fn terminate_enclaves_poweruser(terminate_args: TerminateEnclavesArgs) -> Ni
     Ok(())
 }
 
-pub fn describe_enclaves_poweruser()
--> NitroCliResult<Vec<NitroEnclavesCmdReply>> {
+pub fn describe_enclaves_poweruser() -> NitroCliResult<Vec<NitroEnclavesCmdReply>> {
     debug!("describe_enclaves");
     let mut cli_dev = CliDev::new()?;
     if !cli_dev.enable()? {
         return Err(NitroCliFailure::new()
-        .add_subaction("Failed to enable the CLI device".to_string())
-        .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-        .set_file_and_line(file!(), line!()));
+            .add_subaction("Failed to enable the CLI device".to_string())
+            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+            .set_file_and_line(file!(), line!()));
     }
     let slot_count = NitroEnclavesSlotCount::new();
     let reply = slot_count.submit(&mut cli_dev)?;
@@ -160,10 +154,7 @@ pub fn describe_enclaves_poweruser()
     println!(
         "{}",
         serde_json::to_string_pretty(&infos).map_err(|err| {
-            new_nitro_cli_failure!(
-                format!("{:?}", err),
-                NitroCliErrorEnum::UnspecifiedError
-            )
+            new_nitro_cli_failure!(format!("{:?}", err), NitroCliErrorEnum::UnspecifiedError)
         })?
     );
 
@@ -176,9 +167,9 @@ pub fn console_enclaves_poweruser(args: ConsoleArgs) -> NitroCliResult<()> {
     let mut cli_dev = CliDev::new()?;
     if !cli_dev.enable()? {
         return Err(NitroCliFailure::new()
-        .add_subaction("Failed to enable cli dev".to_string())
-        .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-        .set_file_and_line(file!(), line!()));
+            .add_subaction("Failed to enable cli dev".to_string())
+            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+            .set_file_and_line(file!(), line!()));
     }
 
     let slot_id = get_slot_id(args.enclave_id).map_err(|_| {
@@ -193,13 +184,12 @@ pub fn console_enclaves_poweruser(args: ConsoleArgs) -> NitroCliResult<()> {
     let enclave_cid = reply.enclave_cid;
 
     println!("Connecting to the console for enclave {}...", enclave_cid);
-    enclave_console_poweruser(enclave_cid)
-        .map_err(|err| {
-            new_nitro_cli_failure!(
-                &format!("Failed to start enclave logger: {:?}", err),
-                NitroCliErrorEnum::LoggerError
-            )
-        })?;
+    enclave_console_poweruser(enclave_cid).map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Failed to start enclave logger: {:?}", err),
+            NitroCliErrorEnum::LoggerError
+        )
+    })?;
     Ok(())
 }
 
@@ -207,14 +197,12 @@ pub fn console_enclaves_poweruser(args: ConsoleArgs) -> NitroCliResult<()> {
 pub fn enclave_console_poweruser(enclave_cid: u64) -> NitroCliResult<()> {
     let console = Console::new(
         VMADDR_CID_HYPERVISOR,
-        u32::try_from(enclave_cid)
-            .map_err(|err| {
-                new_nitro_cli_failure!(
-                    &format!("Failed to connect to the enclave: {}", err),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?
-            + CID_TO_CONSOLE_PORT_OFFSET,
+        u32::try_from(enclave_cid).map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to connect to the enclave: {}", err),
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })? + CID_TO_CONSOLE_PORT_OFFSET,
     )?;
     println!("Successfully connected to the console.");
     console.read_to(io::stdout().by_ref())?;
@@ -229,7 +217,7 @@ pub fn get_enclave_describe_info(
         generate_enclave_id(reply.slot_uid)?,
         reply.enclave_cid,
         reply.nr_cpus,
-        // In the moment is not possible to retrieve the cpu_ids 
+        // In the moment is not possible to retrieve the cpu_ids
         // using the poweruser cli
         vec![],
         reply.mem_size / 1024 / 1024,

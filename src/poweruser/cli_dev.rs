@@ -11,8 +11,8 @@ use memmap::{MmapMut, MmapOptions};
 use nix::fcntl::{flock, FlockArg};
 use std::ffi::CStr;
 use std::fmt::Debug;
-use std::fs::File;
 use std::fs::read_to_string;
+use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Result as IoResult;
 use std::io::{Error, ErrorKind};
@@ -22,11 +22,11 @@ use std::slice;
 use std::thread::sleep;
 use std::time;
 
-use serde::Deserialize;
 use enum_primitive_derive::Primitive;
+use serde::Deserialize;
 
-use crate::new_nitro_cli_failure;
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use crate::new_nitro_cli_failure;
 
 pub struct FileLock {
     pub _file: File,
@@ -35,14 +35,12 @@ pub struct FileLock {
 impl FileLock {
     pub fn new(path: &str) -> NitroCliResult<Self> {
         let _file = File::open(path).map_err(|err| {
-            new_nitro_cli_failure!(
-                format!("{}", err),
-                NitroCliErrorEnum::FileOperationFailure
-            )
+            new_nitro_cli_failure!(format!("{}", err), NitroCliErrorEnum::FileOperationFailure)
         })?;
         let fd = _file.as_raw_fd();
         flock(fd, FlockArg::LockExclusiveNonblock).map_err(|_err| {
-            new_nitro_cli_failure!({
+            new_nitro_cli_failure!(
+                {
                     let executable = match std::env::args().next() {
                         Some(name) => name,
                         None => String::from("./nitro-cli"),
@@ -422,12 +420,12 @@ impl CliDev {
             Ok(unsafe { *value_ptr })
         } else {
             Err(NitroCliFailure::new()
-            .add_subaction(format!(
-                "Could not read from the CLI device at offset 0x{:x}",
-                offset
-            ))
-            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-            .set_file_and_line(file!(), line!()))
+                .add_subaction(format!(
+                    "Could not read from the CLI device at offset 0x{:x}",
+                    offset
+                ))
+                .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+                .set_file_and_line(file!(), line!()))
         }
     }
 
@@ -444,12 +442,12 @@ impl CliDev {
             Ok(())
         } else {
             Err(NitroCliFailure::new()
-            .add_subaction(format!(
-                "Could not write to the CLI device at offset 0x{:x} with value {:?}",
-                offset, value
-            ))
-            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-            .set_file_and_line(file!(), line!()))
+                .add_subaction(format!(
+                    "Could not write to the CLI device at offset 0x{:x} with value {:?}",
+                    offset, value
+                ))
+                .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+                .set_file_and_line(file!(), line!()))
         }
     }
 
@@ -481,9 +479,9 @@ impl CliDev {
 
         if num_trys == 0 {
             return Err(NitroCliFailure::new()
-            .add_subaction("Did not receive a reply from the device".to_string())
-            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-            .set_file_and_line(file!(), line!()));
+                .add_subaction("Did not receive a reply from the device".to_string())
+                .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+                .set_file_and_line(file!(), line!()));
         }
 
         let reply = self.read_reply()?;
@@ -497,9 +495,9 @@ impl CliDev {
             let err_str: &CStr = unsafe { CStr::from_ptr(err_cstr) };
 
             Err(NitroCliFailure::new()
-            .add_subaction(format!("{:?}", err_str.to_str().unwrap()))
-            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-            .set_file_and_line(file!(), line!()))
+                .add_subaction(format!("{:?}", err_str.to_str().unwrap()))
+                .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+                .set_file_and_line(file!(), line!()))
         } else {
             Ok(reply)
         }

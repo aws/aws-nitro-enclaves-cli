@@ -5,12 +5,12 @@
 
 //! This crate provides the functionality for the Nitro CLI process.
 
-/// Numeric traits for generic mathematics
-#[cfg(feature = "poweruser")]
-extern crate num_traits;
 /// Provides a custom derive Primitive with native Rust bindings to C
 #[cfg(feature = "poweruser")]
 extern crate enum_primitive_derive;
+/// Numeric traits for generic mathematics
+#[cfg(feature = "poweruser")]
+extern crate num_traits;
 
 /// The common module (shared between the CLI and enclave process).
 pub mod common;
@@ -18,11 +18,11 @@ pub mod common;
 pub mod enclave_proc;
 /// The module covering the communication between a CLI instance and enclave processes.
 pub mod enclave_proc_comm;
-/// The CLI-specific utilities module.
-pub mod utils;
 /// The functionalities from the old cli
 #[cfg(feature = "poweruser")]
 pub mod poweruser;
+/// The CLI-specific utilities module.
+pub mod utils;
 
 use log::debug;
 use serde::Serialize;

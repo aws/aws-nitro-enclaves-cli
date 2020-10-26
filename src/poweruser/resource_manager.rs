@@ -14,8 +14,8 @@ use super::cli_dev::{
 use super::poweruser_lib::terminate_enclaves_poweruser;
 use crate::common::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 
-use crate::common::commands_parser::TerminateEnclavesArgs;
 use super::resource_allocator_driver::{nitro_cli_slot_mem_region, ResourceAllocatorDriver};
+use crate::common::commands_parser::TerminateEnclavesArgs;
 use crate::enclave_proc::utils::generate_enclave_id;
 
 use nix::fcntl::{flock, FlockArg};
@@ -30,8 +30,8 @@ use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 use vsock::VsockListener;
 
+use crate::common::{ExitGracefully, NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::new_nitro_cli_failure;
-use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, ExitGracefully};
 use crate::utils::POLL_TIMEOUT;
 
 // sys fs path to online/offline cpus
@@ -74,12 +74,12 @@ impl ResourceAllocator {
         let mut chunk_size = if self.memory.is_power_of_two() {
             self.memory
         } else {
-            self.memory
-                .checked_next_power_of_two()
-                .ok_or_else(|| new_nitro_cli_failure!(
+            self.memory.checked_next_power_of_two().ok_or_else(|| {
+                new_nitro_cli_failure!(
                     "Invalid memory size".to_string(),
                     NitroCliErrorEnum::InsufficientMemoryRequested
-                ))? / 2
+                )
+            })? / 2
         };
 
         let min_chunk_size = if self.max_regions > 0 {
@@ -97,9 +97,9 @@ impl ResourceAllocator {
         loop {
             if chunk_size < min_chunk_size {
                 return Err(NitroCliFailure::new()
-                .add_subaction("Could not allocate enclave memory".to_string())
-                .set_error_code(NitroCliErrorEnum::InsufficientMemoryAvailable)
-                .set_file_and_line(file!(), line!()));
+                    .add_subaction("Could not allocate enclave memory".to_string())
+                    .set_error_code(NitroCliErrorEnum::InsufficientMemoryAvailable)
+                    .set_file_and_line(file!(), line!()));
             }
 
             if let Ok(region) = self
@@ -169,32 +169,29 @@ impl EnclaveResourceManager {
             .set_file_and_line(file!(), line!()));
         }
 
-        let mut cli_dev =
-            CliDev::new().map_err(|err| {
-                new_nitro_cli_failure!(
-                    format!("Could not create CLI device: {}", err.action),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?;
+        let mut cli_dev = CliDev::new().map_err(|err| {
+            new_nitro_cli_failure!(
+                format!("Could not create CLI device: {}", err.action),
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })?;
         let enabled = cli_dev.enable()?;
 
         if !enabled {
             return Err(NitroCliFailure::new()
-            .add_subaction("Could not enable CLI device".to_string())
-            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-            .set_file_and_line(file!(), line!()));
+                .add_subaction("Could not enable CLI device".to_string())
+                .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+                .set_file_and_line(file!(), line!()));
         }
 
         let alloc = NitroEnclavesSlotAlloc::new();
         let alloc_err_prefix = sanitize_command(NitroEnclavesCmdType::NitroEnclavesSlotAlloc);
-        let reply = alloc
-            .submit(&mut cli_dev)
-            .map_err(|err| {
-                new_nitro_cli_failure!(
-                    format!("{:?} failed with: {}", alloc_err_prefix, err.action),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?;
+        let reply = alloc.submit(&mut cli_dev).map_err(|err| {
+            new_nitro_cli_failure!(
+                format!("{:?} failed with: {}", alloc_err_prefix, err.action),
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })?;
 
         let resource_allocator =
             ResourceAllocator::new(reply.slot_uid, memory_mib, reply.mem_regions).map_err(|e| {
@@ -224,23 +221,19 @@ impl EnclaveResourceManager {
         self.init_cpus()?;
 
         let sockaddr = SockAddr::new_vsock(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
-        let listener = VsockListener::bind(&sockaddr)
-            .map_err(|_err| {
-                new_nitro_cli_failure!(
-                    "Enclave boot heartbeat vsock connection - vsock bind error".to_string(),
-                    NitroCliErrorEnum::SocketConnectTimeoutError
-                )
-            })?;
+        let listener = VsockListener::bind(&sockaddr).map_err(|_err| {
+            new_nitro_cli_failure!(
+                "Enclave boot heartbeat vsock connection - vsock bind error".to_string(),
+                NitroCliErrorEnum::SocketConnectTimeoutError
+            )
+        })?;
 
         let enclave_cid = self.start()?;
 
         eif_loader::enclave_ready(listener, POLL_TIMEOUT).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
             self.terminate_enclave_error(&err_msg);
-            new_nitro_cli_failure!(
-                &err_msg,
-                NitroCliErrorEnum::EnclaveBootFailure
-            )
+            new_nitro_cli_failure!(&err_msg, NitroCliErrorEnum::EnclaveBootFailure)
         })?;
 
         Ok((enclave_cid, self.slot_id))
@@ -252,20 +245,18 @@ impl EnclaveResourceManager {
             .write(true)
             .open("/dev/mem")
             .map_err(|err| {
-                new_nitro_cli_failure!(  
-                    format!("{:?} failed with error: {}", err_prefix, err),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?;
-        self.eif_file
-            .seek(SeekFrom::Start(0))
-            .map_err(|err| {
                 new_nitro_cli_failure!(
                     format!("{:?} failed with error: {}", err_prefix, err),
                     NitroCliErrorEnum::UnspecifiedError
                 )
             })?;
-            
+        self.eif_file.seek(SeekFrom::Start(0)).map_err(|err| {
+            new_nitro_cli_failure!(
+                format!("{:?} failed with error: {}", err_prefix, err),
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })?;
+
         let mut total_written: u64 = 0;
 
         let regions = self.resource_allocator.allocate()?;
@@ -285,14 +276,12 @@ impl EnclaveResourceManager {
                 &mut total_written,
             )?;
 
-            add_mem
-                .submit(&mut self.cli_dev)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("{:?} failed with error: {}", err_prefix, err.action),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            add_mem.submit(&mut self.cli_dev).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("{:?} failed with error: {}", err_prefix, err.action),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
         }
         Ok(())
     }
@@ -301,14 +290,12 @@ impl EnclaveResourceManager {
         let err_prefix = sanitize_command(NitroEnclavesCmdType::NitroEnclavesSlotAddVcpu);
         for cpu_id in &self.cpu_ids {
             let add_cpu = NitroEnclavesSlotAddVcpu::new(self.slot_id, *cpu_id);
-            add_cpu
-                .submit(&mut self.cli_dev)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("{:?} failed with error: {}", err_prefix, err.action),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            add_cpu.submit(&mut self.cli_dev).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("{:?} failed with error: {}", err_prefix, err.action),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             offline_cpu(*cpu_id);
             self.resource_allocator
                 .resource_allocator_driver
@@ -329,14 +316,12 @@ impl EnclaveResourceManager {
             self.debug_mode,
         );
         let err_prefix = sanitize_command(NitroEnclavesCmdType::NitroEnclavesEnclaveStart);
-        let reply = start
-            .submit(&mut self.cli_dev)
-            .map_err(|err| {
-                new_nitro_cli_failure!(
-                    format!("{:?} failed with error: {}", err_prefix, err.action),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?;
+        let reply = start.submit(&mut self.cli_dev).map_err(|err| {
+            new_nitro_cli_failure!(
+                format!("{:?} failed with error: {}", err_prefix, err.action),
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })?;
 
         self.enclave_cid = Some(reply.enclave_cid);
         eprintln!(
@@ -348,10 +333,12 @@ impl EnclaveResourceManager {
         // Starting from here the enclave resources are owned by the
         // running enclave
         self.owns_resources = false;
-        let enclave_cid = self.enclave_cid.ok_or_else(|| new_nitro_cli_failure!(
-            "Invalid CID".to_string(),
-            NitroCliErrorEnum::EnclaveBootFailure
-        ))?;
+        let enclave_cid = self.enclave_cid.ok_or_else(|| {
+            new_nitro_cli_failure!(
+                "Invalid CID".to_string(),
+                NitroCliErrorEnum::EnclaveBootFailure
+            )
+        })?;
 
         Ok(enclave_cid)
     }
@@ -360,21 +347,23 @@ impl EnclaveResourceManager {
     pub fn terminate_enclave_error(&mut self, err: &str) {
         let err_msg = format!("{}. Could not terminate the enclave.", err);
         let fd = self.cli_dev._lock._file.as_raw_fd();
-        flock(fd, FlockArg::Unlock).map_err(|e| {
-            error!("{}", e);
-            std::process::exit(1);
-        }).ok();
+        flock(fd, FlockArg::Unlock)
+            .map_err(|e| {
+                error!("{}", e);
+                std::process::exit(1);
+            })
+            .ok();
 
-        let enclave_id = generate_enclave_id(self.slot_id).map_err(|e| {
-                e.add_subaction(err_msg.clone())
-        }).ok_or_exit_with_errno(None);
+        let enclave_id = generate_enclave_id(self.slot_id)
+            .map_err(|e| e.add_subaction(err_msg.clone()))
+            .ok_or_exit_with_errno(None);
 
         eprintln!("{}.", err);
         eprintln!("Terminating the enclave...");
         let terminate_args = TerminateEnclavesArgs { enclave_id };
-        terminate_enclaves_poweruser(terminate_args).map_err(|e| {
-            e.add_subaction(err_msg.clone())
-        }).ok_or_exit_with_errno(None);
+        terminate_enclaves_poweruser(terminate_args)
+            .map_err(|e| e.add_subaction(err_msg.clone()))
+            .ok_or_exit_with_errno(None);
     }
 }
 
@@ -430,35 +419,29 @@ fn write_eif_region(
     while written < mem_reg.mem_size {
         let write_size = std::cmp::min(buf.len(), (mem_reg.mem_size - written) as usize);
 
-        let write_size = eif_file
-            .read(&mut buf[..write_size])
-            .map_err(|err| {
-                new_nitro_cli_failure!(
-                    format!("Failed to read from EIF: {}", err),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?;
+        let write_size = eif_file.read(&mut buf[..write_size]).map_err(|err| {
+            new_nitro_cli_failure!(
+                format!("Failed to read from EIF: {}", err),
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })?;
 
         if write_size == 0 {
             return Ok(());
         }
 
-        dev_mem
-            .write_all(&buf[..write_size])
-            .map_err(|err| {
-                new_nitro_cli_failure!(
-                    format!("Failed to write to mem: {}", err),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?;
-        dev_mem
-            .flush()
-            .map_err(|err| {
-                new_nitro_cli_failure!(
-                    format!("Failed to flush file: {}", err),
-                    NitroCliErrorEnum::UnspecifiedError
-                )
-            })?;
+        dev_mem.write_all(&buf[..write_size]).map_err(|err| {
+            new_nitro_cli_failure!(
+                format!("Failed to write to mem: {}", err),
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })?;
+        dev_mem.flush().map_err(|err| {
+            new_nitro_cli_failure!(
+                format!("Failed to flush file: {}", err),
+                NitroCliErrorEnum::UnspecifiedError
+            )
+        })?;
         written += write_size as u64;
     }
     Ok(())

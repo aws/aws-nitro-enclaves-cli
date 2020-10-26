@@ -5,19 +5,21 @@
 
 use super::cli_dev::*;
 
+use super::poweruser_lib::{
+    console_enclaves_poweruser, describe_enclaves_poweruser, run_enclaves_poweruser,
+    terminate_enclaves_poweruser,
+};
 use super::resource_allocator_driver::nitro_cli_slot_mem_region;
-use super::resource_manager::ResourceAllocator;
 use super::resource_allocator_driver::ResourceAllocatorDriver;
-use super::poweruser_lib::{run_enclaves_poweruser, terminate_enclaves_poweruser, 
-    describe_enclaves_poweruser, console_enclaves_poweruser};
+use super::resource_manager::ResourceAllocator;
 
-use crate::common::commands_parser::{RunEnclavesArgs, TerminateEnclavesArgs, ConsoleArgs};
+use crate::common::commands_parser::{ConsoleArgs, RunEnclavesArgs, TerminateEnclavesArgs};
 use crate::common::{ENCLAVE_READY_VSOCK_PORT, VMADDR_CID_PARENT};
 
+use crate::num_traits::FromPrimitive;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use eif_loader;
 use log::debug;
-use crate::num_traits::FromPrimitive;
 use nix::sys::socket::SockAddr;
 
 use std::fs::OpenOptions;
@@ -30,8 +32,8 @@ use std::io::Seek;
 extern crate num_traits;
 use vsock::VsockListener;
 
+use crate::common::{ExitGracefully, NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::new_nitro_cli_failure;
-use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, ExitGracefully};
 use crate::utils::POLL_TIMEOUT;
 
 pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
@@ -260,79 +262,144 @@ pub fn initialize<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 pub fn match_cmd(args: &ArgMatches) {
     match args.subcommand() {
         ("execute-dev-cmd", Some(args)) => {
-            execute_command(args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            execute_command(args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("wait-ready", Some(args)) => {
-            wait_ready_signal(args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            wait_ready_signal(args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("free-slot", Some(args)) => {
-            free_slot(args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            free_slot(args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("alloc-mem", Some(args)) => {
-            alloc_mem(args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            alloc_mem(args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("alloc-mem-with-file", Some(args)) => {
-            alloc_mem_with_file(args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            alloc_mem_with_file(args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("write-mem", Some(args)) => {
-            write_mem(args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            write_mem(args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("run-enclave-pu", Some(args)) => {
-            let run_args = RunEnclavesArgs::new_with(args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
-        
-            run_enclaves_poweruser(&run_args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            let run_args = RunEnclavesArgs::new_with(args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
+
+            run_enclaves_poweruser(&run_args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("terminate-enclave-pu", Some(args)) => {
-            let terminate_args = TerminateEnclavesArgs::new_with(args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            let terminate_args = TerminateEnclavesArgs::new_with(args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
 
-            terminate_enclaves_poweruser(terminate_args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            terminate_enclaves_poweruser(terminate_args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("describe-enclaves-pu", Some(args)) => {
-            describe_enclaves_poweruser().map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            describe_enclaves_poweruser()
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         ("console-enclaves-pu", Some(args)) => {
-            let console_args = ConsoleArgs::new_with(&args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            let console_args = ConsoleArgs::new_with(&args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
 
-            console_enclaves_poweruser(console_args).map_err(|e| {
-                e.add_subaction(format!("The command failed with following \
-                argmumets {}", args.usage()))
-            }).ok_or_exit_with_errno(None);
+            console_enclaves_poweruser(console_args)
+                .map_err(|e| {
+                    e.add_subaction(format!(
+                        "The command failed with following \
+                argmumets {}",
+                        args.usage()
+                    ))
+                })
+                .ok_or_exit_with_errno(None);
         }
         (&_, _) => {}
     }
@@ -345,131 +412,116 @@ pub fn execute_command(args: &ArgMatches) -> NitroCliResult<()> {
     let cmd_id: u32 = cmd_id.parse().unwrap();
     let cmd_id = NitroEnclavesCmdType::from_u32(cmd_id)
         .unwrap_or_else(|| panic!("Invalid cmd_id \n{}\n", args.usage()));
-    let cmd_body = args
-        .value_of("cmd-body")
-        .ok_or_else(|| {
-            new_nitro_cli_failure!(
-                "Invalid cmd-body".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
+    let cmd_body = args.value_of("cmd-body").ok_or_else(|| {
+        new_nitro_cli_failure!(
+            "Invalid cmd-body".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
     let mut cli = CliDev::new()?;
     cli.enable()?;
     let mut listener = None;
     let reply = match cmd_id {
         NitroEnclavesCmdType::NitroEnclavesEnclaveStart => {
-            let cmd: NitroEnclavesEnclaveStart = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesEnclaveStart = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             let sockaddr = SockAddr::new_vsock(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
-            listener =
-                Some(VsockListener::bind(&sockaddr)
-                    .map_err(|_| {
-                        new_nitro_cli_failure!(
-                            "Enclave boot heartbeat vsock connection - vsock bind error".to_string(),
-                            NitroCliErrorEnum::UnusableConnectionError
-                        )
-                    })?
-                );
+            listener = Some(VsockListener::bind(&sockaddr).map_err(|_| {
+                new_nitro_cli_failure!(
+                    "Enclave boot heartbeat vsock connection - vsock bind error".to_string(),
+                    NitroCliErrorEnum::UnusableConnectionError
+                )
+            })?);
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesGetSlot => {
-            let cmd: NitroEnclavesGetSlot = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesGetSlot = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesEnclaveStop => {
-            let cmd: NitroEnclavesEnclaveStop = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesEnclaveStop = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesSlotAlloc => {
-            let cmd: NitroEnclavesSlotAlloc = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesSlotAlloc = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesSlotFree => {
-            let cmd: NitroEnclavesSlotFree = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesSlotFree = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesSlotAddMem => {
-            let cmd: NitroEnclavesSlotAddMem = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesSlotAddMem = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesSlotAddVcpu => {
-            let cmd: NitroEnclavesSlotAddVcpu = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesSlotAddVcpu = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesSlotCount => {
-            let cmd: NitroEnclavesSlotCount = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesSlotCount = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesNextSlot => {
-            let cmd: NitroEnclavesNextSlot = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesNextSlot = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesSlotInfo => {
-            let cmd: NitroEnclavesSlotInfo = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesSlotInfo = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesSlotAddBulkVcpu => {
-            let cmd: NitroEnclavesSlotAddBulkVcpu = serde_json::from_str(cmd_body)
-                .map_err(|err| {
+            let cmd: NitroEnclavesSlotAddBulkVcpu =
+                serde_json::from_str(cmd_body).map_err(|err| {
                     new_nitro_cli_failure!(
                         format!("Invalid json format for command: {}", err),
                         NitroCliErrorEnum::UnspecifiedError
@@ -478,13 +530,12 @@ pub fn execute_command(args: &ArgMatches) -> NitroCliResult<()> {
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesDestroy => {
-            let cmd: NitroEnclavesDestroy = serde_json::from_str(cmd_body)
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        format!("Invalid json format for command: {}", err),
-                        NitroCliErrorEnum::UnspecifiedError
-                    )
-                })?;
+            let cmd: NitroEnclavesDestroy = serde_json::from_str(cmd_body).map_err(|err| {
+                new_nitro_cli_failure!(
+                    format!("Invalid json format for command: {}", err),
+                    NitroCliErrorEnum::UnspecifiedError
+                )
+            })?;
             cmd.submit(&mut cli)
         }
         NitroEnclavesCmdType::NitroEnclavesMaxCmd => {
@@ -500,8 +551,11 @@ pub fn execute_command(args: &ArgMatches) -> NitroCliResult<()> {
         NitroEnclavesCmdType::NitroEnclavesEnclaveStart => {
             eif_loader::enclave_ready(listener.unwrap(), POLL_TIMEOUT).map_err(|err| {
                 new_nitro_cli_failure!(
-                    format!("Failed to receive 'ready' \
-                    signal from the enclave: {:?}", err),
+                    format!(
+                        "Failed to receive 'ready' \
+                    signal from the enclave: {:?}",
+                        err
+                    ),
                     NitroCliErrorEnum::UnspecifiedError
                 )
             })
@@ -518,20 +572,18 @@ pub fn wait_ready_signal(_args: &ArgMatches) -> NitroCliResult<()> {
 
 pub fn free_slot(args: &ArgMatches) -> NitroCliResult<()> {
     let slot_id = args.value_of("slot-uid").ok_or({
-            new_nitro_cli_failure!(
-                "slot-uid not specified".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
- 
-    let slot_id: u64 = slot_id
-        .parse()
-        .map_err(|err| {
-            new_nitro_cli_failure!(
-                &format!("Invalid slot-uid format: {}", err),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
+        new_nitro_cli_failure!(
+            "slot-uid not specified".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
+
+    let slot_id: u64 = slot_id.parse().map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Invalid slot-uid format: {}", err),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
 
     let mut cli_dev = CliDev::new()?;
 
@@ -544,22 +596,18 @@ pub fn free_slot(args: &ArgMatches) -> NitroCliResult<()> {
 }
 
 pub fn alloc_mem(args: &ArgMatches) -> NitroCliResult<()> {
-    let mem_size = args
-        .value_of("mem-size")
-        .ok_or({
-            new_nitro_cli_failure!(
-                "memory size not specified".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
-    let mem_size: u64 = mem_size
-        .parse()
-        .map_err(|err| {
-            new_nitro_cli_failure!(
-                &format!("Invalid mem-size format: {}", err),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
+    let mem_size = args.value_of("mem-size").ok_or({
+        new_nitro_cli_failure!(
+            "memory size not specified".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
+    let mem_size: u64 = mem_size.parse().map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Invalid mem-size format: {}", err),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
 
     let mut resource_allocator = ResourceAllocator::new(0, mem_size, 1)?;
     let regions = resource_allocator.allocate()?;
@@ -600,61 +648,52 @@ fn fill_region_from_file(
 }
 
 pub fn alloc_mem_with_file(args: &ArgMatches) -> NitroCliResult<()> {
-    let mem_size = args
-        .value_of("mem-size")
-        .ok_or({
-            new_nitro_cli_failure!(
-                "memory size not specified".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
-    let eif_path = args
-        .value_of("eif-path")
-        .ok_or({
-            new_nitro_cli_failure!(
-                "EIF file path not specified".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
-    let eif_offset = args
-        .value_of("eif-offset")
-        .ok_or({
-            new_nitro_cli_failure!(
-                "offset in the EIF file not specified".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
+    let mem_size = args.value_of("mem-size").ok_or({
+        new_nitro_cli_failure!(
+            "memory size not specified".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
+    let eif_path = args.value_of("eif-path").ok_or({
+        new_nitro_cli_failure!(
+            "EIF file path not specified".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
+    let eif_offset = args.value_of("eif-offset").ok_or({
+        new_nitro_cli_failure!(
+            "offset in the EIF file not specified".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
     let should_write = args.is_present("write");
 
-    let mem_size: u64 = mem_size
-        .parse()
-        .map_err(|_| {
-            new_nitro_cli_failure!(
-                "Invalid mem-size format".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
-    let eif_offset: u64 = eif_offset
-        .parse()
-        .map_err(|_| {
-            new_nitro_cli_failure!(
-                "Invalid eif-offset format".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
+    let mem_size: u64 = mem_size.parse().map_err(|_| {
+        new_nitro_cli_failure!(
+            "Invalid mem-size format".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
+    let eif_offset: u64 = eif_offset.parse().map_err(|_| {
+        new_nitro_cli_failure!(
+            "Invalid eif-offset format".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
     let mut new_offset = eif_offset;
     let mut resource_allocator = ResourceAllocator::new(0, mem_size, 1)?;
     let regions = resource_allocator.allocate()?;
 
     for region in regions {
         if should_write {
-            new_offset = fill_region_from_file(&region, eif_path.to_string(), new_offset)
-                .map_err(|err| {
+            new_offset = fill_region_from_file(&region, eif_path.to_string(), new_offset).map_err(
+                |err| {
                     new_nitro_cli_failure!(
                         &format!("fill_region_from_file failed: {}", err),
                         NitroCliErrorEnum::UnspecifiedError
                     )
-                })?;
+                },
+            )?;
         }
         println!(
             "mem_gpa={}\nmem_size={}\nnew_eif_offset={}",
@@ -666,14 +705,12 @@ pub fn alloc_mem_with_file(args: &ArgMatches) -> NitroCliResult<()> {
 }
 
 pub fn write_mem(args: &ArgMatches) -> NitroCliResult<()> {
-    let file_path = args
-        .value_of("file-path")
-        .ok_or({
-            new_nitro_cli_failure!(
-                "file path not specified".to_string(),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
+    let file_path = args.value_of("file-path").ok_or({
+        new_nitro_cli_failure!(
+            "file path not specified".to_string(),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
     let file_offset = args
         .value_of("file-offset")
         .ok_or({
@@ -725,12 +762,11 @@ pub fn write_mem(args: &ArgMatches) -> NitroCliResult<()> {
         mem_size,
     };
 
-    fill_region_from_file(&mem_region, file_path.to_string(), file_offset)
-        .map_err(|err| {
-            new_nitro_cli_failure!(
-                &format!("fill_region_from_file failed: {}", err),
-                NitroCliErrorEnum::UnspecifiedError
-            )
-        })?;
+    fill_region_from_file(&mem_region, file_path.to_string(), file_offset).map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("fill_region_from_file failed: {}", err),
+            NitroCliErrorEnum::UnspecifiedError
+        )
+    })?;
     Ok(())
 }

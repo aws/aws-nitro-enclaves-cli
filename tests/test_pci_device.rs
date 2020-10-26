@@ -6,8 +6,8 @@ use nitro_cli::common::json_output::EnclaveDescribeInfo;
 use nitro_cli::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use nitro_cli::enclave_proc::cpu_info::CpuInfo;
 use nitro_cli::poweruser::cli_dev::*;
-use nitro_cli::poweruser::resource_allocator_driver::ResourceAllocatorDriver;
 use nitro_cli::poweruser::poweruser_lib::get_enclave_describe_info;
+use nitro_cli::poweruser::resource_allocator_driver::ResourceAllocatorDriver;
 
 #[allow(non_upper_case_globals)]
 const MiB: u64 = 1024 * 1024;
@@ -36,9 +36,9 @@ impl NitroEnclaveAllocator {
         };
         if !result.cli_dev.enable()? {
             return Err(NitroCliFailure::new()
-            .add_subaction("Failed to enable the CLI device".to_string())
-            .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-            .set_file_and_line(file!(), line!()));
+                .add_subaction("Failed to enable the CLI device".to_string())
+                .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+                .set_file_and_line(file!(), line!()));
         }
         result.set_default_mem()?;
 
@@ -55,9 +55,9 @@ impl NitroEnclaveAllocator {
             let error = cmd.submit(&mut self.cli_dev);
             if error.is_err() {
                 return Err(NitroCliFailure::new()
-                .add_subaction("Memory allocation failed!".to_string())
-                .set_error_code(NitroCliErrorEnum::UnspecifiedError)
-                .set_file_and_line(file!(), line!()));
+                    .add_subaction("Memory allocation failed!".to_string())
+                    .set_error_code(NitroCliErrorEnum::UnspecifiedError)
+                    .set_file_and_line(file!(), line!()));
             }
         }
 

@@ -7,9 +7,12 @@ This repository contains a collection of tools and commands used for managing th
   2. Install gcc, make, git, llvm-dev, libclang-dev, clang.
 
 ### Driver information
-  The Nitro Enclaves kernel driver available in the 'drivers/virt/nitro_enclaves' directory is similar to the one merged into the Linux kernel mainline ( https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=726eb70e0d34dc4bc4dada71f52bba8ed638431e ) and that is available starting with the v5.10 Linux kernel.
+  The Nitro Enclaves kernel driver in the 'drivers/virt/nitro_enclaves' directory is similar to the one merged into the Linux kernel mainline ( https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=726eb70e0d34dc4bc4dada71f52bba8ed638431e ) and that is available starting with the v5.10 Linux kernel.
 
-  The Nitro Enclaves kernel driver is available in the Amazon Linux 2 v4.14 kernel starting with kernel-4.14.198-152.320.amzn2.
+  The Nitro Enclaves kernel driver is currently available in the following distros kernels:
+
+  - Amazon Linux 2 v4.14 kernel starting with kernel-4.14.198-152.320.amzn2.x86_64
+  - Amazon Linux 2 v5.4 kernel starting with kernel-5.4.68-34.125.amzn2.x86_64
 
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
 

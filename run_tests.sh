@@ -114,6 +114,7 @@ done < <(grep -v '^ *#' < build/test_executables.txt)
 configure_ne_driver
 
 # Run integration tests except the instalation test
-pytest-3 tests/integration/ --ignore tests/integration/test_installation.py || test_failed
+pytest-3 tests/integration/ --ignore tests/integration/test_installation.py \
+	--ignore tests/integration/test_setup.py || test_failed
 
 clean_up_and_exit

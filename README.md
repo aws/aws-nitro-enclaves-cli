@@ -24,12 +24,25 @@ This repository contains a collection of tools and commands used for managing th
   5. [Optional] You could add ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.shenv.sh in you local shell configuration.
   6. You are now ready to go.
 
-### How to install (Repository):
-  1. Install the main Nitro CLI package from the AL2 repository: `sudo amazon-linux-extras install aws-nitro-enclaves-cli`.
-  2. [Optional] In case you want to build EIF images, install additional Nitro Enclaves resources: `sudo yum install -y aws-nitro-enclaves-cli-devel`.
-  3. Reserve resources (memory and CPUs) for future enclaves, by editing '/etc/nitro_enclaves/allocator.conf' (or use the default configuration - 512MB and 2 CPUs) and then starting the resource reservation service: `sudo systemctl start ne-allocator.service`.
-  4. [Optional] If you want your resources configuration to persist across reboots, enable the service: `sudo systemctl enable config-enclave-resources.service`.
+### How to install (Amazon Linux repository):
+#### Running enclaves
+  1. Install the main Nitro CLI package from the AL2 repository: `sudo
+     amazon-linux-extras install aws-nitro-enclaves-cli`.
+  2. Add yourself to the `ne` group: `sudo usermod -aG ne $USER`. You will
+     have to log out and back in for this change to take effect.
+  3. Reserve resources (memory and CPUs) for future enclaves, by editing
+     `/etc/nitro_enclaves/allocator.yaml` (or use the default configuration -
+512MB and 2 CPUs) and then starting the resource reservation service: `sudo
+systemctl start nitro-enclaves-allocator.service`.
+  4. [Recommended] If you want your resources configuration to persist across
+     reboots, enable the service: `sudo systemctl enable
+nitro-enclaves-allocator.service`.
   5. You are now ready to go.
+
+#### Building enclave images (optional)
+  1. In case you want to build EIF images, install additional Nitro Enclaves
+     resources: `sudo yum install -y aws-nitro-enclaves-cli-devel`.
+  2. Add yourself to the `docker` group: `sudo usermod -aG docker $USER`
 
 ### How to use nitro-cli
   The user guide for the Nitro Enclaves CLI can be found at https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-cli.html.

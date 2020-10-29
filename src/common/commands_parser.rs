@@ -39,6 +39,7 @@ impl RunEnclavesArgs {
                     &format!("Failed to open config file: {:?}", err),
                     NitroCliErrorEnum::FileOperationFailure
                 )
+                .add_info(vec![config_file, "Open"])
             })?;
 
             let json: RunEnclavesArgs = serde_json::from_reader(file).map_err(|err| {

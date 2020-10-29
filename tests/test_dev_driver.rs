@@ -62,6 +62,7 @@ impl NitroEnclavesDeviceDriver {
                     .add_subaction(format!("Could not open {}: {}", NE_DEVICE_PATH, e))
                     .set_error_code(NitroCliErrorEnum::FileOperationFailure)
                     .set_file_and_line(file!(), line!())
+                    .add_info(vec![NE_DEVICE_PATH, "Open"])
             })?,
         })
     }

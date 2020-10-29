@@ -29,6 +29,7 @@ pub fn run_enclaves(
             &format!("Failed to open the EIF file: {:?}", e),
             NitroCliErrorEnum::FileOperationFailure
         )
+        .add_info(vec![&args.eif_path, "Open"])
     })?;
 
     let cpu_ids = CpuInfo::new()

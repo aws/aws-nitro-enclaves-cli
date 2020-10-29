@@ -121,6 +121,12 @@ impl EnclaveProcSock {
                     ),
                     NitroCliErrorEnum::FileOperationFailure
                 )
+                .add_info(vec![
+                    self.socket_path
+                        .to_str()
+                        .unwrap_or("Invalid unicode socket file name"),
+                    "Remove",
+                ])
             })?;
         }
 

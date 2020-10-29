@@ -62,6 +62,9 @@ const NE_DEFAULT_MEMORY_REGION: u64 = 0;
 /// Magic number for Nitro Enclave IOCTL codes.
 const NE_MAGIC: u64 = 0xAE;
 
+/// Path corresponding to the Nitro Enclaves device file.
+const NE_DEV_FILEPATH: &str = "/dev/nitro_enclaves";
+
 /// IOCTL code for `NE_CREATE_VM`.
 pub const NE_CREATE_VM: u64 = nix::request_code_read!(NE_MAGIC, 0x20, size_of::<u64>()) as _;
 
@@ -498,12 +501,13 @@ impl EnclaveHandle {
         let dev_file = OpenOptions::new()
             .read(true)
             .write(true)
-            .open("/dev/nitro_enclaves")
+            .open(NE_DEV_FILEPATH)
             .map_err(|e| {
                 new_nitro_cli_failure!(
                     &format!("Failed to open device file: {:?}", e),
                     NitroCliErrorEnum::FileOperationFailure
                 )
+                .add_info(vec![NE_DEV_FILEPATH, "Open"])
             })?;
 
         let mut slot_uid: u64 = 0;

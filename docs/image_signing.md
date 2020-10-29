@@ -47,20 +47,17 @@ The PCR Signature contains the PEM-formatted signing certificate
 and the serialized `COSESign1` object generated using the byte array
 formed from the PCR's index and its value as payload and the
 private key as signing key. The implementation of `COSESign1`
-and more details can be found in the [rust-cose](
-https://github.com/aws/aws-nitro-enclaves-cose) crate.
+and more details can be found in the [rust-cose](../rust-cose) crate.
 
 ### How to Verify the Signature
 
 1. Get the signature section from the enclave image. The `EifHeader`
 contains an array with section offsets and each `EifSectionHeader`
 contains an `EifSectionType`. You can find more details about these
-headers in the [eif-defs](https://github.com/aws/aws-nitro-enclaves-image-format)
-crate.
+headers in the [eif-defs](../eif_defs) crate.
 
 2. For each PCR Signature use the public key from the signing
 certificate to decrypt the payload from the `COSESign1` object
-(this can be done using the [rust-cose](
-https://github.com/aws/aws-nitro-enclaves-cose) crate) and
+(this can be done using the [rust-cose](../rust-cose) crate) and
 check that the PCR's value is the same as the one computed by
 Nitro CLI.

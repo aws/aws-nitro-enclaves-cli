@@ -323,7 +323,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
 /// Returns a link with more detailed information regarding a specific error.
 pub fn construct_help_link(error_code_str: String) -> String {
     format!(
-        "http://enclaves.aws.amazon.com/nitro-cli/errors#{}",
+        "https://docs.aws.amazon.com/enclaves/latest/user/cli-errors.html#{}",
         error_code_str
     )
 }

@@ -179,6 +179,12 @@ fn open_log_file(file_path: &Path) -> NitroCliResult<File> {
                 &format!("Failed to open log file: {:?}", e),
                 NitroCliErrorEnum::FileOperationFailure
             )
+            .add_info(vec![
+                file_path
+                    .to_str()
+                    .unwrap_or("Invalid unicode log file name"),
+                "Open",
+            ])
         })?;
 
     let log_file_uid = Uid::from_raw(
@@ -188,6 +194,12 @@ fn open_log_file(file_path: &Path) -> NitroCliResult<File> {
                     &format!("Failed to get log file metadata: {:?}", e),
                     NitroCliErrorEnum::FileOperationFailure
                 )
+                .add_info(vec![
+                    file_path
+                        .to_str()
+                        .unwrap_or("Invalid unicode log file name"),
+                    "Get metadata",
+                ])
             })?
             .uid(),
     );

@@ -80,11 +80,13 @@ pub fn build_from_docker(
 ) -> NitroCliResult<(File, BTreeMap<String, String>)> {
     let blobs_path =
         blobs_path().map_err(|e| e.add_subaction("Failed to retrieve blobs path".to_string()))?;
-    let mut cmdline_file = File::open(format!("{}/cmdline", blobs_path)).map_err(|e| {
+    let cmdline_file_path = format!("{}/cmdline", blobs_path);
+    let mut cmdline_file = File::open(cmdline_file_path.clone()).map_err(|e| {
         new_nitro_cli_failure!(
             &format!("Could not open kernel command line file: {:?}", e),
             NitroCliErrorEnum::FileOperationFailure
         )
+        .add_info(vec![&cmdline_file_path, "Open"])
     })?;
 
     let mut cmdline = String::new();
@@ -93,6 +95,7 @@ pub fn build_from_docker(
             &format!("Failed to read kernel command line: {:?}", e),
             NitroCliErrorEnum::FileOperationFailure
         )
+        .add_info(vec![&cmdline_file_path, "Read"])
     })?;
 
     let mut file_output = OpenOptions::new()
@@ -106,6 +109,7 @@ pub fn build_from_docker(
                 &format!("Could not create output file: {:?}", e),
                 NitroCliErrorEnum::FileOperationFailure
             )
+            .add_info(vec![output_path, "Open"])
         })?;
 
     let mut docker2eif = enclave_build::Docker2Eif::new(
@@ -190,6 +194,7 @@ fn artifacts_path() -> NitroCliResult<String> {
                 &format!("Could not create artifacts path {}: {:?}", artifacts, e),
                 NitroCliErrorEnum::FileOperationFailure
             )
+            .add_info(vec![&artifacts, "Create"])
         })?;
         Ok(artifacts)
     } else if let Ok(home) = std::env::var("HOME") {
@@ -199,6 +204,7 @@ fn artifacts_path() -> NitroCliResult<String> {
                 &format!("Could not create artifacts path {}: {:?}", artifacts, e),
                 NitroCliErrorEnum::FileOperationFailure
             )
+            .add_info(vec![&artifacts, "Create"])
         })?;
         Ok(artifacts)
     } else {
@@ -247,6 +253,13 @@ pub fn terminate_all_enclaves() -> NitroCliResult<()> {
             &format!("Error while accessing sockets directory: {:?}", e),
             NitroCliErrorEnum::FileOperationFailure
         )
+        .add_info(vec![
+            sockets_dir
+                .as_path()
+                .to_str()
+                .unwrap_or("Invalid unicode directory name"),
+            "Read",
+        ])
     })?;
 
     let mut err_socket_files: usize = 0;

@@ -153,6 +153,16 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         }
         "E19" => {
             ret.push_str("File operation failure. Such error appears when the system fails to perform the requested file operations, such as opening the EIF file when launching an enclave, or seeking to a specific offset in the EIF file, or writing to the log file.");
+            if additional_info.len() >= 2 {
+                ret.push_str(
+                    format!(
+                        "\nFile: '{}', failing operation: '{}'.",
+                        additional_info.get(0).unwrap_or(&info_placeholder),
+                        additional_info.get(1).unwrap_or(&info_placeholder),
+                    )
+                    .as_str(),
+                );
+            }
         }
         "E20" => {
             ret.push_str(

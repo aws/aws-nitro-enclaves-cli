@@ -79,6 +79,7 @@ pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
                 &format!("Failed to open file: {:?}", e),
                 NitroCliErrorEnum::FileOperationFailure
             )
+            .add_info(vec![file_path, "Open"])
         })?;
         let mut contents = String::new();
         file.read_to_string(&mut contents).map_err(|e| {
@@ -86,6 +87,7 @@ pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
                 &format!("Failed to read from file: {:?}", e),
                 NitroCliErrorEnum::FileOperationFailure
             )
+            .add_info(vec![file_path, "Read"])
         })?;
         contents.retain(|c| !c.is_whitespace());
         return Ok(format!("{}-enc{:x}", contents, slot_id));

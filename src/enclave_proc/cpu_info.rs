@@ -11,6 +11,9 @@ use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::new_nitro_cli_failure;
 
+/// Path corresponding to the NE CPU pool.
+const POOL_FILENAME: &str = "/sys/module/nitro_enclaves/parameters/ne_cpus";
+
 /// The CPU configuration requested by the user.
 #[derive(Clone, PartialEq)]
 pub enum EnclaveCpuConfig {
@@ -157,13 +160,13 @@ impl CpuInfo {
 
     /// Parse the CPU pool and build the list of off-line CPUs.
     fn get_cpu_info() -> NitroCliResult<Vec<u32>> {
-        let pool_file =
-            File::open("/sys/module/nitro_enclaves/parameters/ne_cpus").map_err(|e| {
-                new_nitro_cli_failure!(
-                    &format!("Failed to open CPU pool file: {}", e),
-                    NitroCliErrorEnum::FileOperationFailure
-                )
-            })?;
+        let pool_file = File::open(POOL_FILENAME).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to open CPU pool file: {}", e),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+            .add_info(vec![POOL_FILENAME, "Open"])
+        })?;
         let file_reader = BufReader::new(pool_file);
         let mut result: Vec<u32> = Vec::new();
 
@@ -173,6 +176,7 @@ impl CpuInfo {
                     &format!("Failed to read line from CPU pool file: {}", e),
                     NitroCliErrorEnum::FileOperationFailure
                 )
+                .add_info(vec![POOL_FILENAME, "Read"])
             })?;
             if line_str.trim().is_empty() {
                 continue;

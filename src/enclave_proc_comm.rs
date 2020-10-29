@@ -107,6 +107,7 @@ pub fn enclave_proc_connect_to_all() -> NitroCliResult<Vec<UnixStream>> {
                                     &format!("Failed to delete socket: {:?}", e),
                                     NitroCliErrorEnum::FileOperationFailure
                                 )
+                                .add_info(vec![path_str, "Remove"])
                             });
                         }
                     }

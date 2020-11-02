@@ -7,27 +7,27 @@ use log::debug;
 use std::fs::File;
 
 use crate::common::commands_parser::RunEnclavesArgs;
-use crate::common::construct_error_message;
 use crate::common::json_output::EnclaveTerminateInfo;
-use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
+use crate::common::BacktraceConstructor;
+use crate::common::{EnclaveErrorEnum, EnclaveFailure, EnclaveResult};
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::CpuInfo;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
 use crate::enclave_proc::utils::get_enclave_describe_info;
-use crate::new_nitro_cli_failure;
+use crate::new_enclave_failure;
 
 /// Launch an enclave with the specified arguments and provide the launch status through the given connection.
 pub fn run_enclaves(
     args: &RunEnclavesArgs,
     connection: Option<&Connection>,
-) -> NitroCliResult<EnclaveManager> {
+) -> EnclaveResult<EnclaveManager> {
     debug!("run_enclaves");
 
     let eif_file = File::open(&args.eif_path).map_err(|e| {
-        new_nitro_cli_failure!(
+        new_enclave_failure!(
             &format!("Failed to open the EIF file: {:?}", e),
-            NitroCliErrorEnum::FileOperationFailure
+            EnclaveErrorEnum::FileOperationFailure
         )
     })?;
 
@@ -59,7 +59,7 @@ pub fn run_enclaves(
 pub fn terminate_enclaves(
     enclave_manager: &mut EnclaveManager,
     connection: Option<&Connection>,
-) -> NitroCliResult<()> {
+) -> EnclaveResult<()> {
     let enclave_id = enclave_manager.enclave_id.clone();
 
     debug!("terminate_enclaves");
@@ -72,7 +72,7 @@ pub fn terminate_enclaves(
             format!(
                 "Warning: Failed to stop enclave {}\nError message: {:?}",
                 enclave_manager.enclave_id,
-                construct_error_message(&error_info).as_str()
+                error_info.construct_backtrace().as_str()
             )
             .as_str(),
         )?;
@@ -94,9 +94,9 @@ pub fn terminate_enclaves(
         connection,
         serde_json::to_string_pretty(&EnclaveTerminateInfo::new(enclave_id, true))
             .map_err(|err| {
-                new_nitro_cli_failure!(
+                new_enclave_failure!(
                     &format!("Failed to display enclave termination data: {:?}", err),
-                    NitroCliErrorEnum::SerdeError
+                    EnclaveErrorEnum::SerdeError
                 )
             })?
             .as_str(),
@@ -107,7 +107,7 @@ pub fn terminate_enclaves(
 pub fn describe_enclaves(
     enclave_manager: &EnclaveManager,
     connection: &Connection,
-) -> NitroCliResult<()> {
+) -> EnclaveResult<()> {
     debug!("describe_enclaves");
 
     let info = get_enclave_describe_info(enclave_manager)
@@ -115,9 +115,9 @@ pub fn describe_enclaves(
     connection.println(
         serde_json::to_string_pretty(&info)
             .map_err(|err| {
-                new_nitro_cli_failure!(
+                new_enclave_failure!(
                     &format!("Failed to display enclave describe data: {:?}", err),
-                    NitroCliErrorEnum::SerdeError
+                    EnclaveErrorEnum::SerdeError
                 )
             })?
             .as_str(),

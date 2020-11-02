@@ -312,6 +312,17 @@ version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "enclave_api"
+version = "0.1.0"
+dependencies = [
+ "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.74 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nix 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.50 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "enclave_build"
 version = "0.1.0"
 dependencies = [
@@ -828,6 +839,7 @@ dependencies = [
  "chrono 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "eif_loader 0.1.0",
+ "enclave_api 0.1.0",
  "enclave_build 0.1.0",
  "flexi_logger 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "inotify 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",

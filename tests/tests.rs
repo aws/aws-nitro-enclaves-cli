@@ -5,14 +5,10 @@
 #[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
-    use nitro_cli::common::commands_parser::{
-        BuildEnclavesArgs, RunEnclavesArgs, TerminateEnclavesArgs,
-    };
-    use nitro_cli::common::json_output::EnclaveDescribeInfo;
-    use nitro_cli::enclave_proc::commands::{describe_enclaves, run_enclaves, terminate_enclaves};
-    use nitro_cli::enclave_proc::utils::{
-        flags_to_string, generate_enclave_id, get_enclave_describe_info,
-    };
+    use enclave_api::common::json_output::EnclaveDescribeInfo;
+    use enclave_api::enclave_proc::resource_manager::EnclaveState;
+    use enclave_api::{Enclave, EnclaveConf, EnclaveCpuConfig, EnclaveFlags};
+    use nitro_cli::commands_parser::{BuildEnclavesArgs, RunEnclavesArgs, TerminateEnclavesArgs};
     use nitro_cli::utils::Console;
     use nitro_cli::{build_enclaves, build_from_docker, enclave_console};
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
@@ -260,15 +256,14 @@ mod tests {
         )
         .expect("Docker build failed");
 
-        let args = RunEnclavesArgs {
-            enclave_cid: None,
+        let conf = EnclaveConf {
+            cid: None,
             eif_path: build_args.output,
-            cpu_ids: None,
-            cpu_count: Some(2),
-            memory_mib: 64,
-            debug_mode: Some(true),
+            cpu_conf: EnclaveCpuConfig::Count(2),
+            mem_size: 256,
+            flags: EnclaveFlags::DEBUG_MODE,
         };
-        run_describe_terminate(args);
+        run_describe_terminate(conf);
     }
 
     #[test]
@@ -298,15 +293,14 @@ mod tests {
         )
         .expect("Docker build failed");
 
-        let args = RunEnclavesArgs {
-            enclave_cid: None,
+        let conf = EnclaveConf {
+            cid: None,
             eif_path: build_args.output,
-            cpu_ids: None,
-            cpu_count: Some(2),
-            memory_mib: 256,
-            debug_mode: Some(true),
+            cpu_conf: EnclaveCpuConfig::Count(2),
+            mem_size: 256,
+            flags: EnclaveFlags::DEBUG_MODE,
         };
-        run_describe_terminate(args);
+        run_describe_terminate(conf);
     }
 
     #[test]
@@ -331,34 +325,26 @@ mod tests {
         )
         .expect("Docker build failed");
 
-        let args = RunEnclavesArgs {
-            enclave_cid: None,
+        let conf = EnclaveConf {
+            cid: None,
             eif_path: build_args.output,
-            cpu_ids: None,
-            cpu_count: Some(2),
-            memory_mib: 1024,
-            debug_mode: Some(true),
+            cpu_conf: EnclaveCpuConfig::Count(2),
+            mem_size: 1024,
+            flags: EnclaveFlags::DEBUG_MODE,
         };
-        run_describe_terminate(args);
+        run_describe_terminate(conf);
     }
 
-    fn run_describe_terminate(args: RunEnclavesArgs) {
+    fn run_describe_terminate(conf: EnclaveConf) {
         setup_env();
-        let req_enclave_cid = args.enclave_cid.clone();
-        let req_mem_size = args.memory_mib.clone();
-        let req_nr_cpus: u64 = args.cpu_count.unwrap().try_into().unwrap();
-        let debug_mode = args.debug_mode.clone();
-        let mut enclave_manager = run_enclaves(&args, None).expect("Run enclaves failed");
-        let enclave_cid = enclave_manager.get_console_resources().unwrap();
-        if let Some(req_enclave_cid) = req_enclave_cid {
-            assert_eq!(req_enclave_cid, enclave_cid);
+        let enclave = Enclave::run(conf.clone()).expect("Running enclave failed");
+        if let Some(req_enclave_cid) = conf.cid {
+            assert_eq!(req_enclave_cid, enclave.get_enclave_cid());
         }
-
-        let cid_copy = enclave_cid;
 
         let console = Console::new_nonblocking(
             VMADDR_CID_HYPERVISOR,
-            u32::try_from(cid_copy).unwrap() + CID_TO_CONSOLE_PORT_OFFSET,
+            u32::try_from(enclave.get_enclave_cid()).unwrap() + CID_TO_CONSOLE_PORT_OFFSET,
         )
         .expect("Failed to connect to the console");
         let mut buffer: Vec<u8> = Vec::new();
@@ -369,31 +355,32 @@ mod tests {
 
         let contents = String::from_utf8(buffer).unwrap();
         let boot = contents.contains("nsm: loading out-of-tree module");
-
         assert_eq!(boot, true);
 
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
-        let replies: Vec<EnclaveDescribeInfo> = vec![info];
-        let reply = &replies[0];
-        let flags = &reply.flags;
-
-        assert_eq!({ reply.enclave_cid }, enclave_cid);
-        assert_eq!(reply.memory_mib, req_mem_size);
-        assert_eq!({ reply.cpu_count }, req_nr_cpus);
-        assert_eq!(reply.state, "RUNNING");
-        match debug_mode {
-            Some(true) => assert_eq!(flags, "DEBUG_MODE"),
-            _ => assert_eq!(flags, "NONE"),
+        let mut info = Enclave::describe(enclave.get_enclave_id().to_string())
+            .expect("Describe enclaves failed");
+        if let Some(conf_cid) = conf.cid {
+            assert_eq!(info.get_enclave_cid(), conf_cid);
+        }
+        assert!(info.get_memory_size() >= conf.mem_size);
+        match conf.cpu_conf {
+            EnclaveCpuConfig::List(v) => assert_eq!(
+                info.get_cpu_ids()
+                    .iter()
+                    .zip(v.iter())
+                    .filter(|&(a, b)| a == b)
+                    .count(),
+                v.len()
+            ),
+            EnclaveCpuConfig::Count(n) => assert_eq!(info.get_cpu_count(), n as u64),
         };
-        let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");
+        if let EnclaveState::Running = info.get_state() {
+        } else {
+            panic!("Enclave not running.");
+        }
+        assert_eq!(info.get_flags(), conf.flags);
 
-        terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
-
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
-
-        assert_eq!(info.enclave_cid, 0);
-        assert_eq!(info.cpu_count, 0);
-        assert_eq!(info.memory_mib, 0);
+        info.terminate().expect("Terminate enclaves failed");
     }
 
     #[test]
@@ -418,16 +405,15 @@ mod tests {
         )
         .expect("Docker build failed");
 
-        let run_args = RunEnclavesArgs {
-            enclave_cid: None,
+        let conf = EnclaveConf {
+            cid: None,
             eif_path: build_args.output,
-            cpu_ids: None,
-            cpu_count: Some(2),
-            memory_mib: 128,
-            debug_mode: Some(true),
+            cpu_conf: EnclaveCpuConfig::Count(2),
+            mem_size: 128,
+            flags: EnclaveFlags::DEBUG_MODE,
         };
 
-        run_describe_terminate(run_args);
+        run_describe_terminate(conf);
     }
 
     #[test]
@@ -452,25 +438,21 @@ mod tests {
         )
         .expect("Docker build failed");
 
-        let run_args = RunEnclavesArgs {
-            enclave_cid: None,
+        let conf = EnclaveConf {
+            cid: None,
             eif_path: build_args.output,
-            cpu_ids: None,
-            cpu_count: Some(2),
-            memory_mib: 128,
-            debug_mode: Some(false),
+            cpu_conf: EnclaveCpuConfig::Count(2),
+            mem_size: 128,
+            flags: EnclaveFlags::NONE,
         };
 
-        let mut enclave_manager = run_enclaves(&run_args, None).expect("Run enclaves failed");
-        let enclave_cid = enclave_manager.get_console_resources().unwrap();
+        let mut enclave = Enclave::run(conf.clone()).expect("Run enclave failed");
+        let enclave_cid = enclave.get_enclave_cid();
 
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
-        let replies: Vec<EnclaveDescribeInfo> = vec![info];
-        let _reply = &replies[0];
-
+        let _info = Enclave::describe(enclave.get_enclave_id()).expect("Describe enclave failed");
         assert_eq!(enclave_console(enclave_cid).is_err(), true);
 
-        terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
+        enclave.terminate().expect("Terminate enclaves failed");
     }
 
     #[test]
@@ -495,21 +477,18 @@ mod tests {
         )
         .expect("Docker build failed");
 
-        let run_args = RunEnclavesArgs {
-            enclave_cid: None,
+        let conf = EnclaveConf {
+            cid: None,
             eif_path: build_args.output,
-            cpu_ids: None,
-            cpu_count: Some(2),
-            memory_mib: 128,
-            debug_mode: Some(true),
+            cpu_conf: EnclaveCpuConfig::Count(2),
+            mem_size: 128,
+            flags: EnclaveFlags::DEBUG_MODE,
         };
 
-        let mut enclave_manager = run_enclaves(&run_args, None).expect("Run enclaves failed");
-        let enclave_cid = enclave_manager.get_console_resources().unwrap();
+        let mut enclave = Enclave::run(conf.clone()).expect("Run enclave failed");
+        let enclave_cid = enclave.get_enclave_cid();
 
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
-        let replies: Vec<EnclaveDescribeInfo> = vec![info];
-        let _reply = &replies[0];
+        let _info = Enclave::describe(enclave.get_enclave_id()).expect("Describe enclave failed");
 
         for _ in 0..3 {
             let console = Console::new(
@@ -523,7 +502,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
 
-        terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
+        enclave.terminate().expect("Terminate enclaves failed");
     }
 
     #[test]

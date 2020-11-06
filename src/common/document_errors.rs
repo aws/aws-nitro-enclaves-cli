@@ -177,7 +177,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         "E21" => {
             ret.push_str(
                 format!(
-                    "No such CPU available in the pool. User provided `{}` contains CPU {}, which is not available in the pool.",
+                    "No such CPU available in the pool. User provided `{}` contains CPU {}, which is not available in the pool.\nYou can add a specific CPU to the CPU pool by editing the `cpu_pool` value from '/etc/nitro_enclaves/allocator.yaml' and then enable the nitro-enclaves-allocator.service.",
                     additional_info.get(0).unwrap_or(&info_placeholder),
                     additional_info.get(1).unwrap_or(&info_placeholder),
                 ).as_str(),
@@ -186,7 +186,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         "E22" => {
             ret.push_str(
                 format!(
-                    "Insufficient CPUs available in the pool. User provided `{}` is {}, which is more than the configured CPU pool size",
+                    "Insufficient CPUs available in the pool. User provided `{}` is {}, which is more than the configured CPU pool size.\nYou can increase the CPU pool size by editing the `cpu_count` value from '/etc/nitro_enclaves/allocator.yaml' and then enable the nitro-enclaves-allocator.service.",
                     additional_info.get(0).unwrap_or(&info_placeholder),
                     additional_info.get(1).unwrap_or(&info_placeholder),
                 ).as_str(),
@@ -225,7 +225,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         "E27" => {
             ret.push_str(
                 format!(
-                    "Insufficient memory available. User provided `{}` is {} MB, which is more than the available hugepage memory.",
+                    "Insufficient memory available. User provided `{}` is {} MB, which is more than the available hugepage memory.\nYou can increase the available memory by editing the `memory_mib` value from '/etc/nitro_enclaves/allocator.yaml' and then enable the nitro-enclaves-allocator.service.",
                     additional_info.get(0).unwrap_or(&info_placeholder),
                     additional_info.get(1).unwrap_or(&info_placeholder)
                 ).as_str(),

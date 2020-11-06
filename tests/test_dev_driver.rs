@@ -300,6 +300,14 @@ mod test_dev_driver {
         ));
         assert_eq!(result.is_err(), true);
 
+        // Add wrong memory region with address out of range.
+        let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
+            0,
+            region.mem_addr() + region.mem_size(),
+            region.mem_size(),
+        ));
+        assert_eq!(result.is_err(), true);
+
         let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
         check_dmesg
             .record_current_line()
@@ -370,6 +378,37 @@ mod test_dev_driver {
         }
 
         check_dmesg.expect_no_changes().unwrap();
+
+        // Clear the enclave.
+        drop(enclave);
+
+        let mut enclave = driver.create_enclave().unwrap();
+
+        check_dmesg
+            .record_current_line()
+            .expect("Failed to record current line");
+
+        // Add an auto-chosen cpu from the pool.
+        let result = enclave.add_cpu(0);
+        assert_eq!(result.is_err(), false);
+
+        check_dmesg.expect_no_changes().unwrap();
+
+        check_dmesg
+            .record_current_line()
+            .expect("Failed to record current line");
+
+        // Add all remaining auto-chosen cpus.
+        for _i in 0..candidates.len() {
+            let result = enclave.add_cpu(0);
+            assert_eq!(result.is_err(), false);
+        }
+
+        check_dmesg.expect_no_changes().unwrap();
+
+        // Add one more cpu than the maximum available in the pool.
+        let result = enclave.add_cpu(0);
+        assert_eq!(result.is_err(), true);
     }
 
     #[test]

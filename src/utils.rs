@@ -229,3 +229,17 @@ fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
         )),
     }
 }
+
+/// Computes the ceil of `lhs / rhs`. Used for reporting the lower
+/// limit of enclave memory based on the EIF file size.
+pub fn ceil_div(lhs: u64, rhs: u64) -> u64 {
+    if rhs == 0 {
+        return std::u64::MAX;
+    }
+
+    lhs / rhs
+        + match lhs % rhs {
+            0 => 0,
+            _ => 1,
+        }
+}

@@ -202,14 +202,13 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
             ret.push_str("No such hugepage flag error. Such error appears when the enclave process attempts to use an invalid hugepage size (size other than the known hugepage sizes) for initializing the enclave memory.");
         }
         "E26" => {
-            if additional_info.len() >= 4 {
+            if additional_info.len() >= 3 {
                 ret.push_str(
                     format!(
-                        "Insufficient memory requested. User provided `{}` is {} MB, but `{}` is larger ({} MB)",
+                        "Insufficient memory requested. User provided `{}` is {} MB, but based on the EIF file size, the minimum memory should be {} MB",
                         additional_info.get(0).unwrap_or(&info_placeholder),
                         additional_info.get(1).unwrap_or(&info_placeholder),
-                        additional_info.get(2).unwrap_or(&info_placeholder),
-                        additional_info.get(3).unwrap_or(&info_placeholder)
+                        additional_info.get(2).unwrap_or(&info_placeholder)
                     ).as_str(),
                 );
             } else {

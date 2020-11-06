@@ -30,8 +30,8 @@ mod tests {
 
     const SAMPLE_DOCKER: &str =
         "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample";
-    const ENCLAVE_SDK_DOCKER: &str =
-        "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:enclave-sdk";
+    const COMMAND_EXECUTER_DOCKER: &str =
+        "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:command-executer";
 
     pub const MAX_BOOT_TIMEOUT_SEC: u64 = 9;
 
@@ -121,12 +121,12 @@ mod tests {
     }
 
     #[test]
-    fn build_enclaves_enclave_sdk() {
+    fn build_enclaves_command_executer() {
         let dir = tempdir().unwrap();
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: ENCLAVE_SDK_DOCKER.to_string(),
+            docker_uri: COMMAND_EXECUTER_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
@@ -144,7 +144,7 @@ mod tests {
         .1;
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "92c58dd8603a5fc57493c0cf78d726840e3e3dc728444e244f02e03ba5fa353d7cab2b7aeaa8627d26e7464808d864fd"
+            "064a6a5fc90aebcbe195678bb9c332df7b3a50449826e5aff990f75a51348669cfa69850e88ac33e28be37cf9be1b17c"
         );
         assert_eq!(
             measurements.get("PCR1").unwrap(),
@@ -152,7 +152,7 @@ mod tests {
         );
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "bd60ceba51d463a519545688123a91fd88b798405034b1dae256bfc3559d9e48b3be63b073ebcb9e0aa506235774d514"
+            "6230ddd55a64440e2dcca604961e0457bd4de358fd719269c7c3081ced00dc4b2abf0df5248d84a778873425ed7b7797"
         );
     }
 
@@ -310,12 +310,12 @@ mod tests {
     }
 
     #[test]
-    fn run_describe_terminate_enclave_sdk_docker_image() {
+    fn run_describe_terminate_command_executer_docker_image() {
         let dir = tempdir().unwrap();
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let build_args = BuildEnclavesArgs {
-            docker_uri: ENCLAVE_SDK_DOCKER.to_string(),
+            docker_uri: COMMAND_EXECUTER_DOCKER.to_string(),
             docker_dir: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
@@ -336,7 +336,7 @@ mod tests {
             eif_path: build_args.output,
             cpu_ids: None,
             cpu_count: Some(2),
-            memory_mib: 1024,
+            memory_mib: 2046,
             debug_mode: Some(true),
         };
         run_describe_terminate(args);
@@ -536,10 +536,10 @@ mod tests {
     #[test]
     fn run_describe_terminate_loop() {
         for _ in 0..3 {
-            run_describe_terminate_enclave_sdk_docker_image();
+            run_describe_terminate_command_executer_docker_image();
             run_describe_terminate_simple_docker_image();
             run_describe_terminate_signed_enclave_image();
-            run_describe_terminate_enclave_sdk_docker_image();
+            run_describe_terminate_command_executer_docker_image();
             run_describe_terminate_signed_enclave_image();
         }
     }

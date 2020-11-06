@@ -37,6 +37,7 @@ use crate::enclave_proc::cpu_info::EnclaveCpuConfig;
 use crate::enclave_proc::utils::get_run_enclaves_info;
 use crate::enclave_proc::utils::{GiB, MiB};
 use crate::new_nitro_cli_failure;
+use crate::utils::ceil_div;
 
 /// CamelCase alias for the bindgen generated driver struct (ne_enclave_start_info).
 pub type EnclaveStartInfo = ne_enclave_start_info;
@@ -52,6 +53,9 @@ type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u64, EnclaveState);
 
 /// The bit indicating if an enclave has been launched in debug mode.
 pub const NE_ENCLAVE_DEBUG_MODE: u64 = 0x1;
+
+/// Constant number used for computing the lower memory limit.
+const ENCLAVE_MEMORY_EIF_SIZE_RATIO: u64 = 4;
 
 /// Enclave Image Format (EIF) flag.
 const NE_EIF_IMAGE: u64 = 0x01;
@@ -481,19 +485,20 @@ impl EnclaveHandle {
                 )
             })?
             .len();
-        if eif_size > requested_mem {
+        if ENCLAVE_MEMORY_EIF_SIZE_RATIO * eif_size > requested_mem {
             return Err(new_nitro_cli_failure!(
                 &format!(
-                    "At least {} MiB must be allocated (which is the EIF file size)",
-                    eif_size >> 20
+                    "At least {} MB must be allocated (which is {} times the EIF file size)",
+                    ceil_div(ceil_div(eif_size, 1024), 1024) * ENCLAVE_MEMORY_EIF_SIZE_RATIO,
+                    ENCLAVE_MEMORY_EIF_SIZE_RATIO
                 ),
                 NitroCliErrorEnum::InsufficientMemoryRequested
             )
             .add_info(vec![
                 "memory",
                 &memory_mib.to_string(),
-                "EIF size",
-                &(eif_size >> 20).to_string(),
+                &(ceil_div(ceil_div(eif_size, 1024), 1024) * ENCLAVE_MEMORY_EIF_SIZE_RATIO)
+                    .to_string(),
             ]));
         }
 

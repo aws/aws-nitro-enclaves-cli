@@ -142,6 +142,25 @@ function configure_cpu_pool {
     print "Done."
 }
 
+# Identify all CPU IDs that have been off-lined for enclave use.
+function get_enclave_cpus {
+    [ -f "$CPU_POOL_FILE" ] || return
+
+    # Split the CPU configuration into CPU groups.
+    IFS=',' read -r -a cpu_groups <<< "$(cat "$CPU_POOL_FILE")"
+
+    for cpu_group in "${cpu_groups[@]}"
+    do
+        # Print each individual CPU from each group.
+        cpu_start=$(echo "$cpu_group" | cut -d'-' -f1)
+        cpu_end=$(echo "$cpu_group" | cut -d'-' -f2)
+        for cpu_id in $(seq "$cpu_start" "$cpu_end")
+        do
+            echo "$cpu_id"
+        done
+    done
+}
+
 # Determine the NUMA node which contains the enclave-available CPUs. If no arguments are given,
 # the CPU pool is taken from the pool file, which must have been configurated earlier.
 function get_numa_node_from_cpus {

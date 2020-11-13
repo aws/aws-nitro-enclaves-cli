@@ -127,10 +127,14 @@ function parse_config {
 
 # Set all CPUs online before trying to reconfigure the CPU pool (in case the service is restarted).
 function enable_offline_cpus {
-    offline_cpus=$(cat /sys/devices/system/cpu/offline)
-    for offline_cpu in $(echo $offline_cpus | sed "s/[,-]/ /g"); do
-        echo 1 > /sys/devices/system/cpu/cpu$offline_cpu/online || fail "Failed to re-enable cpu $offline_cpu."
-    done
+    echo "" > /sys/module/nitro_enclaves/parameters/ne_cpus 2> .tmp_file
+    err_info=$(cat .tmp_file)
+    rm .tmp_file
+
+    # Check error code in order to determine if there are any enclaves running
+    if [[ $err_info == *"Operation not permitted"* ]]; then
+	    fail "Could not re-online CPUs because there is at least one enclave currently running. Make sure you stop all enclaves prior to re-starting the nitro-enclaves-allocator.service."
+    fi
 }
 
 # Configure the CPU pool.
@@ -536,9 +540,11 @@ function main() {
 
     local cpu_msg
     if [[ ! -z ${CONFIG[cpu_count]} ]]; then
+        enable_offline_cpus
         cpu_msg="${CONFIG[cpu_count]} CPUs"
         configure_cpu_pool_by_cpu_count "${CONFIG[cpu_count]}" "${CONFIG[memory_mib]}"
     elif [[ ! -z ${CONFIG[cpu_pool]} ]]; then
+        enable_offline_cpus
         cpu_msg="CPU pool: ${CONFIG[cpu_pool]}"
         configure_cpu_pool "${CONFIG[cpu_pool]}"
         configure_huge_pages "${CONFIG[memory_mib]}"

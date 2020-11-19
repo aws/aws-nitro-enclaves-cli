@@ -68,6 +68,7 @@ fn get_command_action(cmd: EnclaveProcessCommandType) -> String {
         }
         EnclaveProcessCommandType::Describe => "Describe Enclaves".to_string(),
         EnclaveProcessCommandType::GetEnclaveCID => "Get Enclave CID".to_string(),
+        EnclaveProcessCommandType::GetEnclaveFlags => "Get Enclave Flags".to_string(),
         EnclaveProcessCommandType::ConnectionListenerStop => "Stop Connection Listener".to_string(),
         _ => "Unknown Command".to_string(),
     }
@@ -277,12 +278,27 @@ fn handle_command(
         }
 
         EnclaveProcessCommandType::GetEnclaveCID => {
-            let enclave_cid = enclave_manager.get_console_resources().map_err(|e| {
-                e.set_action("Failed to get console resources (enclave CID)".to_string())
-            })?;
+            let enclave_cid = enclave_manager
+                .get_console_resources_enclave_cid()
+                .map_err(|e| {
+                    e.set_action("Failed to get console resources (enclave CID)".to_string())
+                })?;
             connection.write_u64(enclave_cid).map_err(|e| {
                 e.add_subaction("Failed to write enclave CID to connection".to_string())
                     .set_action("Get Enclave CID".to_string())
+            })?;
+            (0, false)
+        }
+
+        EnclaveProcessCommandType::GetEnclaveFlags => {
+            let enclave_flags = enclave_manager
+                .get_console_resources_enclave_flags()
+                .map_err(|e| {
+                    e.set_action("Failed to get console resources (enclave flags)".to_string())
+                })?;
+            connection.write_u64(enclave_flags).map_err(|e| {
+                e.add_subaction("Failed to write enclave flags to connection".to_string())
+                    .set_action("Get Enclave Flags".to_string())
             })?;
             (0, false)
         }

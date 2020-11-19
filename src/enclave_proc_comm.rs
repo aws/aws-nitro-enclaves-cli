@@ -371,7 +371,7 @@ pub fn enclave_proc_get_cid(enclave_id: &str) -> NitroCliResult<u64> {
     comm.shutdown(std::net::Shutdown::Both).map_err(|e| {
         new_nitro_cli_failure!(
             &format!(
-                "Failed to shut down connection after obtaining CID: {:?}",
+                "Failed to shut down connection after obtaining enclave CID: {:?}",
                 e
             ),
             NitroCliErrorEnum::SocketError
@@ -379,4 +379,34 @@ pub fn enclave_proc_get_cid(enclave_id: &str) -> NitroCliResult<u64> {
     })?;
 
     Ok(enclave_cid)
+}
+
+/// Obtain an enclave's flags given its full ID.
+pub fn enclave_proc_get_flags(enclave_id: &str) -> NitroCliResult<u64> {
+    let mut comm = enclave_proc_connect_to_single(enclave_id)
+        .map_err(|e| e.add_subaction("Failed to connect to enclave process".to_string()))?;
+    // TODO: Replicate output of old CLI on invalid enclave IDs.
+    enclave_proc_command_send_single::<EmptyArgs>(
+        EnclaveProcessCommandType::GetEnclaveFlags,
+        None,
+        &mut comm,
+    )
+    .map_err(|e| e.add_subaction("Failed to send flags request to enclave process".to_string()))?;
+
+    info!("Sent command: GetEnclaveFlags");
+    let enclave_flags = read_u64_le(&mut comm)
+        .map_err(|e| e.add_subaction(String::from("Failed to read flags from enclave process")))?;
+
+    // We got the flags, so shut the connection down.
+    comm.shutdown(std::net::Shutdown::Both).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!(
+                "Failed to shut down connection after obtaining enclave flags: {:?}",
+                e
+            ),
+            NitroCliErrorEnum::SocketError
+        )
+    })?;
+
+    Ok(enclave_flags)
 }

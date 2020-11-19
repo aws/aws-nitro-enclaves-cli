@@ -17,13 +17,18 @@ use nitro_cli::common::commands_parser::{
 };
 use nitro_cli::common::document_errors::explain_error;
 use nitro_cli::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
-use nitro_cli::common::{enclave_proc_command_send_single, logger};
+use nitro_cli::common::{
+    enclave_proc_command_send_single, logger, NitroCliErrorEnum, NitroCliFailure, NitroCliResult,
+};
 use nitro_cli::common::{EnclaveProcessCommandType, ExitGracefully};
+use nitro_cli::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
 use nitro_cli::enclave_proc_comm::{
     enclave_proc_command_send_all, enclave_proc_connect_to_single, enclave_proc_get_cid,
-    enclave_proc_spawn, enclave_process_handle_all_replies,
+    enclave_proc_get_flags, enclave_proc_spawn, enclave_process_handle_all_replies,
 };
-use nitro_cli::{build_enclaves, console_enclaves, create_app, terminate_all_enclaves};
+use nitro_cli::{
+    build_enclaves, console_enclaves, create_app, new_nitro_cli_failure, terminate_all_enclaves,
+};
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
 const DESCRIBE_ENCLAVE_STR: &str = "Describe Enclave";
@@ -200,6 +205,23 @@ fn main() {
                         .set_action(ENCLAVE_CONSOLE_STR.to_string())
                 })
                 .ok_or_exit_with_errno(None);
+            let enclave_flags = enclave_proc_get_flags(&console_args.enclave_id)
+                .map_err(|e| {
+                    e.add_subaction("Failed to retrieve enclave flags".to_string())
+                        .set_action(ENCLAVE_CONSOLE_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+            if enclave_flags & NE_ENCLAVE_DEBUG_MODE == 0 {
+                let _result : NitroCliResult<()> = Err(new_nitro_cli_failure!(
+                    "The enclave was not started with the debug flag set, include '--debug-mode' in the run-enclave command",
+                    NitroCliErrorEnum::EnclaveConsoleConnectionFailure
+                ))
+                .map_err(|e| {
+                    e.add_subaction("Failed to connect to enclave console".to_string())
+                        .set_action(ENCLAVE_CONSOLE_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+            }
             console_enclaves(enclave_cid)
                 .map_err(|e| {
                     e.add_subaction("Failed to connect to enclave console".to_string())

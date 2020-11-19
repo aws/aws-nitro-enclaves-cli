@@ -926,10 +926,10 @@ impl EnclaveManager {
         ))
     }
 
-    /// Get the resources needed for connecting to the enclave console.
+    /// Get the resources (enclave CID) needed for connecting to the enclave console.
     ///
     /// The enclave handle is locked during this operation.
-    pub fn get_console_resources(&self) -> NitroCliResult<u64> {
+    pub fn get_console_resources_enclave_cid(&self) -> NitroCliResult<u64> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
                 &format!("Failed to acquire lock: {:?}", e),
@@ -937,6 +937,19 @@ impl EnclaveManager {
             )
         })?;
         Ok(locked_handle.enclave_cid.unwrap())
+    }
+
+    /// Get the resources (enclave flags) needed for connecting to the enclave console.
+    ///
+    /// The enclave handle is locked during this operation.
+    pub fn get_console_resources_enclave_flags(&self) -> NitroCliResult<u64> {
+        let locked_handle = self.enclave_handle.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
+        Ok(locked_handle.flags)
     }
 
     /// Get the resources needed for enclave termination.

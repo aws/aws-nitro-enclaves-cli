@@ -83,11 +83,13 @@ impl CommandRequesterPolicy {
             EnclaveProcessCommandType::TerminateComplete,
             EnclaveProcessCommandType::Describe,
             EnclaveProcessCommandType::GetEnclaveCID,
+            EnclaveProcessCommandType::GetEnclaveFlags,
             EnclaveProcessCommandType::ConnectionListenerStop,
         ];
         let cmds_read_only = vec![
             EnclaveProcessCommandType::Describe,
             EnclaveProcessCommandType::GetEnclaveCID,
+            EnclaveProcessCommandType::GetEnclaveFlags,
         ];
         let mut policy = HashMap::new();
 

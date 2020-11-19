@@ -10,6 +10,7 @@ mod tests {
     };
     use nitro_cli::common::json_output::EnclaveDescribeInfo;
     use nitro_cli::enclave_proc::commands::{describe_enclaves, run_enclaves, terminate_enclaves};
+    use nitro_cli::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
     use nitro_cli::enclave_proc::utils::{
         flags_to_string, generate_enclave_id, get_enclave_describe_info,
     };
@@ -349,10 +350,18 @@ mod tests {
         let req_nr_cpus: u64 = args.cpu_count.unwrap().try_into().unwrap();
         let debug_mode = args.debug_mode.clone();
         let mut enclave_manager = run_enclaves(&args, None).expect("Run enclaves failed");
-        let enclave_cid = enclave_manager.get_console_resources().unwrap();
+        let enclave_cid = enclave_manager.get_console_resources_enclave_cid().unwrap();
+        let enclave_flags = enclave_manager
+            .get_console_resources_enclave_flags()
+            .unwrap();
         if let Some(req_enclave_cid) = req_enclave_cid {
             assert_eq!(req_enclave_cid, enclave_cid);
         }
+
+        match debug_mode {
+            Some(true) => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE),
+            _ => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0),
+        };
 
         let cid_copy = enclave_cid;
 
@@ -462,7 +471,15 @@ mod tests {
         };
 
         let mut enclave_manager = run_enclaves(&run_args, None).expect("Run enclaves failed");
-        let enclave_cid = enclave_manager.get_console_resources().unwrap();
+        let enclave_cid = enclave_manager.get_console_resources_enclave_cid().unwrap();
+        let enclave_flags = enclave_manager
+            .get_console_resources_enclave_flags()
+            .unwrap();
+
+        match run_args.debug_mode {
+            Some(true) => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE),
+            _ => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0),
+        };
 
         let info = get_enclave_describe_info(&enclave_manager).unwrap();
         let replies: Vec<EnclaveDescribeInfo> = vec![info];
@@ -505,7 +522,15 @@ mod tests {
         };
 
         let mut enclave_manager = run_enclaves(&run_args, None).expect("Run enclaves failed");
-        let enclave_cid = enclave_manager.get_console_resources().unwrap();
+        let enclave_cid = enclave_manager.get_console_resources_enclave_cid().unwrap();
+        let enclave_flags = enclave_manager
+            .get_console_resources_enclave_flags()
+            .unwrap();
+
+        match run_args.debug_mode {
+            Some(true) => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE),
+            _ => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0),
+        };
 
         let info = get_enclave_describe_info(&enclave_manager).unwrap();
         let replies: Vec<EnclaveDescribeInfo> = vec![info];

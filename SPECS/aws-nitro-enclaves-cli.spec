@@ -10,10 +10,15 @@
 %define ne_log_file %{ne_name}.log
 %define ne_run_dir /run/%{ne_name}
 
+%define _src_dir %{_builddir}/%{name}-%{version}
+%define _licenses_filename THIRD_PARTY_LICENSES
+%define _third_party_licenses_file %{_datadir}/licenses/%{name}-%{version}/%{_licenses_filename}
+%define _pkg_licenses_file %{_src_dir}/%{_licenses_filename}
+
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
 Version:    1.0
-Release:    7%{?dist}
+Release:    8%{?dist}
 
 License:    Apache 2.0
 
@@ -76,6 +81,7 @@ make vsock-proxy-native
 %install
 # Main Nitro CLI tools installation
 make NITRO_CLI_INSTALL_DIR=%{buildroot} BIN_DIR=%{_bindir} UNIT_DIR=%{_unitdir} VAR_DIR=%{_var} install-tools
+install -D -m0644 %{_pkg_licenses_file} %{buildroot}%{_third_party_licenses_file}
 
 # -devel package: sources and include headers
 mkdir -p %{buildroot}%{ne_include_dir}
@@ -142,6 +148,7 @@ rm -rf %{ne_log_dir}
 %{_bindir}/nitro-cli
 %{_bindir}/vsock-proxy
 %{_bindir}/nitro-enclaves-allocator
+%{_third_party_licenses_file}
 %{_unitdir}/nitro-enclaves-vsock-proxy.service
 %{_unitdir}/nitro-enclaves-allocator.service
 %config(noreplace) %{ne_sysconf_dir}/vsock-proxy.yaml
@@ -159,6 +166,13 @@ rm -rf %{ne_log_dir}
 %{ne_include_dir}/*
 
 %changelog
+* Tue Nov 24 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0-8
+- Added third_party directory with linuxkit credit
+- Improved 'insufficient resources' error messages
+- Updated the allocator service
+- Enforce an enclave memory lower limit of 4x the size of the EIF file
+- Added a check wrt the enclave flags, when issuing a `console` command
+
 * Thu Nov 05 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0-7
 - Updated init blob file to reflect recent init code changes
 

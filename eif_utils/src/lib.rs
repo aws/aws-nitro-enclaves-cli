@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(warnings)]
+use aws_nitro_enclaves_cose::{sign::HeaderMap, COSESign1};
 use crc::{crc32, Hasher32};
 use eif_defs::eif_hasher::EifHasher;
 use eif_defs::{
     EifHeader, EifSectionHeader, EifSectionType, PcrInfo, PcrSignature, EIF_MAGIC, MAX_NUM_SECTIONS,
 };
 use openssl::ec::EcKey;
-use rust_cose::{COSESign1, HeaderMap};
 use serde_cbor::to_vec;
 use sha2::Digest;
 use std::collections::BTreeMap;

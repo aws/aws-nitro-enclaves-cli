@@ -87,8 +87,6 @@ nitro-enclaves-allocator.service`.
 
   - 'include': The header files exposed by the Nitro Enclaves kernel module used by the Nitro CLI
 
-  - 'rust-cose': A Rust-based COSE implementation, needed by the EIF utilities module ('eif_utils')
-
   - 'samples': A collection of CLI-related sample applications. One sample is the command executer - an application that enables a parent instance to issue commands to an enclave (such as transferring a file, executing an application on the enclave etc.)
 
   - 'src': The Nitro CLI implementation, divided into 3 components:

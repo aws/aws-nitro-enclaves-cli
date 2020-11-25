@@ -5,7 +5,7 @@ authors = ["Alexandru Gheorghe <aggh@amazon.com>"]
 edition = "2018"
 
 [dependencies]
-clap = "2.33.0"
+clap = "2.33"
 sha2 = "0.8"
 hex = "0.3.2"
 crc = "1.8"

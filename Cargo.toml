@@ -17,7 +17,7 @@ libc = { version = ">=0.2.69" }
 flexi_logger = "0.15"
 page_size = "0.4"
 signal-hook = "0.3"
-serde_cbor = "0.10"
+serde_cbor = "0.11"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
 openssl = "0.10"
@@ -30,7 +30,7 @@ bindgen = { version=">=0.54" }
 
 [dev-dependencies]
 log = "0.4"
-num-derive = "0.2"
+num-derive = "0.3"
 num-traits = "0.2"
 tempfile = "3.1"
 

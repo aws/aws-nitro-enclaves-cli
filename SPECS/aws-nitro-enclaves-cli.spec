@@ -17,8 +17,8 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.0
-Release:    8%{?dist}
+Version:    1.0.9
+Release:    0%{?dist}
 
 License:    Apache 2.0
 
@@ -136,12 +136,34 @@ echo -e "
 
 
 %postun
-# Remove any directory which was created by the driver as well as unload the driver
-rm -f /usr/lib/modules-load.d/nitro_enclaves.conf
-rm -f /usr/lib/udev/rules.d/99-nitro_enclaves.rules
-rm -f /usr/lib/tmpfiles.d/nitro_enclaves.conf
-rm -rf %{ne_run_dir}
-rm -rf %{ne_log_dir}
+if [ $1 -ne 1 ]; then
+    # Any operation except for package upgrade
+    # Remove any directory which was created by the driver as well as unload the driver
+    rm -f /usr/lib/modules-load.d/nitro_enclaves.conf
+    rm -f /usr/lib/udev/rules.d/99-nitro_enclaves.rules
+    rm -f /usr/lib/tmpfiles.d/nitro_enclaves.conf
+    rm -rf %{ne_run_dir}
+    rm -rf %{ne_log_dir}
+fi
+
+
+%posttrans
+# Manually (re)perform log file initialization steps
+mkdir -p %{ne_log_dir}
+chmod 775 %{ne_log_dir}
+touch %{ne_log_dir}/%{ne_log_file}
+chmod 664 %{ne_log_dir}/%{ne_log_file}
+chown -R root:%{ne_group} %{ne_log_dir}
+
+# (Re)create tmpfs directory
+echo "d " %{ne_run_dir} " 0775 root "%{ne_group} > /usr/lib/tmpfiles.d/%{ne_name}.conf
+# Make directory available even without rebooting the system
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/%{ne_name}.conf
+
+# (Re)configure setup steps for the Nitro Enclaves driver (groups & udev rule)
+echo "KERNEL==\"nitro_enclaves\", SUBSYSTEM==\"misc\", OWNER=\"root\", GROUP=\""%{ne_group}"\", \
+    MODE=\"0660\", TAG+=\"systemd\"" > /usr/lib/udev/rules.d/99-nitro_enclaves.rules
+udevadm trigger -y nitro_enclaves
 
 
 %files
@@ -166,6 +188,10 @@ rm -rf %{ne_log_dir}
 %{ne_include_dir}/*
 
 %changelog
+* Fri Nov 27 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0.9-0
+- Added checks for the pre & post uninstallation hooks to check
+  whether an upgrade or an uninstallation is being performed
+
 * Tue Nov 24 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0-8
 - Added third_party directory with linuxkit credit
 - Improved 'insufficient resources' error messages

@@ -1032,7 +1032,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Copyright (C) 1989, 1991 Free Software Foundation, Inc.
 
     * Package bzImage's source code may be found at:
-      https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.14.204.tar.xz
+      https://amazon-source-code-downloads.s3.amazonaws.com/nitro-enclaves/linux-4.14.204.tar.xz
 
 GNU GENERAL PUBLIC LICENSE
 

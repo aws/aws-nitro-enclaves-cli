@@ -16,7 +16,7 @@ log = "0.4"
 libc = { version = ">=0.2.69" }
 flexi_logger = "0.15"
 page_size = "0.4"
-signal-hook = "0.1"
+signal-hook = "0.3"
 serde_cbor = "0.10"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }

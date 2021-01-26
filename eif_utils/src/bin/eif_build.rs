@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(warnings)]
@@ -173,6 +173,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
         cmdline.to_string(),
         sign_info,
         hasher.clone(),
+        0, // flags
     );
     for ramdisk in ramdisks {
         build.add_ramdisk(Path::new(ramdisk));

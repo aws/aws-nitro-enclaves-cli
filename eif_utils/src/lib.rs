@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(warnings)]
@@ -67,6 +67,7 @@ pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     sign_info: Option<SignEnclaveInfo>,
     signature: Option<Vec<u8>>,
     signature_size: u64,
+    eif_hdr_flags: u16,
     default_mem: u64,
     default_cpus: u64,
     /// Hash of the whole EifImage.
@@ -88,6 +89,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         cmdline: String,
         sign_info: Option<SignEnclaveInfo>,
         hasher: T,
+        flags: u16,
     ) -> Self {
         let kernel_file = File::open(kernel_path).expect("Invalid kernel path");
         let cmdline = CString::new(cmdline).expect("Invalid cmdline");
@@ -98,6 +100,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             sign_info,
             signature: None,
             signature_size: 0,
+            eif_hdr_flags: flags,
             default_mem: 1024 * 1024 * 1024,
             default_cpus: 2,
             image_hasher: EifHasher::new_without_cache(hasher.clone())
@@ -247,7 +250,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         EifHeader {
             magic: EIF_MAGIC,
             version: eif_defs::CURRENT_VERSION,
-            flags: 0,
+            flags: self.eif_hdr_flags,
             default_mem: self.default_mem,
             default_cpus: self.default_cpus,
             reserved: 0,

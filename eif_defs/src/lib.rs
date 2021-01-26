@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(warnings)]
@@ -18,6 +18,10 @@ use std::mem::size_of;
 
 pub const EIF_MAGIC: [u8; 4] = [46, 101, 105, 102]; // .eif in ascii
 pub const MAX_NUM_SECTIONS: usize = 32;
+/// EIF Header Flags
+/// bits 1  : Architecture - toggled for aarch64, cleared for x86_64
+/// bits 2-8: Unused
+pub const EIF_HDR_ARCH_ARM64: u16 = 0x1;
 
 /// Current EIF version to be incremented every time we change the format
 /// of this structures, we assume changes are backwards compatible.
@@ -31,6 +35,7 @@ pub struct EifHeader {
     pub magic: [u8; 4],
     /// EIF version
     pub version: u16,
+    /// EIF header flags
     pub flags: u16,
     /// Default enclave memory used to boot this eif file
     pub default_mem: u64,

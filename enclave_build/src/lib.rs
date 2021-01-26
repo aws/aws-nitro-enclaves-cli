@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::File;
@@ -7,7 +7,9 @@ use std::process::Command;
 
 mod docker;
 mod yaml_generator;
+
 use docker::DockerUtil;
+use eif_defs::EIF_HDR_ARCH_ARM64;
 use eif_utils::{EifBuilder, SignEnclaveInfo};
 use sha2::Digest;
 use std::collections::BTreeMap;
@@ -41,6 +43,7 @@ pub enum Docker2EifError {
     RemoveFileError,
     SignImageError(String),
     SignArgsError,
+    UnsupportedArchError,
 }
 
 impl<'a> Docker2Eif<'a> {
@@ -181,11 +184,23 @@ impl<'a> Docker2Eif<'a> {
             return Err(Docker2EifError::LinuxkitExecError);
         }
 
+        let arch = self.docker.architecture().map_err(|e| {
+            eprintln!("Docker error: {:?}", e);
+            Docker2EifError::DockerError
+        })?;
+
+        let flags = match arch.as_str() {
+            docker::DOCKER_ARCH_ARM64 => EIF_HDR_ARCH_ARM64,
+            docker::DOCKER_ARCH_AMD64 => 0,
+            _ => return Err(Docker2EifError::UnsupportedArchError),
+        };
+
         let mut build = EifBuilder::new(
             &Path::new(&self.kernel_img_path),
             self.cmdline.clone(),
             self.sign_info.clone(),
             sha2::Sha384::new(),
+            flags,
         );
 
         // Linuxkit adds -initrd.img sufix to the file names.

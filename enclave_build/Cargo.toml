@@ -19,4 +19,5 @@ log = "0.4"
 url = "2.1"
 sha2 = "0.8"
 
+eif_defs = { path = "../eif_defs" }
 eif_utils = { path = "../eif_utils" }

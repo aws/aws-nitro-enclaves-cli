@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::docker::DockerError::CredentialsError;
@@ -13,6 +13,10 @@ use std::path::Path;
 use tempfile::NamedTempFile;
 use tokio::prelude::{Future, Stream};
 use url::Url;
+
+/// Docker inspect architecture constants
+pub const DOCKER_ARCH_ARM64: &str = "arm64";
+pub const DOCKER_ARCH_AMD64: &str = "amd64";
 
 #[derive(Debug, PartialEq)]
 pub enum DockerError {
@@ -339,6 +343,23 @@ impl DockerUtil {
         let env_file = write_config(env)?;
 
         Ok((cmd_file, env_file))
+    }
+
+    /// Fetch architecture information from an image
+    pub fn architecture(&self) -> Result<String, DockerError> {
+        let arch = self
+            .docker
+            .images()
+            .get(&self.docker_image)
+            .inspect()
+            .map(|image| image.architecture)
+            .map_err(|e| {
+                error!("{:?}", e);
+                DockerError::InspectError
+            });
+
+        let mut runtime = tokio::runtime::Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+        runtime.block_on(arch)
     }
 }
 

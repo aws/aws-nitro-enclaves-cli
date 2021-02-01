@@ -8,6 +8,11 @@
 
 .DEFAULT_GOAL := nitro-cli
 
+ARCH_x86_64      = x86_64
+ARCH_aarch64     = aarch64
+TOOLCHAIN_PREFIX = unknown-linux-musl
+HOST_MACHINE     = $(shell uname -m)
+
 CARGO   = cargo
 CC      = gcc
 INSTALL = install
@@ -20,6 +25,21 @@ MV      = mv
 CP      = cp
 AWS     = aws
 SHA1    = sha1sum
+
+ifeq ($(HOST_MACHINE),$(ARCH_x86_64))
+TOOLCHAIN_ARCH_TARGET = $(ARCH_x86_64)
+else ifeq ($(HOST_MACHINE),$(ARCH_aarch64))
+TOOLCHAIN_ARCH_TARGET = $(ARCH_aarch64)
+CC = musl-gcc # Required for openssl-sys cross-build
+else
+TOOLCHAIN_ARCH_TARGET =
+endif
+
+ifeq ($(TOOLCHAIN_ARCH_TARGET),)
+$(error Unsupported architecture: ${HOST_MACHINE})
+endif
+
+CARGO_TARGET = $(TOOLCHAIN_ARCH_TARGET)-$(TOOLCHAIN_PREFIX)
 
 SRC_PATH              = .
 BASE_PATH             ?= $(SRC_PATH)
@@ -88,8 +108,8 @@ driver-deps:
 # a file with the same name via the touch command. This
 # change is required in order to capture the timestamp
 # of the rule.
-.build-container: tools/Dockerfile1804
-	docker image build -t $(CONTAINER_TAG) -f tools/Dockerfile1804 tools/
+.build-container: tools/Dockerfile1804.${HOST_MACHINE}
+	docker image build -t $(CONTAINER_TAG) -f tools/Dockerfile1804.${HOST_MACHINE} tools/
 	touch $@
 
 build-container: .build-container
@@ -122,13 +142,13 @@ init: init.c build-setup
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ cargo build \
+			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ CC=${CC} cargo build \
 				--release \
 				--manifest-path=/nitro_src/Cargo.toml \
-				--target=x86_64-unknown-linux-musl \
+				--target=${CARGO_TARGET} \
 				--target-dir=/nitro_build/nitro_cli  && \
 			chmod -R 777 nitro_build '
-	ln -sf ../x86_64-unknown-linux-musl/release/nitro-cli \
+	ln -sf ../${CARGO_TARGET}/release/nitro-cli \
 		${OBJ_PATH}/nitro_cli/release/nitro-cli
 	touch $@
 
@@ -148,23 +168,23 @@ nitro-cli-native:
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ cargo build \
+			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ CC=${CC} cargo build \
 				--release \
 				--manifest-path=/nitro_src/samples/command_executer/Cargo.toml \
-				--target=x86_64-unknown-linux-musl \
+				--target=${CARGO_TARGET} \
 				--target-dir=/nitro_build/command-executer  && \
 			chmod -R 777 nitro_build '
-	ln -sf ../x86_64-unknown-linux-musl/release/command-executer \
+	ln -sf ../${CARGO_TARGET}/release/command-executer \
 		${OBJ_PATH}/command-executer/release/command-executer
 	touch $@
 
 .build-command-executer-eif: .build-nitro-cli .build-command-executer \
-	$(BASE_PATH)/samples/command_executer/resources/blobs/* \
+	$(BASE_PATH)/samples/command_executer/resources/blobs/${HOST_MACHINE}/* \
 	$(BASE_PATH)/samples/command_executer/resources/Dockerfile.alpine
 
 	$(MKDIR) -p $(OBJ_PATH)/command-executer/command_executer_docker_dir
 	$(CP) \
-		$(OBJ_PATH)/command-executer/x86_64-unknown-linux-musl/release/command-executer \
+		$(OBJ_PATH)/command-executer/${CARGO_TARGET}/release/command-executer \
 		$(OBJ_PATH)/command-executer/command_executer_docker_dir
 	$(CP) \
 		$(BASE_PATH)/samples/command_executer/resources/Dockerfile.alpine \
@@ -174,8 +194,8 @@ nitro-cli-native:
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		$(CONTAINER_TAG) bin/bash -c \
-			'NITRO_CLI_BLOBS=/nitro_src/samples/command_executer/resources/blobs \
-				/nitro_build/nitro_cli/x86_64-unknown-linux-musl/release/nitro-cli \
+			'NITRO_CLI_BLOBS=/nitro_src/samples/command_executer/resources/blobs/${HOST_MACHINE} \
+				/nitro_build/nitro_cli/${CARGO_TARGET}/release/nitro-cli \
 					build-enclave \
 					--docker-uri command_executer:eif \
 					--docker-dir /nitro_build/command-executer/command_executer_docker_dir \
@@ -191,12 +211,12 @@ command-executer: build-setup build-container .build-command-executer-eif
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && set -o pipefail && \
-			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ cargo test \
+			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ CC=${CC} cargo test \
 				--release \
 				--no-run \
 				--all \
 				--manifest-path=/nitro_src/Cargo.toml \
-				--target=x86_64-unknown-linux-musl \
+				--target=${CARGO_TARGET} \
 				--target-dir=/nitro_build/nitro_cli \
 				--message-format json \
 				| tee /nitro_build/nitro-tests-build.log | \
@@ -214,7 +234,7 @@ nitro-format: build-setup build-container
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			cargo fmt --manifest-path=/nitro_src/Cargo.toml -q --all -- --check'
+			cargo fmt --manifest-path=/nitro_src/Cargo.toml -q --all -- --check '
 
 nitro-clippy: build-setup build-container
 	$(DOCKER) run \
@@ -239,13 +259,13 @@ nitro-audit: build-setup build-container
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			cargo build \
+			CC=${CC} cargo build \
 				--release \
 				--target-dir=/nitro_build/vsock_proxy \
-				--target=x86_64-unknown-linux-musl \
+				--target=${CARGO_TARGET} \
 				--manifest-path=/nitro_src/vsock_proxy/Cargo.toml && \
 			chmod -R 777 nitro_build '
-	ln -sf ../x86_64-unknown-linux-musl/release/vsock-proxy \
+	ln -sf ../${CARGO_TARGET}/release/vsock-proxy \
 		${OBJ_PATH}/vsock_proxy/release/vsock-proxy
 	touch $@
 
@@ -273,9 +293,9 @@ install-tools:
 	$(INSTALL) -D -m 0664 bootstrap/allocator.yaml ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/allocator.yaml
 	$(INSTALL) -D -m 0644 bootstrap/nitro-enclaves-allocator.service ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/blobs
-	$(CP) -r blobs/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/blobs/
+	$(CP) -r blobs/${HOST_MACHINE}/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/blobs/
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples
-	$(CP) -r examples/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples/
+	$(CP) -r examples/${HOST_MACHINE}/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples/
 
 .PHONY: install
 install: install-tools nitro_enclaves

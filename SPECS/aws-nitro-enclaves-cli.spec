@@ -6,9 +6,9 @@
 %define ne_data_dir %{_datadir}/%{ne_name}
 %define ne_include_dir %{_includedir}/%{ne_name}
 %define ne_sysconf_dir %{_sysconfdir}/%{ne_name}
-%define ne_log_dir /var/log/%{ne_name}
+%define ne_log_dir %{_localstatedir}/log/%{ne_name}
 %define ne_log_file %{ne_name}.log
-%define ne_run_dir /run/%{ne_name}
+%define ne_run_dir %{_rundir}/%{ne_name}
 
 %define _src_dir %{_builddir}/%{name}-%{version}
 %define _licenses_filename THIRD_PARTY_LICENSES
@@ -17,7 +17,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.0.9
+Version:    1.0.10
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -92,7 +92,6 @@ install -D -m 0755 run-nitro-cli-integration-tests %{buildroot}%{_bindir}/run-ni
 mkdir -p %{buildroot}%{ne_data_dir}/tests/integration
 cp -r tests/integration/* %{buildroot}%{ne_data_dir}/tests/integration/
 
-
 %pre
 groupadd -f %{ne_group}
 
@@ -147,23 +146,26 @@ if [ $1 -ne 1 ]; then
 fi
 
 
-%posttrans
-# Manually (re)perform log file initialization steps
-mkdir -p %{ne_log_dir}
-chmod 775 %{ne_log_dir}
-touch %{ne_log_dir}/%{ne_log_file}
-chmod 664 %{ne_log_dir}/%{ne_log_file}
-chown -R root:%{ne_group} %{ne_log_dir}
+%triggerpostun -- aws-nitro-enclaves-cli = 1.0
+# When uninstalling v1.0-5 of aws-nitro-enclaves-cli (during an update),
+# make sure to bring in again files removed by the buggy version
+if [ $1 -eq 2 ]; then
+    mkdir -p %{ne_log_dir}
+    chmod 775 %{ne_log_dir}
+    touch %{ne_log_dir}/%{ne_log_file}
+    chmod 664 %{ne_log_dir}/%{ne_log_file}
+    chown -R root:%{ne_group} %{ne_log_dir}
 
-# (Re)create tmpfs directory
-echo "d " %{ne_run_dir} " 0775 root "%{ne_group} > /usr/lib/tmpfiles.d/%{ne_name}.conf
-# Make directory available even without rebooting the system
-systemd-tmpfiles --create /usr/lib/tmpfiles.d/%{ne_name}.conf
+    # (Re)create tmpfs directory
+    echo "d " %{ne_run_dir} " 0775 root "%{ne_group} > /usr/lib/tmpfiles.d/%{ne_name}.conf
+    # Make directory available even without rebooting the system
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/%{ne_name}.conf
 
-# (Re)configure setup steps for the Nitro Enclaves driver (groups & udev rule)
-echo "KERNEL==\"nitro_enclaves\", SUBSYSTEM==\"misc\", OWNER=\"root\", GROUP=\""%{ne_group}"\", \
-    MODE=\"0660\", TAG+=\"systemd\"" > /usr/lib/udev/rules.d/99-nitro_enclaves.rules
-udevadm trigger -y nitro_enclaves
+    # (Re)configure setup steps for the Nitro Enclaves driver (groups & udev rule)
+    echo "KERNEL==\"nitro_enclaves\", SUBSYSTEM==\"misc\", OWNER=\"root\", GROUP=\""%{ne_group}"\", \
+        MODE=\"0660\", TAG+=\"systemd\"" > /usr/lib/udev/rules.d/99-nitro_enclaves.rules
+    udevadm trigger -y nitro_enclaves
+fi
 
 
 %files
@@ -188,6 +190,10 @@ udevadm trigger -y nitro_enclaves
 %{ne_include_dir}/*
 
 %changelog
+* Tue Feb 02 2021 Gabriel Bercaru <bercarug@amazon.com> - 1.0.10-0
+- Removed the %posttrans scriptlet and delegated the task of
+  re-performing resources initialization to a trigger script
+  which runs only when uninstalling v1.0 or the package (during an update)
 * Fri Nov 27 2020 Gabriel Bercaru <bercarug@amazon.com> - 1.0.9-0
 - Added checks for the pre & post uninstallation hooks to check
   whether an upgrade or an uninstallation is being performed

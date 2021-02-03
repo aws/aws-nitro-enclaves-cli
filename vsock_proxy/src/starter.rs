@@ -6,7 +6,7 @@
 /// TCP traffic
 ///
 use dns_lookup::lookup_host;
-use idna;
+use idna::domain_to_ascii;
 use log::info;
 use nix::sys::select::{select, FdSet};
 use nix::sys::socket::{SockAddr, SockType};
@@ -43,17 +43,15 @@ pub fn check_allowlist(
         let docs = YamlLoader::load_from_str(&content).map_err(|_| "Bad yaml format")?;
         let services = (&docs[0])["allowlist"]
             .as_vec()
-            .ok_or_else(|| "No allowlist field")?;
+            .ok_or("No allowlist field")?;
 
         for raw_service in services {
             let port = raw_service["port"]
                 .as_i64()
-                .ok_or_else(|| "No port field or invalid type")?;
+                .ok_or("No port field or invalid type")?;
             let port = port as u16;
 
-            let addr = raw_service["address"]
-                .as_str()
-                .ok_or_else(|| "No address field")?;
+            let addr = raw_service["address"].as_str().ok_or("No address field")?;
             let addrs = Proxy::parse_addr(addr, only_4, only_6)?;
             for addr in addrs.into_iter() {
                 if addr == remote_addr && port == remote_port {
@@ -105,7 +103,7 @@ impl Proxy {
     /// Resolve a DNS name (IDNA format) into an IP address (v4 or v6)
     pub fn parse_addr(addr: &str, only_4: bool, only_6: bool) -> VsockProxyResult<Vec<IpAddr>> {
         // IDNA parsing
-        let addr = idna::domain_to_ascii(&addr).map_err(|_| "Could not parse domain name")?;
+        let addr = domain_to_ascii(&addr).map_err(|_| "Could not parse domain name")?;
 
         // DNS lookup
         // It results in a vector of IPs (V4 and V6)
@@ -200,10 +198,7 @@ fn transfer(src: &mut dyn Read, dst: &mut dyn Write) -> bool {
     let mut buffer = [0u8; BUFF_SIZE];
 
     let nbytes = src.read(&mut buffer);
-    let nbytes = match nbytes {
-        Err(_) => 0,
-        Ok(n) => n,
-    };
+    let nbytes = nbytes.unwrap_or(0);
 
     if nbytes == 0 {
         return true;

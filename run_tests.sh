@@ -98,7 +98,7 @@ do
 
 	configure_ne_driver
 
-	./build/nitro_cli/x86_64-unknown-linux-musl/release/"${test_exec_name}" \
+	./build/nitro_cli/x86_64-unknown-linux-musl/release/deps/"${test_exec_name}" \
 		--test-threads=1 --nocapture || test_failed
 done < <(grep -v '^ *#' < build/test_executables.txt)
 

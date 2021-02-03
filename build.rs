@@ -23,7 +23,7 @@ fn get_gcc_sysroot() -> String {
         output = Command::new(cc).arg("--print-sysroot").output();
     }
 
-    if let Err(_) = output {
+    if output.is_err() {
         // Otherwise, try to guess the compiler's name by the name
         // $TARGET-gcc, where $TARGET represents the target architecture
         // that was specified for build
@@ -31,7 +31,7 @@ fn get_gcc_sysroot() -> String {
         output = Command::new(format!("{}-gcc", target))
             .arg("--print-sysroot")
             .output();
-        if let Err(_) = output {
+        if output.is_err() {
             // If that did not work as well, use directly `gcc`
             output = Command::new("gcc").arg("--print-sysroot").output();
         }

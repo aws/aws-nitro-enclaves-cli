@@ -7,13 +7,13 @@
 /// vsock-proxy 8000 127.0.0.1 9000
 ///
 use clap::{App, AppSettings, Arg};
-use env_logger;
+use env_logger::init;
 use log::info;
 
 use vsock_proxy::starter::{Proxy, VsockProxyResult};
 
 fn main() -> VsockProxyResult<()> {
-    env_logger::init();
+    init();
 
     let matches = App::new("Vsock-TCP proxy")
         .about("Vsock-TCP proxy")

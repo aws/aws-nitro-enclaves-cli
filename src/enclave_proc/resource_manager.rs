@@ -672,7 +672,7 @@ impl EnclaveHandle {
         match cpu_config {
             EnclaveCpuConfig::List(cpu_ids) => {
                 for cpu_id in cpu_ids {
-                    self.init_single_cpu(cpu_id.clone()).map_err(|e| {
+                    self.init_single_cpu(cpu_id).map_err(|e| {
                         e.add_subaction(format!("Failed to add CPU with ID {}", cpu_id))
                     })?;
                 }

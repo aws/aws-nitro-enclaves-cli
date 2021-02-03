@@ -100,10 +100,7 @@ impl CommandRequesterPolicy {
         );
 
         // The root user may issue any command.
-        policy.insert(
-            CommandRequesterType::User(0 as libc::uid_t),
-            cmds_read_write,
-        );
+        policy.insert(CommandRequesterType::User(0_u32), cmds_read_write);
 
         // All other users may only issue read-only commands.
         policy.insert(CommandRequesterType::Others, cmds_read_only);

@@ -304,7 +304,7 @@ impl DockerUtil {
                 .map(|image| {
                     (
                         image.config.entrypoint.unwrap(),
-                        image.config.env.ok_or(Vec::<String>::new()).unwrap(),
+                        image.config.env.ok_or_else(Vec::<String>::new).unwrap(),
                     )
                 })
                 .map_err(|e| {

@@ -15,6 +15,7 @@ This repository contains a collection of tools and commands used for managing th
   - Amazon Linux 2 v5.4 kernel starting with kernel-5.4.68-34.125.amzn2.x86_64
   - Ubuntu v5.4 kernel starting with linux-aws 5.4.0-1030-aws x86_64
   - Ubuntu v5.8 kernel starting with linux-aws 5.8.0-1017-aws x86_64
+  - Fedora v5.10+ kernel (e.g. 5.10.12-200.fc33.x86_64)
 
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
 

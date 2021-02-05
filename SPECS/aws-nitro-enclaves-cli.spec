@@ -18,7 +18,7 @@
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
 Version:    1.0.10
-Release:    0%{?dist}
+Release:    1%{?dist}
 
 License:    Apache 2.0
 
@@ -190,6 +190,9 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Sat Feb 06 2021 Gabriel Bercaru <bercarug@amazon.com> - 1.0.10-1
+- Changed release from 0 to 1
+
 * Tue Feb 02 2021 Gabriel Bercaru <bercarug@amazon.com> - 1.0.10-0
 - Removed the %posttrans scriptlet and delegated the task of
   re-performing resources initialization to a trigger script

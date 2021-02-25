@@ -69,6 +69,10 @@ make nitro-clippy || test_failed
 echo "=================== cargo audit ==========================="
 make nitro-audit || test_failed
 
+# Check Rust licenses
+echo "=================== cargo about ==========================="
+make nitro-about || test_failed
+
 # Setup the environement with everything needed to run the integration tests
 make command-executer || test_failed
 make nitro-tests || test_failed

@@ -252,7 +252,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
             ret.push_str("Memory overflow. Such error may appear during loading the EIF in the memory regions which will be conceded to the future enclave, if the regions offset plus the EIF file size exceeds the maximum address of the target platform.");
         }
         "E35" => {
-            ret.push_str("EIF file parsing error. Such error appears when attempting to fill a memory region with a section of the EIF file, but reading the entire section fails.");
+            ret.push_str("EIF file parsing error. Such errors appear when attempting to fill a memory region with a section of the EIF file, but reading the entire section fails. This might indicate that the required hugepages are not available.");
         }
         "E36" => {
             ret.push_str("Enclave boot failure. Such error appears when attempting to receive the `ready` signal from a freshly booted enclave. It arises in several contexts, for instance, when the enclave is booted from an invalid EIF file and the enclave process immediately exits, failing to submit the `ready` signal. In this case, the error backtrace provides detailed information on what specifically failed during the enclave boot process.");
@@ -471,7 +471,7 @@ pub fn explain_error(error_code_str: String) {
             eprintln!("Memory overflow. Such error may appear during loading the EIF in the memory regions which will be conceded to the future enclave, if the regions offset plus the EIF file size exceeds the maximum address of the target platform.");
         }
         "E35" => {
-            eprintln!("EIF file parsing error. Such error appears when attempting to fill a memory region with a section of the EIF file, but reading the entire section fails.");
+            eprintln!("EIF file parsing error. Such errors appear when attempting to fill a memory region with a section of the EIF file, but reading the entire section fails. This might indicate that the required hugepages are not available.");
         }
         "E36" => {
             eprintln!("Enclave boot failure. Such error appears when attempting to receive the `ready` signal from a freshly booted enclave. It arises in several contexts, for instance, when the enclave is booted from an invalid EIF file and the enclave process immediately exits, failing to submit the `ready` signal. In this case, the error backtrace provides detailed information on what specifically failed during the enclave boot process.");

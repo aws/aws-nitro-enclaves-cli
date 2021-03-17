@@ -14,7 +14,7 @@ vsock = "0.1.5"
 
 [dev-dependencies]
 eif_utils = { path = "../eif_utils"}
-sha2 = "0.8"
+sha2 = "0.9.3"
 tempfile = "3.1"
 
 [lib]

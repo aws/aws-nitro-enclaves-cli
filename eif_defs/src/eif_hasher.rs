@@ -46,7 +46,7 @@ fn initial_digest(len: usize) -> Vec<u8> {
 
 impl<T: Digest + Debug + Write + Clone> EifHasher<T> {
     pub fn new(block_size: usize, mut hasher: T) -> Result<Self, String> {
-        let output_size = hasher.result_reset().len();
+        let output_size = hasher.finalize_reset().len();
         if block_size > 0 && output_size * 2 > block_size {
             return Err("Invalid block_size".to_string());
         }
@@ -70,7 +70,7 @@ impl<T: Digest + Debug + Write + Clone> EifHasher<T> {
         /// forced to keep a large serialized state, 256 bytes for SHA256.
         pub const FIXED_BLOCK_SIZE_HASHER_OUPUT_RATIO: usize = 8;
         Self::new(
-            hasher.clone().result_reset().len() * FIXED_BLOCK_SIZE_HASHER_OUPUT_RATIO,
+            hasher.clone().finalize_reset().len() * FIXED_BLOCK_SIZE_HASHER_OUPUT_RATIO,
             hasher,
         )
     }
@@ -82,9 +82,9 @@ impl<T: Digest + Debug + Write + Clone> EifHasher<T> {
         Self::new(0, hasher)
     }
 
-    pub fn result_reset(&mut self) -> IoResult<Vec<u8>> {
+    pub fn finalize_reset(&mut self) -> IoResult<Vec<u8>> {
         if self.block_size == 0 {
-            return Ok(self.hasher.result_reset().to_vec());
+            return Ok(self.hasher.finalize_reset().to_vec());
         }
         if !self.block.is_empty() {
             self.consume_block()?;
@@ -94,20 +94,20 @@ impl<T: Digest + Debug + Write + Clone> EifHasher<T> {
         Ok(result)
     }
 
-    pub fn tpm_extend_result_reset(&mut self) -> IoResult<Vec<u8>> {
-        let result = self.result_reset()?;
+    pub fn tpm_extend_finalize_reset(&mut self) -> IoResult<Vec<u8>> {
+        let result = self.finalize_reset()?;
         let mut hasher = self.hasher.clone();
 
         hasher.write_all(&initial_digest(self.output_size))?;
         hasher.write_all(&result[..])?;
-        Ok(hasher.result_reset().to_vec())
+        Ok(hasher.finalize_reset().to_vec())
     }
 
     fn consume_block(&mut self) -> IoResult<()> {
         self.hasher.write_all(&self.digest[..])?;
         self.hasher.write_all(&self.block[..])?;
         self.block.clear();
-        let result = self.hasher.result_reset();
+        let result = self.hasher.finalize_reset();
         self.digest.copy_from_slice(&result[..]);
         Ok(())
     }
@@ -173,7 +173,7 @@ mod tests {
         block_size: usize,
     ) {
         let data = vec![78u8; block_size - 1];
-        let output_size = hasher_alg.result_reset().len();
+        let output_size = hasher_alg.finalize_reset().len();
         let mut hasher = EifHasher::new(block_size, hasher_alg.clone()).unwrap();
 
         hasher.write_all(&data[..]).unwrap();
@@ -185,19 +185,19 @@ mod tests {
         let mut hasher_clone = hasher.clone();
         let mut hasher_alg_clone = hasher_alg.clone();
         assert_eq!(
-            hasher_alg.result_reset().to_vec(),
-            hasher.result_reset().unwrap()
+            hasher_alg.finalize_reset().to_vec(),
+            hasher.finalize_reset().unwrap()
         );
 
-        let result = hasher_alg_clone.result_reset();
+        let result = hasher_alg_clone.finalize_reset();
         hasher_alg_clone
             .write_all(&initial_digest(output_size)[..])
             .unwrap();
         hasher_alg_clone.write_all(&result[..]).unwrap();
 
         assert_eq!(
-            hasher_clone.tpm_extend_result_reset().unwrap(),
-            hasher_alg_clone.result_reset().to_vec()
+            hasher_clone.tpm_extend_finalize_reset().unwrap(),
+            hasher_alg_clone.finalize_reset().to_vec()
         );
     }
 
@@ -213,7 +213,7 @@ mod tests {
         block_size: usize,
     ) {
         let data = vec![78u8; block_size];
-        let output_size = hasher_alg.result_reset().len();
+        let output_size = hasher_alg.finalize_reset().len();
         let mut hasher = EifHasher::new(block_size, hasher_alg.clone()).unwrap();
 
         hasher.write_all(&data).unwrap();
@@ -226,19 +226,19 @@ mod tests {
         let mut hasher_alg_clone = hasher_alg.clone();
 
         assert_eq!(
-            hasher_alg.result_reset().to_vec(),
-            hasher.result_reset().unwrap()
+            hasher_alg.finalize_reset().to_vec(),
+            hasher.finalize_reset().unwrap()
         );
 
-        let result = hasher_alg_clone.result_reset();
+        let result = hasher_alg_clone.finalize_reset();
         hasher_alg_clone
             .write_all(&initial_digest(output_size)[..])
             .unwrap();
         hasher_alg_clone.write_all(&result[..]).unwrap();
 
         assert_eq!(
-            hasher_clone.tpm_extend_result_reset().unwrap(),
-            hasher_alg_clone.result_reset().to_vec()
+            hasher_clone.tpm_extend_finalize_reset().unwrap(),
+            hasher_alg_clone.finalize_reset().to_vec()
         );
     }
 
@@ -254,7 +254,7 @@ mod tests {
         block_size: usize,
     ) {
         let data = vec![78u8; block_size + block_size / 2 - 1];
-        let output_size = hasher_alg.result_reset().len();
+        let output_size = hasher_alg.finalize_reset().len();
         let (data1, data2) = data.split_at(block_size);
         let mut hasher = EifHasher::new(block_size, hasher_alg.clone()).unwrap();
 
@@ -262,7 +262,7 @@ mod tests {
 
         hasher_alg.write_all(&initial_digest(output_size)).unwrap();
         hasher_alg.write_all(&data1).unwrap();
-        let result = hasher_alg.result_reset();
+        let result = hasher_alg.finalize_reset();
         hasher_alg.write_all(&result).unwrap();
         hasher_alg.write_all(&data2).unwrap();
 
@@ -270,19 +270,19 @@ mod tests {
         let mut hasher_alg_clone = hasher_alg.clone();
 
         assert_eq!(
-            hasher_alg.result_reset().to_vec(),
-            hasher.result_reset().unwrap()
+            hasher_alg.finalize_reset().to_vec(),
+            hasher.finalize_reset().unwrap()
         );
 
-        let result = hasher_alg_clone.result_reset();
+        let result = hasher_alg_clone.finalize_reset();
         hasher_alg_clone
             .write_all(&initial_digest(output_size)[..])
             .unwrap();
         hasher_alg_clone.write_all(&result[..]).unwrap();
 
         assert_eq!(
-            hasher_clone.tpm_extend_result_reset().unwrap(),
-            hasher_alg_clone.result_reset().to_vec()
+            hasher_clone.tpm_extend_finalize_reset().unwrap(),
+            hasher_alg_clone.finalize_reset().to_vec()
         );
     }
 
@@ -318,9 +318,9 @@ mod tests {
             hasher_one_byte_at_atime.write_all(&[x]).unwrap();
         }
 
-        let result1 = hasher_in_one_go.result_reset().unwrap();
-        let result2 = hasher_in_random_chunks.result_reset().unwrap();
-        let result3 = hasher_one_byte_at_atime.result_reset().unwrap();
+        let result1 = hasher_in_one_go.finalize_reset().unwrap();
+        let result2 = hasher_in_random_chunks.finalize_reset().unwrap();
+        let result3 = hasher_one_byte_at_atime.finalize_reset().unwrap();
         assert_eq!(result1, result2);
         assert_eq!(result1, result3);
     }
@@ -336,8 +336,8 @@ mod tests {
             eif_hasher.write(&[value]).unwrap();
         }
 
-        let result1 = eif_hasher.result_reset().unwrap();
-        let result2 = hasher.result_reset();
+        let result1 = eif_hasher.finalize_reset().unwrap();
+        let result2 = hasher.finalize_reset();
         assert_eq!(result1, result2.to_vec());
     }
 }

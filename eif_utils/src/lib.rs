@@ -503,7 +503,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             let cert = openssl::x509::X509::from_pem(&sign_info.signing_certificate[..]).unwrap();
             let cert_der = cert.to_der().unwrap();
             // This is equivalent to extend(cert.digest(sha384)), since hasher is going to
-            // hash the DER certificate (cert.digest()) and then tpm_extend_result_reset
+            // hash the DER certificate (cert.digest()) and then tpm_extend_finalize_reset
             // will do the extend.
             self.certificate_hasher.write_all(&cert_der).unwrap();
         }
@@ -514,24 +514,24 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         let mut measurements = BTreeMap::new();
         let image_hasher = hex::encode(
             self.image_hasher
-                .tpm_extend_result_reset()
+                .tpm_extend_finalize_reset()
                 .expect("Could not get result for image_hasher"),
         );
         let bootstrap_hasher = hex::encode(
             self.bootstrap_hasher
-                .tpm_extend_result_reset()
+                .tpm_extend_finalize_reset()
                 .expect("Could not get result for bootstrap_hasher"),
         );
         let app_hash = hex::encode(
             self.customer_app_hasher
-                .tpm_extend_result_reset()
+                .tpm_extend_finalize_reset()
                 .expect("Could not get result for app_hasher"),
         );
         // Hash certificate only if signing key is set, otherwise related PCR will be zero
         let cert_hash = if self.sign_info.is_some() {
             Some(hex::encode(
                 self.certificate_hasher
-                    .tpm_extend_result_reset()
+                    .tpm_extend_finalize_reset()
                     .expect("Could not get result for certificate_hasher"),
             ))
         } else {

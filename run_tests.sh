@@ -86,6 +86,7 @@ mkdir -p /var/log/nitro_enclaves || test_failed
 
 # Build EIFS for testing
 mkdir -p test_images
+export HOME="/root"
 nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample \
 	--output-file test_images/vsock-sample.eif || test_failed
 

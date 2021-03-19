@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::docker::DockerError::CredentialsError;
+use futures::stream::StreamExt;
 use log::{debug, error, info};
 use serde_json::value::Value;
 use shiplift::RegistryAuth;
@@ -11,7 +12,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
-use tokio::prelude::{Future, Stream};
+use tokio::runtime::Runtime;
 use url::Url;
 
 /// Docker inspect architecture constants
@@ -172,163 +173,169 @@ impl DockerUtil {
 
     /// Pull the image, with the tag provided in constructor, from the Docker registry
     pub fn pull_image(&self) -> Result<(), DockerError> {
-        let mut pull_options_builder = PullOptions::builder();
-        pull_options_builder.image(&self.docker_image);
+        let act = async {
+            let mut pull_options_builder = PullOptions::builder();
+            pull_options_builder.image(&self.docker_image);
 
-        match self.get_credentials() {
-            Ok(auth) => {
-                pull_options_builder.auth(auth);
-            }
-            // It is not mandatory to have the credentials set, but this is
-            // the most likely reason for failure when pulling, so log the
-            // error.
-            Err(err) => {
-                debug!("WARNING!! Credential could not be set {:?}", err);
+            match self.get_credentials() {
+                Ok(auth) => {
+                    pull_options_builder.auth(auth);
+                }
+                // It is not mandatory to have the credentials set, but this is
+                // the most likely reason for failure when pulling, so log the
+                // error.
+                Err(err) => {
+                    debug!("WARNING!! Credential could not be set {:?}", err);
+                }
+            };
+
+            let mut stream = self.docker.images().pull(&pull_options_builder.build());
+
+            loop {
+                if let Some(item) = stream.next().await {
+                    match item {
+                        Ok(output) => {
+                            let msg = &output;
+
+                            if let Some(err_msg) = msg.get("error") {
+                                error!("{:?}", err_msg.clone());
+                                break Err(DockerError::PullError);
+                            } else {
+                                info!("{}", msg);
+                            }
+                        }
+                        Err(e) => {
+                            error!("{:?}", e);
+                            break Err(DockerError::PullError);
+                        }
+                    }
+                } else {
+                    break Ok(());
+                }
             }
         };
 
-        let act = self
-            .docker
-            .images()
-            .pull(&pull_options_builder.build())
-            .then(|output| {
-                if let Ok(msg) = &output {
-                    if let Some(err_msg) = msg.get("error") {
-                        return Err(err_msg.clone());
-                    }
-                }
-                Ok(output)
-            })
-            .for_each(|msg| {
-                if let Ok(msg) = msg {
-                    info!("{}", msg);
-                }
-                Ok(())
-            })
-            .map_err(|e| {
-                error!("{:?}", e);
-                DockerError::PullError
-            });
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
 
-        let mut runtime = tokio::runtime::Runtime::new().map_err(|_| DockerError::RuntimeError)?;
         runtime.block_on(act)
     }
 
     /// Build an image locally, with the tag provided in constructor, using a
     /// directory that contains a Dockerfile
     pub fn build_image(&self, dockerfile_dir: String) -> Result<(), DockerError> {
-        let act = self
-            .docker
-            .images()
-            .build(
+        let act = async {
+            let mut stream = self.docker.images().build(
                 &BuildOptions::builder(dockerfile_dir)
                     .tag(self.docker_image.clone())
                     .build(),
-            )
-            .then(|output| {
-                if let Ok(msg) = &output {
-                    if let Some(err_msg) = msg.get("error") {
-                        return Err(err_msg.clone());
-                    }
-                }
-                Ok(output)
-            })
-            .for_each(|msg| {
-                if let Ok(msg) = msg {
-                    info!("{}", msg);
-                }
-                Ok(())
-            })
-            .map_err(|e| {
-                error!("{:?}", e);
-                DockerError::BuildError
-            });
+            );
 
-        let mut runtime = tokio::runtime::Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+            loop {
+                if let Some(item) = stream.next().await {
+                    match item {
+                        Ok(output) => {
+                            let msg = &output;
+
+                            if let Some(err_msg) = msg.get("error") {
+                                error!("{:?}", err_msg.clone());
+                                break Err(DockerError::BuildError);
+                            } else {
+                                info!("{}", msg);
+                            }
+                        }
+                        Err(e) => {
+                            error!("{:?}", e);
+                            break Err(DockerError::BuildError);
+                        }
+                    }
+                } else {
+                    break Ok(());
+                }
+            }
+        };
+
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
 
         runtime.block_on(act)
     }
 
     fn inspect_image(&self) -> Result<(Vec<String>, Vec<String>), DockerError> {
         // First try to find CMD parameters (together with potential ENV bindings)
-        let act_cmd = self
-            .docker
-            .images()
-            .get(&self.docker_image)
-            .inspect()
-            .map(|image| image.config.cmd.ok_or(DockerError::UnsupportedEntryPoint));
-        let act_env = self
-            .docker
-            .images()
-            .get(&self.docker_image)
-            .inspect()
-            .map(|image| image.config.env.ok_or(DockerError::UnsupportedEntryPoint));
+        let act_cmd = async {
+            match self.docker.images().get(&self.docker_image).inspect().await {
+                Ok(image) => Ok(image.config.cmd),
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(DockerError::UnsupportedEntryPoint)
+                }
+            }
+        };
+        let act_env = async {
+            match self.docker.images().get(&self.docker_image).inspect().await {
+                Ok(image) => Ok(image.config.env),
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(DockerError::UnsupportedEntryPoint)
+                }
+            }
+        };
 
-        let check_cmd_runtime = tokio::runtime::Runtime::new()
+        let check_cmd_runtime = Runtime::new()
             .map_err(|_| DockerError::RuntimeError)?
-            .block_on(act_cmd)
-            .map_err(|_| DockerError::RuntimeError)?;
-        let check_env_runtime = tokio::runtime::Runtime::new()
+            .block_on(act_cmd);
+        let check_env_runtime = Runtime::new()
             .map_err(|_| DockerError::RuntimeError)?
-            .block_on(act_env)
-            .map_err(|_| DockerError::RuntimeError)?;
+            .block_on(act_env);
 
         // If no CMD instructions are found, try to locate an ENTRYPOINT command
         if check_cmd_runtime.is_err() || check_env_runtime.is_err() {
-            let act_entrypoint =
-                self.docker
-                    .images()
-                    .get(&self.docker_image)
-                    .inspect()
-                    .map(|image| {
-                        image
-                            .config
-                            .entrypoint
-                            .ok_or(DockerError::UnsupportedEntryPoint)
-                    });
+            let act_entrypoint = async {
+                match self.docker.images().get(&self.docker_image).inspect().await {
+                    Ok(image) => Ok(image.config.entrypoint),
+                    Err(e) => {
+                        error!("{:?}", e);
+                        Err(DockerError::UnsupportedEntryPoint)
+                    }
+                }
+            };
 
-            let check_entrypoint_runtime = tokio::runtime::Runtime::new()
+            let check_entrypoint_runtime = Runtime::new()
                 .map_err(|_| DockerError::RuntimeError)?
-                .block_on(act_entrypoint)
-                .map_err(|_| DockerError::RuntimeError)?;
+                .block_on(act_entrypoint);
 
             if check_entrypoint_runtime.is_err() {
                 return Err(DockerError::UnsupportedEntryPoint);
             }
 
-            let act = self
-                .docker
-                .images()
-                .get(&self.docker_image)
-                .inspect()
-                .map(|image| {
-                    (
+            let act = async {
+                match self.docker.images().get(&self.docker_image).inspect().await {
+                    Ok(image) => Ok((
                         image.config.entrypoint.unwrap(),
                         image.config.env.ok_or_else(Vec::<String>::new).unwrap(),
-                    )
-                })
-                .map_err(|e| {
-                    error!("{:?}", e);
-                    DockerError::InspectError
-                });
-            let mut runtime =
-                tokio::runtime::Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+                    )),
+                    Err(e) => {
+                        error!("{:?}", e);
+                        Err(DockerError::InspectError)
+                    }
+                }
+            };
+
+            let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
 
             return runtime.block_on(act);
         }
 
-        let act = self
-            .docker
-            .images()
-            .get(&self.docker_image)
-            .inspect()
-            .map(|image| (image.config.cmd.unwrap(), image.config.env.unwrap()))
-            .map_err(|e| {
-                error!("{:?}", e);
-                DockerError::InspectError
-            });
+        let act = async {
+            match self.docker.images().get(&self.docker_image).inspect().await {
+                Ok(image) => Ok((image.config.cmd.unwrap(), image.config.env.unwrap())),
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(DockerError::InspectError)
+                }
+            }
+        };
 
-        let mut runtime = tokio::runtime::Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
 
         runtime.block_on(act)
     }
@@ -347,18 +354,18 @@ impl DockerUtil {
 
     /// Fetch architecture information from an image
     pub fn architecture(&self) -> Result<String, DockerError> {
-        let arch = self
-            .docker
-            .images()
-            .get(&self.docker_image)
-            .inspect()
-            .map(|image| image.architecture)
-            .map_err(|e| {
-                error!("{:?}", e);
-                DockerError::InspectError
-            });
+        let arch = async {
+            match self.docker.images().get(&self.docker_image).inspect().await {
+                Ok(image) => Ok(image.architecture),
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(DockerError::InspectError)
+                }
+            }
+        };
 
-        let mut runtime = tokio::runtime::Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+
         runtime.block_on(arch)
     }
 }

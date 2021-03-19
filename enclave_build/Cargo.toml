@@ -11,13 +11,14 @@ clap = "2.33"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 serde_json = "1.0"
-shiplift = "0.6"
+shiplift = "0.7"
 tempfile = "3.1.0"
-tokio = "0.1.22"
+tokio = { version = "1.0", features = ["rt-multi-thread"] }
 base64 = "0.11"
 log = "0.4"
 url = "2.1"
 sha2 = "0.9.3"
+futures = "0.3.13"
 
 eif_defs = { path = "../eif_defs" }
 eif_utils = { path = "../eif_utils" }

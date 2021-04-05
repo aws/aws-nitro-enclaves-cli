@@ -252,6 +252,16 @@ nitro-audit: build-setup build-container
 			'source /root/.cargo/env && \
 			cargo audit -f /nitro_src/Cargo.lock'
 
+nitro-about: build-setup build-container
+	$(DOCKER) run \
+		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
+		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
+		$(CONTAINER_TAG) bin/bash -c \
+			'source /root/.cargo/env && \
+			cargo about --manifest-path=/nitro_src/Cargo.toml \
+			generate /nitro_src/about.hbs | \
+			diff /nitro_src/THIRD_PARTY_LICENSES_RUST_CRATES.html -'
+
 # See .build-container rule for explanation.
 .build-vsock-proxy: $(shell find $(BASE_PATH)/vsock_proxy/src -name "*.rs")
 	$(DOCKER) run \

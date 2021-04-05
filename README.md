@@ -17,6 +17,12 @@ This repository contains a collection of tools and commands used for managing th
   - Ubuntu v5.8 kernel starting with linux-aws 5.8.0-1017-aws x86_64
   - Fedora v5.10+ kernel (e.g. 5.10.12-200.fc33.x86_64)
 
+  The following packages need to be installed or updated to have the Nitro Enclaves kernel driver available in the mentioned distros:
+
+  - Amazon Linux 2 - "kernel" (amzn2-core) for the v4.14 kernel, "kernel" (amzn2extra-kernel-5.4) for the v5.4 kernel
+  - Ubuntu - "linux-aws" and "linux-modules-extra-aws" for the v5.4 and v5.8 kernels
+  - Fedora - "kernel" for the v5.10+ kernel
+
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
 
 ### How to install (Git):

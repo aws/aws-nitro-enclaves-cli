@@ -174,6 +174,20 @@ impl DockerUtil {
     /// Pull the image, with the tag provided in constructor, from the Docker registry
     pub fn pull_image(&self) -> Result<(), DockerError> {
         let act = async {
+            // Check if the Docker image is locally available.
+            // If available, early exit.
+            if self
+                .docker
+                .images()
+                .get(&self.docker_image)
+                .inspect()
+                .await
+                .is_ok()
+            {
+                eprintln!("Using the locally available Docker image...");
+                return Ok(());
+            }
+
             let mut pull_options_builder = PullOptions::builder();
             pull_options_builder.image(&self.docker_image);
 

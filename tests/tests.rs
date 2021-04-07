@@ -29,10 +29,11 @@ mod tests {
     use openssl::pkey::{PKey, Private};
     use openssl::x509::{X509Name, X509};
 
+    // Remote Docker image
     const SAMPLE_DOCKER: &str =
         "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample";
-    const COMMAND_EXECUTER_DOCKER: &str =
-        "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:command-executer";
+    // Local Docker image
+    const COMMAND_EXECUTER_DOCKER: &str = "command_executer:eif";
 
     pub const MAX_BOOT_TIMEOUT_SEC: u64 = 9;
 
@@ -134,27 +135,14 @@ mod tests {
             private_key: None,
         };
 
-        let measurements = build_from_docker(
+        build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
         )
-        .expect("Docker build failed")
-        .1;
-        assert_eq!(
-            measurements.get("PCR0").unwrap(),
-            "4a3de500f6ef47811e534ac7375d51f261556475659bb51a7992a3057d3def6deb7e2c3dc78123861c0acdc165f990e6"
-        );
-        assert_eq!(
-            measurements.get("PCR1").unwrap(),
-            "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
-        );
-        assert_eq!(
-            measurements.get("PCR2").unwrap(),
-            "fce6c6e0af9410ba96f48925971f89378a15d185aaee8982647f8f2c8d1e2d387b52681f1354f21778d81044e476bc3e"
-        );
+        .expect("Docker build failed");
     }
 
     fn generate_signing_cert_and_key(cert_path: &str, key_path: &str) {

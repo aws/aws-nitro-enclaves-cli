@@ -25,6 +25,9 @@ function clean_up_and_exit() {
 	[ "$(lsmod | grep -cw nitro_enclaves)" -eq 0 ] || rmmod nitro_enclaves || register_test_fail
 	make clean
 	rm -rf test_images
+	# Cleanup pulled images during testing
+	docker rmi 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample 2> /dev/null || true
+	docker rmi hello-world:latest 2> /dev/null || true
 
 	exit $TEST_SUITES_FAILED
 }

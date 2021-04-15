@@ -109,7 +109,7 @@ impl NitroEnclave {
         // Close enclave descriptor.
         let rc = unsafe { libc::close(self.enc_fd) };
         if rc < 0 {
-            panic!(format!("Could not close enclave descriptor: {}.", rc))
+            panic!("Could not close enclave descriptor: {}.", rc)
         }
     }
 

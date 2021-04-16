@@ -95,7 +95,7 @@ A configuration file example can be found in `configs/config.yaml`.
 
 After installing the Nitro CLI RPM, the vsock proxy can be run as a service using the following command:  
 ```
-systemctl enable vsock-proxy.service
+systemctl enable nitro-enclaves-vsock-proxy.service
 ```
 The service files can be found in `service` directory. The proxy is ran using the default configuration
 from `/etc/vsock_proxy/config.yaml`, on local port 8000 and the AWS KMS endpoint corresponding to

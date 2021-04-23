@@ -35,9 +35,12 @@ This repository contains a collection of tools and commands used for managing th
   1. Clone the repository.
   2. Set NITRO_CLI_INSTALL_DIR to the desired location, by default everything will be installed in build/install
   3. Run 'make nitro-cli && make vsock-proxy && make install'.
-  4. Source the script ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.sh.
-  5. [Optional] You could add ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.shenv.sh in you local shell configuration.
-  6. You are now ready to go.
+  4. [Rerun after reboot] Source the script ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.sh.
+  5. [Rerun after reboot] Preallocate resources for the enclaves(s). 
+     For example, to configure 2 vCPUs and 256 Mib for enclave use:
+     `nitro-cli-config -i -m 256 -t 2`
+  6. [Optional] You could add ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.sh in your local shell configuration.
+  7. You are now ready to go.
 
 ### How to install (Amazon Linux repository):
 #### Running enclaves

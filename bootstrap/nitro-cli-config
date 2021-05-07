@@ -438,7 +438,8 @@ function configure_resource_directory {
 # Configure the resource directories for Nitro CLI logging and sockets.
 function configure_resource_directories {
     # Configure the directory that will hold enclave process sockets.
-    configure_resource_directory "/var/run/$RES_DIR_NAME"
+    sudo_run "echo \"d /run/$RES_DIR_NAME 0775 root $NE_GROUP_NAME\" > /usr/lib/tmpfiles.d/$RES_DIR_NAME.conf" || fail "Could not configure the directory for the enclave process sockets - /run/$RES_DIR_NAME"
+    sudo_run "systemd-tmpfiles --create /usr/lib/tmpfiles.d/$RES_DIR_NAME.conf" || fail "Could not make /run/$RES_DIR_NAME available on the system"
 
     # Configure the directory that will hold logs.
     configure_resource_directory "/var/log/$RES_DIR_NAME"

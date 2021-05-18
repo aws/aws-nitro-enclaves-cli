@@ -19,6 +19,7 @@ This repository contains a collection of tools and commands used for managing th
   - Ubuntu v5.11+ kernel (e.g. linux-aws 5.11.0-1006-aws x86_64)
   - Fedora v5.10+ kernel (e.g. 5.10.12-200.fc33.x86_64)
   - CentOS Stream v4.18+ kernel starting with kernel-4.18.0-257.el8.x86_64
+  - Red Hat Enterprise Linux v4.18+ kernel starting with kernel-4.18.0-305.el8.x86_64
 
   The following packages need to be installed or updated to have the Nitro Enclaves kernel driver available in the mentioned distros:
 
@@ -26,6 +27,7 @@ This repository contains a collection of tools and commands used for managing th
   - Ubuntu - "linux-aws" and "linux-modules-extra-aws" for the v5.4, v5.8 and v5.11+ kernels
   - Fedora - "kernel" for the v5.10+ kernel
   - CentOS Stream - "kernel" for the v4.18+ kernel
+  - Red Hat Enterprise Linux - "kernel" for the v4.18+ kernel
 
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
 

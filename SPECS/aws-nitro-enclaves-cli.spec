@@ -17,8 +17,8 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.0.10
-Release:    1%{?dist}
+Version:    1.0.11
+Release:    0%{?dist}
 
 License:    Apache 2.0
 
@@ -190,6 +190,12 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Wed May 19 2021 Alexandru Gheorghe <aggh@amazon.com> - 1.0.11-0
+- Updated documentation.
+- Updated dependencies to exclude deprecated crates and unused ones.
+- Switch vsock proxy to using IMDSv2.
+- Minor bug fixes.
+
 * Sat Feb 06 2021 Gabriel Bercaru <bercarug@amazon.com> - 1.0.10-1
 - Changed release from 0 to 1
 

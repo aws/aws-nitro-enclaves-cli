@@ -1,6 +1,6 @@
 [package]
 name = "nitro-cli"
-version = "1.0.10"
+version = "1.0.11"
 authors = ["Alexandru Gheorghe <aggh@amazon.com>"]
 edition = "2018"
 

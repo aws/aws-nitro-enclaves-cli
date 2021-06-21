@@ -7,7 +7,7 @@ This repository contains a collection of tools and commands used for managing th
   2. Install gcc, make, git, llvm-dev, libclang-dev, clang.
 
 ### Driver information
-  The Nitro Enclaves kernel driver in the 'drivers/virt/nitro_enclaves' directory is similar to the one merged into the Linux kernel mainline ( https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=726eb70e0d34dc4bc4dada71f52bba8ed638431e ) and that is available starting with the v5.10 Linux kernel.
+  The Nitro Enclaves kernel driver is available in the upstream Linux kernel starting with the v5.10 kernel. The codebase from the 'drivers/virt/nitro_enclaves' directory in this GitHub repository is similar to the one merged into the upstream Linux kernel.
 
   The Nitro Enclaves kernel driver is currently available in the following distros kernels:
 

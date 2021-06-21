@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM public.ecr.aws/lts/ubuntu:latest
 
 RUN apt-get update
 RUN apt-get install -y build-essential gcc make wget

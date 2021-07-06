@@ -9,7 +9,7 @@ This repository contains a collection of tools and commands used for managing th
 ### Driver information
   The Nitro Enclaves kernel driver is available in the upstream Linux kernel starting with the v5.10 kernel. The codebase from the 'drivers/virt/nitro_enclaves' directory in this GitHub repository is similar to the one merged into the upstream Linux kernel.
 
-  The Nitro Enclaves kernel driver is currently available in the following distros kernels:
+  The Nitro Enclaves kernel driver is currently available in the following distro kernels:
 
   - Amazon Linux 2 v4.14 kernel starting with kernel-4.14.198-152.320.amzn2.x86_64
   - Amazon Linux 2 v5.4 kernel starting with kernel-5.4.68-34.125.amzn2.x86_64
@@ -64,15 +64,22 @@ This repository contains a collection of tools and commands used for managing th
   This library is licensed under the Apache 2.0 License.
 
 ## Source-code components
-  The components of the CLI are organized as follows (all paths are relative to the CLI's root directory):
+  The components of the Nitro Enclaves CLI are organized as follows (all paths are relative to the Nitro Enclaves CLI's root directory):
 
   - 'blobs': Binary blobs providing pre-compiled components needed for the building of enclave images:
-      - 'blobs/bzImage': Kernel image
-      - 'blobs/bzImage.config': Kernel config
-      - 'blobs/cmdline': Kernel boot command line
-      - 'blobs/init': Init process executable
-      - 'blobs/linuxkit': LinuxKit-based user-space environment
-      - 'blobs/nsm.ko': The driver which enables the Nitro Secure Module (NSM) component inside the enclave
+      - 'blobs/aarch64/bzImage': Kernel image
+      - 'blobs/aarch64/bzImage.config': Kernel config
+      - 'blobs/aarch64/cmdline': Kernel boot command line
+      - 'blobs/aarch64/init': Init process executable
+      - 'blobs/aarch64/linuxkit': LinuxKit-based user-space environment
+      - 'blobs/aarch64/nsm.ko': The driver which enables the Nitro Secure Module (NSM) component inside the enclave
+      - 'blobs/x86_64/bzImage': Kernel image
+      - 'blobs/x86_64/bzImage.config': Kernel config
+      - 'blobs/x86_64/cmdline': Kernel boot command line
+      - 'blobs/x86_64/init': Init process executable
+      - 'blobs/x86_64/linuxkit': LinuxKit-based user-space environment
+      - 'blobs/x86_64/nsm.ko': The driver which enables the Nitro Secure Module (NSM) component inside the enclave
+      - The enclave kernel is based on the v4.14 Amazon Linux kernel - https://github.com/amazonlinux/linux/tree/amazon-4.14.y/master
 
   - 'build': An automatically-generated directory which stores the build output for various components (the CLI, the command executer etc.)
 
@@ -95,6 +102,8 @@ This repository contains a collection of tools and commands used for managing th
   - 'eif_utils': Utilities for the EIF files, focused mostly on building EIFs
 
   - 'enclave_build': A tool which builds EIF files starting from a Docker image and pre-existing binary blobs (such as those from 'blobs')
+
+  - 'examples': Basic examples of enclaves. One example is the hello world enclave.
 
   - 'include': The header files exposed by the Nitro Enclaves kernel module used by the Nitro CLI
 

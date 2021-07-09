@@ -1,6 +1,6 @@
 #!/bin/bash -x
 #
-# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Script used for running all the tests we have on a EC2 instance that has
@@ -12,6 +12,7 @@ TEST_SUITES_TOTAL=0
 SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export NITRO_CLI_BLOBS="${SCRIPTDIR}/blobs"
 export NITRO_CLI_ARTIFACTS="${SCRIPTDIR}/build"
+ARCH="$(uname -m)"
 
 $(aws ecr get-login --no-include-email --region us-east-1)
 
@@ -28,6 +29,9 @@ function clean_up_and_exit() {
 	# Cleanup pulled images during testing
 	docker rmi 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample 2> /dev/null || true
 	docker rmi hello-world:latest 2> /dev/null || true
+
+	rm -rf examples/"${ARCH}"/hello-entrypoint
+	docker rmi hello-entrypoint-usage:latest 2> /dev/null || true
 
 	exit $TEST_SUITES_FAILED
 }
@@ -92,10 +96,19 @@ mkdir -p /run/nitro_enclaves || test_failed
 mkdir -p /var/log/nitro_enclaves || test_failed
 
 # Build EIFS for testing
-mkdir -p test_images
+mkdir -p test_images || test_failed
 export HOME="/root"
 nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample \
 	--output-file test_images/vsock-sample.eif || test_failed
+
+# Build enclave image using Docker ENTRYPOINT instruction
+mkdir -p examples/"${ARCH}"/hello-entrypoint || test_failed
+cp -r examples/"${ARCH}"/hello/* examples/"${ARCH}"/hello-entrypoint || test_failed
+
+sed -i 's/CMD/ENTRYPOINT/g' examples/"${ARCH}"/hello-entrypoint/Dockerfile || test_failed
+
+nitro-cli build-enclave --docker-dir examples/"${ARCH}"/hello-entrypoint --docker-uri hello-entrypoint-usage \
+	--output-file test_images/hello-entrypoint-usage.eif || test_failed
 
 # Run all unit tests
 while IFS= read -r test_line
@@ -106,7 +119,7 @@ do
 
 	configure_ne_driver
 
-	./build/nitro_cli/x86_64-unknown-linux-musl/release/deps/"${test_exec_name}" \
+	./build/nitro_cli/"${ARCH}"-unknown-linux-musl/release/deps/"${test_exec_name}" \
 		--test-threads=1 --nocapture || test_failed
 done < <(grep -v '^ *#' < build/test_executables.txt)
 

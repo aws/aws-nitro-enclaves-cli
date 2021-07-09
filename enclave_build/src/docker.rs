@@ -277,19 +277,19 @@ impl DockerUtil {
         // First try to find CMD parameters (together with potential ENV bindings)
         let act_cmd = async {
             match self.docker.images().get(&self.docker_image).inspect().await {
-                Ok(image) => Ok(image.config.cmd),
+                Ok(image) => image.config.cmd.ok_or(DockerError::UnsupportedEntryPoint),
                 Err(e) => {
                     error!("{:?}", e);
-                    Err(DockerError::UnsupportedEntryPoint)
+                    Err(DockerError::InspectError)
                 }
             }
         };
         let act_env = async {
             match self.docker.images().get(&self.docker_image).inspect().await {
-                Ok(image) => Ok(image.config.env),
+                Ok(image) => image.config.env.ok_or(DockerError::UnsupportedEntryPoint),
                 Err(e) => {
                     error!("{:?}", e);
-                    Err(DockerError::UnsupportedEntryPoint)
+                    Err(DockerError::InspectError)
                 }
             }
         };
@@ -305,10 +305,13 @@ impl DockerUtil {
         if check_cmd_runtime.is_err() || check_env_runtime.is_err() {
             let act_entrypoint = async {
                 match self.docker.images().get(&self.docker_image).inspect().await {
-                    Ok(image) => Ok(image.config.entrypoint),
+                    Ok(image) => image
+                        .config
+                        .entrypoint
+                        .ok_or(DockerError::UnsupportedEntryPoint),
                     Err(e) => {
                         error!("{:?}", e);
-                        Err(DockerError::UnsupportedEntryPoint)
+                        Err(DockerError::InspectError)
                     }
                 }
             };

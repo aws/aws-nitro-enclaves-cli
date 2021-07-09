@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33"
-sha2 = "0.9.3"
+sha2 = "0.9.5"
 hex = "0.3.2"
 crc = "1.8"
 eif_defs = { path = "../eif_defs" }

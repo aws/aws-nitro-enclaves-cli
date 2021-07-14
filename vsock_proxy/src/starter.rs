@@ -25,14 +25,14 @@ pub const VSOCK_PROXY_PORT: u32 = 8000;
 /// The most common result type provided by VsockProxy operations.
 pub type VsockProxyResult<T> = Result<T, String>;
 
-/// Checks if the forwarded server is allowed
+/// Checks if the forwarded server is allowed, providing its IP on success.
 pub fn check_allowlist(
-    remote_addr: IpAddr,
+    remote_host: &str,
     remote_port: u16,
     config_file: Option<&str>,
     only_4: bool,
     only_6: bool,
-) -> VsockProxyResult<()> {
+) -> VsockProxyResult<IpAddr> {
     if let Some(config_file) = config_file {
         let mut f = File::open(config_file).map_err(|_| "Could not open the file")?;
 
@@ -45,17 +45,35 @@ pub fn check_allowlist(
             .as_vec()
             .ok_or("No allowlist field")?;
 
+        // Obtain the remote server's IP address.
+        let mut addrs = Proxy::parse_addr(&remote_host, only_4, only_6)
+            .map_err(|err| format!("Could not parse remote address: {}", err))?;
+        let remote_addr = *addrs.get(0).ok_or("No IP address found")?;
+
         for raw_service in services {
+            let addr = raw_service["address"].as_str().ok_or("No address field")?;
             let port = raw_service["port"]
                 .as_i64()
                 .ok_or("No port field or invalid type")?;
             let port = port as u16;
 
-            let addr = raw_service["address"].as_str().ok_or("No address field")?;
-            let addrs = Proxy::parse_addr(addr, only_4, only_6)?;
+            // Start by matching against ports.
+            if port != remote_port {
+                continue;
+            }
+
+            // Attempt to match directly against the allowlisted hostname first.
+            if addr == remote_host {
+                info!("Matched with host name \"{}\" and port \"{}\"", addr, port);
+                return Ok(remote_addr);
+            }
+
+            // If hostname matching failed, attempt to match against IPs.
+            addrs = Proxy::parse_addr(addr, only_4, only_6)?;
             for addr in addrs.into_iter() {
-                if addr == remote_addr && port == remote_port {
-                    return Ok(());
+                if addr == remote_addr {
+                    info!("Matched with host IP \"{}\" and port \"{}\"", addr, port);
+                    return Ok(remote_addr);
                 }
             }
         }
@@ -75,7 +93,7 @@ pub struct Proxy {
 impl Proxy {
     pub fn new(
         local_port: u32,
-        remote_addr: IpAddr,
+        remote_host: &str,
         remote_port: u16,
         num_workers: usize,
         config_file: Option<&str>,
@@ -86,11 +104,15 @@ impl Proxy {
             return Err("Number of workers must not be 0".to_string());
         }
         info!("Checking allowlist configuration");
-        check_allowlist(remote_addr, remote_port, config_file, only_4, only_6)
+        let remote_addr = check_allowlist(remote_host, remote_port, config_file, only_4, only_6)
             .map_err(|err| format!("Error at checking the allowlist: {}", err))?;
-
         let pool = ThreadPool::new(num_workers);
         let sock_type = SockType::Stream;
+
+        info!(
+            "Using IP \"{:?}\" for the given server \"{}\"",
+            remote_addr, remote_host
+        );
         Ok(Proxy {
             local_port,
             remote_addr,

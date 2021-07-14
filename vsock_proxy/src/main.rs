@@ -81,10 +81,6 @@ fn main() -> VsockProxyResult<()> {
         .value_of("remote_addr")
         // This argument is required, so clap ensures it's available
         .unwrap();
-    let remote_addrs = Proxy::parse_addr(&remote_addr, only_4, only_6)
-        .map_err(|err| format!("Could not parse remote address: {}", err))?;
-    let remote_addr = *remote_addrs.get(0).ok_or("No IP address found")?;
-    info!("Using IP {:?} for the given server", remote_addr);
 
     let remote_port = matches
         .value_of("remote_port")

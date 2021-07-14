@@ -23,7 +23,7 @@ fn vsock_connect(port: u32) -> VsockStream {
 #[test]
 fn test_tcp_connection() {
     // Proxy will translate from port 8000 vsock to localhost port 9000 TCP
-    let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+    let addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)).to_string();
     let mut file = NamedTempFile::new().unwrap();
     file.write_all(
         b"allowlist:\n\
@@ -32,7 +32,7 @@ fn test_tcp_connection() {
     .unwrap();
     let proxy = Proxy::new(
         vsock_proxy::starter::VSOCK_PROXY_PORT,
-        addr,
+        &addr,
         9000,
         2,
         file.path().to_str(),

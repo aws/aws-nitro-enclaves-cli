@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "nitro-cli"
-version = "1.0.11"
+version = "1.0.12"
 dependencies = [
  "bindgen",
  "chrono",

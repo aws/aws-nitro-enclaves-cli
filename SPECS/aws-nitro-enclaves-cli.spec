@@ -17,7 +17,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.0.11
+Version:    1.0.12
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -190,6 +190,9 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Thu July 15 2021 Alexandru Gheorghe <aggh@amazon.com> - 1.0.12-0
+- Fix build-enclave when docker contains ENTRYPOINT command.
+
 * Wed May 19 2021 Alexandru Gheorghe <aggh@amazon.com> - 1.0.11-0
 - Updated documentation.
 - Updated dependencies to exclude deprecated crates and unused ones.

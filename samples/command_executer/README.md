@@ -7,13 +7,13 @@ above mentioned port, sends commands and waits for the reply (unless --no-wait
 is used). The command-executer is useful for executing shell commands inside
 the enclave and sending/receiving files to/from the enclave.
 
-It replaces the old nc-vsock we used in the past (which we haven't bothered to
-remove yet).
+The command executer sample should be used for testing and debugging only,
+and not in a production environment.
 
 ## Building
 
 ```
-	$ cargo build
+	$ cargo build --release
 ```
 
 ## Running
@@ -24,7 +24,7 @@ remove yet).
 and build an EIF.
 
 ```
-	$ export NITRO_CLI_BLOBS=$(realpath ../../blobs/)
+	$ export NITRO_CLI_BLOBS=$(realpath ../../blobs/x86_64)
 	$ nitro-cli build-enclave --docker-dir "./resources" --docker-uri mytag --output-file command-executer.eif
 ```
 ---
@@ -45,13 +45,12 @@ instance you are about to run an enclave on.
 4. Launch an enclave with the EIF containing command-executer.
 
 ```
-	$ ./nitro-cli run-enclave --cpu-count 4 --memory 2048 --eif-path command_executer.eif
+	$ ./nitro-cli run-enclave --cpu-count 4 --memory 2048 --eif-path command_executer.eif --enclave-cid 16
 	Start allocating memory...
-	Running on instance CPUs [1, 5, 2, 6]
 	Started enclave with enclave-cid: 16, memory: 2048 MiB, cpu-ids: [1, 5, 2, 6]
-	Sending image to cid: 16 port: 7000
 	{
-	  "EnclaveID": "i-08aa8a2f7bff2ff99_enc103923520469154997",
+	  "EnclaveID": "i-abc12345def67890a-enc9876abcd543210ef12",
+	  "ProcessID": 12345,
 	  "EnclaveCID": 16,
 	  "NumberOfCPUs": 4,
 	  "CPUIDs": [

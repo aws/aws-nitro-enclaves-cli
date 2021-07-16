@@ -60,6 +60,23 @@ This repository contains a collection of tools and commands used for managing th
 ### How to use nitro-cli
   The user guide for the Nitro Enclaves CLI can be found at https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-cli.html.
 
+#### Enclave disk size
+  The enclaves do not have access to a physical disk, just a RAM filesystem.
+  One can configure the disk space by changing memory size or by using kernel command line arguments.
+
+  The `init.c` file keeps the default configuration for each volume. The below example shows
+  the default options for `/tmp`.
+  ```
+  { OpMount, .mount = { "tmpfs", "/tmp", "tmpfs", MS_NODEV | MS_NOSUID | MS_NOEXEC } },
+  ```
+  To modify the memory allocated to this volume, another parameter is needed
+  ```
+  { OpMount, .mount = { "tmpfs", "/tmp", "tmpfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "size=100%" } },
+  ```
+  Note that the parameter `size` specifies only the maximum allocated size.
+  After modifying the configuration, the file needs to be recompiled using `make init` and moved to
+  `/usr/share/nitro_enclaves/blobs/init`.
+
 ## License
   This library is licensed under the Apache 2.0 License.
 

@@ -38,7 +38,7 @@ RUN  source $HOME/.cargo/env && \
 RUN  source $HOME/.cargo/env && \
 	cargo install cargo-audit --version 0.15.0 --locked
 RUN  source $HOME/.cargo/env && \
-	cargo install cargo-about --version 0.2.2
+	cargo install cargo-about --version 0.3.0 --locked
 RUN apt-get install -y jq
 
 # Install docker for nitro-cli build-enclave runs

@@ -22,6 +22,7 @@ use log::{info, warn};
 use nix::sys::epoll::EpollFlags;
 use nix::sys::signal::{Signal, SIGHUP};
 use nix::unistd::{daemon, getpid, getppid};
+use std::collections::BTreeMap;
 use std::os::unix::io::{FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::process;
@@ -221,6 +222,7 @@ fn handle_command(
     conn_listener: &mut ConnectionListener,
     enclave_manager: &mut EnclaveManager,
     terminate_thread: &mut Option<std::thread::JoinHandle<()>>,
+    pcr_thread: &mut Option<JoinHandle<NitroCliResult<BTreeMap<String, String>>>>,
 ) -> NitroCliResult<(i32, bool)> {
     Ok(match cmd {
         EnclaveProcessCommandType::Run => {
@@ -234,10 +236,12 @@ fn handle_command(
                 })?;
                 info!("Run args = {:?}", run_args);
 
-                *enclave_manager = run_enclaves(&run_args, Some(connection)).map_err(|e| {
+                let run_result = run_enclaves(&run_args, Some(connection)).map_err(|e| {
                     e.add_subaction("Failed to trigger enclave run".to_string())
                         .set_action("Run Enclave".to_string())
                 })?;
+                *enclave_manager = run_result.enclave_manager;
+                *pcr_thread = run_result.pcr_thread;
 
                 info!("Enclave ID = {}", enclave_manager.enclave_id);
                 logger
@@ -309,6 +313,28 @@ fn handle_command(
                     .set_action("Describe Enclaves".to_string())
             })?;
 
+            // Evaluate thread result at first describe, then set thread to None.
+            if pcr_thread.is_some() {
+                enclave_manager
+                    .set_measurements(
+                        pcr_thread
+                            .take()
+                            .unwrap()
+                            .join()
+                            .map_err(|e| {
+                                new_nitro_cli_failure!(
+                                    &format!("Termination thread join failed: {:?}", e),
+                                    NitroCliErrorEnum::ThreadJoinFailure
+                                )
+                            })?
+                            .map_err(|e| {
+                                e.add_subaction("Failed to save PCR values".to_string())
+                            })?,
+                    )
+                    .expect("Failed to set measuements inside enclave handle.");
+                *pcr_thread = None;
+            }
+
             describe_enclaves(&enclave_manager, connection).map_err(|e| {
                 e.add_subaction("Failed to describe enclave".to_string())
                     .set_action("Describe Enclaves".to_string())
@@ -330,6 +356,8 @@ fn process_event_loop(
     let mut conn_listener = ConnectionListener::new()?;
     let mut enclave_manager = EnclaveManager::default();
     let mut terminate_thread: Option<std::thread::JoinHandle<()>> = None;
+    let mut pcr_thread: Option<std::thread::JoinHandle<NitroCliResult<BTreeMap<String, String>>>> =
+        None;
     let mut done = false;
     let mut ret_value = Ok(());
 
@@ -389,6 +417,7 @@ fn process_event_loop(
             &mut conn_listener,
             &mut enclave_manager,
             &mut terminate_thread,
+            &mut pcr_thread,
         );
 
         // Obtain the status code and whether the event loop must be exited.

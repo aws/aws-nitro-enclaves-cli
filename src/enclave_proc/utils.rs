@@ -39,7 +39,7 @@ pub fn flags_to_string(flags: u64) -> String {
 pub fn get_enclave_describe_info(
     enclave_manager: &EnclaveManager,
 ) -> NitroCliResult<EnclaveDescribeInfo> {
-    let (slot_uid, enclave_cid, cpus_count, cpu_ids, memory_mib, flags, state) =
+    let (slot_uid, enclave_cid, cpus_count, cpu_ids, memory_mib, flags, state, measurements) =
         enclave_manager.get_description_resources()?;
     let info = EnclaveDescribeInfo::new(
         generate_enclave_id(slot_uid)?,
@@ -49,6 +49,7 @@ pub fn get_enclave_describe_info(
         memory_mib,
         state.to_string(),
         flags_to_string(flags),
+        measurements,
     );
     Ok(info)
 }

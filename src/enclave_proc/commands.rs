@@ -4,7 +4,9 @@
 #![deny(warnings)]
 
 use log::debug;
+use std::collections::BTreeMap;
 use std::fs::File;
+use std::thread::JoinHandle;
 
 use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::construct_error_message;
@@ -17,11 +19,19 @@ use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
 use crate::enclave_proc::utils::get_enclave_describe_info;
 use crate::new_nitro_cli_failure;
 
+/// Information retuned by run_enclave function.
+pub struct RunEnclaveResult {
+    /// Manager structure describing the enclave.
+    pub enclave_manager: EnclaveManager,
+    /// Handle of the thread that computes PCRs.
+    pub pcr_thread: Option<JoinHandle<NitroCliResult<BTreeMap<String, String>>>>,
+}
+
 /// Launch an enclave with the specified arguments and provide the launch status through the given connection.
 pub fn run_enclaves(
     args: &RunEnclavesArgs,
     connection: Option<&Connection>,
-) -> NitroCliResult<EnclaveManager> {
+) -> NitroCliResult<RunEnclaveResult> {
     debug!("run_enclaves");
 
     let eif_file = File::open(&args.eif_path).map_err(|e| {
@@ -46,6 +56,13 @@ pub fn run_enclaves(
     .map_err(|e| {
         e.add_subaction("Failed to construct EnclaveManager with given arguments".to_string())
     })?;
+
+    // Launch parallel computing of PCRs
+    let path = args.eif_path.clone();
+    let handle = std::thread::spawn(move || {
+        EnclaveManager::get_pcrs(&path)
+            .map_err(|e| e.add_subaction("Failed to save PCR values".to_string()))
+    });
     enclave_manager
         .run_enclave(connection)
         .map_err(|e| e.add_subaction("Failed to run enclave".to_string()))?;
@@ -53,7 +70,10 @@ pub fn run_enclaves(
         .update_state(EnclaveState::Running)
         .map_err(|e| e.add_subaction("Failed to update enclave state".to_string()))?;
 
-    Ok(enclave_manager)
+    Ok(RunEnclaveResult {
+        enclave_manager,
+        pcr_thread: Some(handle),
+    })
 }
 
 /// Terminate an enclave and provide the termination status through the given connection.

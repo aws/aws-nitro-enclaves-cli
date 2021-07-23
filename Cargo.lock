@@ -854,12 +854,15 @@ dependencies = [
 name = "nitro-cli"
 version = "1.0.12"
 dependencies = [
+ "aws-nitro-enclaves-cose",
  "bindgen",
  "chrono",
  "clap",
+ "eif_defs",
  "eif_loader",
  "enclave_build",
  "flexi_logger",
+ "hex 0.3.2",
  "inotify",
  "lazy_static",
  "libc",
@@ -872,6 +875,7 @@ dependencies = [
  "serde",
  "serde_cbor",
  "serde_json",
+ "sha2",
  "signal-hook",
  "tempfile",
  "vmm-sys-util",

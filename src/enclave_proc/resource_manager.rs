@@ -11,10 +11,14 @@ mod bindings {
 }
 
 use bindings::*;
+use eif_defs::eif_hasher::EifHasher;
+use eif_defs::{EifHeader, EifSectionHeader, EifSectionType, PcrSignature};
 use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
 use libc::c_int;
 use log::{debug, info};
 use nix::sys::socket::SockAddr;
+use serde_cbor::from_slice;
+use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;
 use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
@@ -22,6 +26,7 @@ use std::io::prelude::*;
 use std::io::{Error, SeekFrom};
 use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use vsock::VsockListener;
@@ -49,7 +54,16 @@ pub type UserMemoryRegion = ne_user_memory_region;
 pub type ImageLoadInfo = ne_image_load_info;
 
 /// The internal data type needed for describing an enclave.
-type UnpackedHandle = (u64, u64, u64, Vec<u32>, u64, u64, EnclaveState);
+type UnpackedHandle = (
+    u64,
+    u64,
+    u64,
+    Vec<u32>,
+    u64,
+    u64,
+    EnclaveState,
+    BTreeMap<String, String>,
+);
 
 /// The bit indicating if an enclave has been launched in debug mode.
 pub const NE_ENCLAVE_DEBUG_MODE: u64 = 0x1;
@@ -155,6 +169,8 @@ struct EnclaveHandle {
     eif_file: Option<File>,
     /// The current state the enclave is in.
     state: EnclaveState,
+    /// PCR values.
+    measurements: BTreeMap<String, String>,
 }
 
 /// The structure which manages an enclave in a thread-safe manner.
@@ -539,6 +555,7 @@ impl EnclaveHandle {
                 .map_err(|e| e.add_subaction("Create resource allocator".to_string()))?,
             eif_file: Some(eif_file),
             state: EnclaveState::default(),
+            measurements: BTreeMap::new(),
         })
     }
 
@@ -905,6 +922,168 @@ impl EnclaveManager {
         Ok(())
     }
 
+    /// Set measurements field inside EnclaveHandle
+    pub fn set_measurements(
+        &mut self,
+        measurements: BTreeMap<String, String>,
+    ) -> NitroCliResult<()> {
+        self.enclave_handle
+            .lock()
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to acquire lock: {:?}", e),
+                    NitroCliErrorEnum::LockAcquireFailure
+                )
+            })?
+            .measurements = measurements;
+        Ok(())
+    }
+
+    /// Read EIF, calculate PCR values and save them.
+    ///
+    /// Go through all the section of the EIF file, extract the headers
+    /// and compute the PCRs using the hashers, based on the section type.
+    /// Measurements will be returned as result of a separate thread executing
+    /// this function.
+    pub fn get_pcrs(eif_path: &str) -> NitroCliResult<BTreeMap<String, String>> {
+        let mut curr_seek = 0;
+        let mut measurements = BTreeMap::new();
+        let mut eif_file = File::open(eif_path).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to open the EIF file: {:?}", e),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+            .add_info(vec![eif_path, "Open"])
+        })?;
+
+        // Skip EIF header
+        curr_seek += EifHeader::size();
+        eif_file
+            .seek(SeekFrom::Start(curr_seek as u64))
+            .expect("Could not seek kernel to first section.");
+
+        let mut section_buf = vec![0u8; EifSectionHeader::size()];
+        let mut image_hasher =
+            EifHasher::new_without_cache(Sha384::new()).expect("Could not create image_hasher");
+        let mut bootstrap_hasher =
+            EifHasher::new_without_cache(Sha384::new()).expect("Could not create bootstrap_hasher");
+        let mut app_hasher =
+            EifHasher::new_without_cache(Sha384::new()).expect("Could not create app_hasher");
+        let mut cert_hasher =
+            EifHasher::new_without_cache(Sha384::new()).expect("Could not create cert_hasher");
+        let mut ramdisk_idx = 0;
+
+        // Read all section headers and treat by type
+        while eif_file
+            .read_exact(&mut section_buf)
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Error while reading EIF header: {:?}", e),
+                    NitroCliErrorEnum::EifParsingError
+                )
+            })
+            .is_ok()
+        {
+            let section = EifSectionHeader::from_be_bytes(&section_buf).map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Error extracting EIF section header: {:?}", e),
+                    NitroCliErrorEnum::EifParsingError
+                )
+            })?;
+
+            let mut buf = vec![0u8; section.section_size as usize];
+            curr_seek += EifSectionHeader::size();
+            eif_file
+                .seek(SeekFrom::Start(curr_seek as u64))
+                .expect("Could not seek EIF after header");
+            eif_file.read_exact(&mut buf).map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Error while reading kernel from EIF: {:?}", e),
+                    NitroCliErrorEnum::EifParsingError
+                )
+            })?;
+            curr_seek += section.section_size as usize;
+            eif_file
+                .seek(SeekFrom::Start(curr_seek as u64))
+                .expect("Could not seek EIF after section");
+
+            match section.section_type {
+                EifSectionType::EifSectionKernel => {
+                    image_hasher.write_all(&buf).unwrap();
+                    bootstrap_hasher.write_all(&buf).unwrap();
+                }
+                EifSectionType::EifSectionCmdline => {
+                    image_hasher.write_all(&buf).unwrap();
+                    bootstrap_hasher.write_all(&buf).unwrap();
+                }
+                EifSectionType::EifSectionRamdisk => {
+                    image_hasher.write_all(&buf).unwrap();
+                    if ramdisk_idx == 0 {
+                        bootstrap_hasher.write_all(&buf).unwrap();
+                    } else {
+                        app_hasher.write_all(&buf).unwrap();
+                    }
+                    ramdisk_idx += 1;
+                }
+                EifSectionType::EifSectionSignature => {
+                    // Deserialize PCR0 signature structure and write it to the hasher
+                    let des_sign: Vec<PcrSignature> = from_slice(&buf[..]).map_err(|e| {
+                        new_nitro_cli_failure!(
+                            &format!("Error deserializing certificate: {:?}", e),
+                            NitroCliErrorEnum::EifParsingError
+                        )
+                    })?;
+
+                    let cert = openssl::x509::X509::from_pem(&des_sign[0].signing_certificate)
+                        .map_err(|e| {
+                            new_nitro_cli_failure!(
+                                &format!("Error while digesting certificate: {:?}", e),
+                                NitroCliErrorEnum::EifParsingError
+                            )
+                        })?;
+                    let cert_der = cert.to_der().unwrap();
+
+                    // Write the hash and save it to measurements only if
+                    // signature section is present
+                    cert_hasher.write_all(&cert_der).unwrap();
+                    let cert_hasher = hex::encode(
+                        cert_hasher
+                            .tpm_extend_finalize_reset()
+                            .expect("Could not get result for cert_hasher"),
+                    );
+                    measurements.insert("8".to_string(), cert_hasher);
+                }
+                EifSectionType::EifSectionInvalid => {
+                    new_nitro_cli_failure!(
+                        "Eif contains an invalid section",
+                        NitroCliErrorEnum::EifParsingError
+                    );
+                }
+            }
+        }
+
+        let image_hasher = hex::encode(
+            image_hasher
+                .tpm_extend_finalize_reset()
+                .expect("Could not get result for image_hasher"),
+        );
+        let bootstrap_hasher = hex::encode(
+            bootstrap_hasher
+                .tpm_extend_finalize_reset()
+                .expect("Could not get result for bootstrap_hasher"),
+        );
+        let app_hasher = hex::encode(
+            app_hasher
+                .tpm_extend_finalize_reset()
+                .expect("Could not get result for app_hasher"),
+        );
+        measurements.insert("0".to_string(), image_hasher);
+        measurements.insert("1".to_string(), bootstrap_hasher);
+        measurements.insert("2".to_string(), app_hasher);
+
+        Ok(measurements)
+    }
+
     /// Get the resources needed for describing an enclave.
     ///
     /// The enclave handle is locked during this operation.
@@ -923,6 +1102,7 @@ impl EnclaveManager {
             locked_handle.allocated_memory_mib,
             locked_handle.flags,
             locked_handle.state.clone(),
+            locked_handle.measurements.clone(),
         ))
     }
 

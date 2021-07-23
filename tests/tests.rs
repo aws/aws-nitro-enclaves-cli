@@ -337,7 +337,9 @@ mod tests {
         let req_mem_size = args.memory_mib.clone();
         let req_nr_cpus: u64 = args.cpu_count.unwrap().try_into().unwrap();
         let debug_mode = args.debug_mode.clone();
-        let mut enclave_manager = run_enclaves(&args, None).expect("Run enclaves failed");
+        let mut enclave_manager = run_enclaves(&args, None)
+            .expect("Run enclaves failed")
+            .enclave_manager;
         let enclave_cid = enclave_manager.get_console_resources_enclave_cid().unwrap();
         let enclave_flags = enclave_manager
             .get_console_resources_enclave_flags()
@@ -458,7 +460,9 @@ mod tests {
             debug_mode: Some(false),
         };
 
-        let mut enclave_manager = run_enclaves(&run_args, None).expect("Run enclaves failed");
+        let mut enclave_manager = run_enclaves(&run_args, None)
+            .expect("Run enclaves failed")
+            .enclave_manager;
         let enclave_cid = enclave_manager.get_console_resources_enclave_cid().unwrap();
         let enclave_flags = enclave_manager
             .get_console_resources_enclave_flags()
@@ -509,7 +513,9 @@ mod tests {
             debug_mode: Some(true),
         };
 
-        let mut enclave_manager = run_enclaves(&run_args, None).expect("Run enclaves failed");
+        let mut enclave_manager = run_enclaves(&run_args, None)
+            .expect("Run enclaves failed")
+            .enclave_manager;
         let enclave_cid = enclave_manager.get_console_resources_enclave_cid().unwrap();
         let enclave_flags = enclave_manager
             .get_console_resources_enclave_flags()
@@ -555,5 +561,75 @@ mod tests {
             run_describe_terminate_command_executer_docker_image();
             run_describe_terminate_signed_enclave_image();
         }
+    }
+
+    #[test]
+    fn build_run_save_pcrs_describe() {
+        let dir = tempdir().unwrap();
+        let eif_path = dir.path().join("test.eif");
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed")
+        .1;
+
+        setup_env();
+        let run_args = RunEnclavesArgs {
+            enclave_cid: None,
+            eif_path: args.output,
+            cpu_ids: None,
+            cpu_count: Some(2),
+            memory_mib: 64,
+            debug_mode: Some(true),
+        };
+        let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
+        let mut enclave_manager = run_result.enclave_manager;
+        let mut pcr_thread = run_result.pcr_thread;
+
+        assert!(pcr_thread.is_some());
+
+        enclave_manager
+            .set_measurements(
+                pcr_thread
+                    .take()
+                    .unwrap()
+                    .join()
+                    .expect("Failed to join thread.")
+                    .expect("Failed to save PCRs."),
+            )
+            .expect("Failed to set measuements inside enclave handle.");
+
+        let info = get_enclave_describe_info(&enclave_manager).unwrap();
+        let replies: Vec<EnclaveDescribeInfo> = vec![info];
+        let reply = &replies[0];
+
+        assert_eq!(
+            reply.measurements.get(&"0".to_string()).unwrap(),
+            "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
+        );
+        assert_eq!(
+            reply.measurements.get(&"1".to_string()).unwrap(),
+            "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
+        );
+        assert_eq!(
+            reply.measurements.get(&"2".to_string()).unwrap(),
+            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
+        );
+
+        let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");
+        terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
     }
 }

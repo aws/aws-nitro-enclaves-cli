@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![allow(clippy::too_many_arguments)]
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -33,6 +34,9 @@ pub struct EnclaveDescribeInfo {
     #[serde(rename = "Flags")]
     /// The bit-mask which provides the enclave's launch flags.
     pub flags: String,
+    #[serde(rename = "PCRs")]
+    /// Contains the PCR values.
+    pub measurements: BTreeMap<String, String>,
 }
 
 impl EnclaveDescribeInfo {
@@ -45,6 +49,7 @@ impl EnclaveDescribeInfo {
         memory_mib: u64,
         state: String,
         flags: String,
+        measurements: BTreeMap<String, String>,
     ) -> Self {
         EnclaveDescribeInfo {
             enclave_id,
@@ -55,6 +60,7 @@ impl EnclaveDescribeInfo {
             memory_mib,
             state,
             flags,
+            measurements,
         }
     }
 }

@@ -111,6 +111,24 @@ pub fn get_pcrs<T: Digest + Debug + Write + Clone>(
     Ok(measurements)
 }
 
+/// Structure that groups together all metadata provided at build-time
+#[derive(Debug)]
+pub struct EifIdentityInfo {
+    pub img_name: String,
+    pub img_version: String,
+    pub metadata: Option<File>,
+}
+
+impl EifIdentityInfo {
+    pub fn new(img_name: String, img_version: String, metadata: Option<File>) -> Self {
+        EifIdentityInfo {
+            img_name,
+            img_version,
+            metadata,
+        }
+    }
+}
+
 pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     kernel: File,
     cmdline: Vec<u8>,

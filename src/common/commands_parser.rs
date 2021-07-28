@@ -102,6 +102,12 @@ pub struct BuildEnclavesArgs {
     pub signing_certificate: Option<String>,
     /// The path to the private key for signed enclaves.
     pub private_key: Option<String>,
+    /// The name of the enclave image.
+    pub img_name: Option<String>,
+    /// The version of the enclave image.
+    pub img_version: Option<String>,
+    /// The path to the private key for signed enclaves.
+    pub metadata: Option<String>,
 }
 
 impl BuildEnclavesArgs {
@@ -146,6 +152,9 @@ impl BuildEnclavesArgs {
             })?,
             signing_certificate,
             private_key,
+            img_name: parse_image_name(args),
+            img_version: parse_image_version(args),
+            metadata: parse_metadata(args),
         })
     }
 }
@@ -469,6 +478,18 @@ fn parse_signing_certificate(args: &ArgMatches) -> Option<String> {
 
 fn parse_private_key(args: &ArgMatches) -> Option<String> {
     args.value_of("private-key").map(|val| val.to_string())
+}
+
+fn parse_image_name(args: &ArgMatches) -> Option<String> {
+    args.value_of("image_name").map(|val| val.to_string())
+}
+
+fn parse_image_version(args: &ArgMatches) -> Option<String> {
+    args.value_of("image_version").map(|val| val.to_string())
+}
+
+fn parse_metadata(args: &ArgMatches) -> Option<String> {
+    args.value_of("metadata").map(|val| val.to_string())
 }
 
 fn parse_error_code_str(args: &ArgMatches) -> NitroCliResult<String> {

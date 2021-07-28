@@ -65,6 +65,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         assert_eq!(build_enclaves(args).is_err(), true);
@@ -81,6 +84,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         let measurements = build_from_docker(
@@ -89,6 +95,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed")
         .1;
@@ -135,6 +144,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -143,6 +155,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed");
     }
@@ -158,6 +173,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -166,6 +184,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed");
     }
@@ -227,6 +248,9 @@ mod tests {
             output: eif_path,
             signing_certificate: Some(cert_path),
             private_key: Some(key_path),
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         let measurements = build_from_docker(
@@ -235,6 +259,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed")
         .1;
@@ -281,6 +308,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -289,6 +319,9 @@ mod tests {
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
+            &build_args.img_name,
+            &build_args.img_version,
+            &build_args.metadata,
         )
         .expect("Docker build failed");
 
@@ -321,6 +354,9 @@ mod tests {
             output: eif_path,
             signing_certificate: Some(cert_path),
             private_key: Some(key_path),
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -329,6 +365,9 @@ mod tests {
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
+            &build_args.img_name,
+            &build_args.img_version,
+            &build_args.metadata,
         )
         .expect("Docker build failed");
 
@@ -356,6 +395,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -364,6 +406,9 @@ mod tests {
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
+            &build_args.img_name,
+            &build_args.img_version,
+            &build_args.metadata,
         )
         .expect("Docker build failed");
 
@@ -455,6 +500,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -463,6 +511,9 @@ mod tests {
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
+            &build_args.img_name,
+            &build_args.img_version,
+            &build_args.metadata,
         )
         .expect("Docker build failed");
 
@@ -491,6 +542,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -499,6 +553,9 @@ mod tests {
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
+            &build_args.img_name,
+            &build_args.img_version,
+            &build_args.metadata,
         )
         .expect("Docker build failed");
 
@@ -546,6 +603,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -554,6 +614,9 @@ mod tests {
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
+            &build_args.img_name,
+            &build_args.img_version,
+            &build_args.metadata,
         )
         .expect("Docker build failed");
 
@@ -629,6 +692,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -637,6 +703,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed");
 
@@ -719,6 +788,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -820,6 +892,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed");
 
@@ -846,6 +921,9 @@ mod tests {
             output: eif_path,
             signing_certificate: Some(cert_path),
             private_key: Some(key_path),
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -854,6 +932,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed");
 

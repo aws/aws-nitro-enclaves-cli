@@ -55,6 +55,9 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
         &args.output,
         &args.signing_certificate,
         &args.private_key,
+        &args.img_name,
+        &args.img_version,
+        &args.metadata,
     )
     .map_err(|e| e.add_subaction("Failed to build EIF from docker".to_string()))?;
     Ok(())
@@ -67,6 +70,9 @@ pub fn build_from_docker(
     output_path: &str,
     signing_certificate: &Option<String>,
     private_key: &Option<String>,
+    img_name: &Option<String>,
+    img_version: &Option<String>,
+    metadata: &Option<String>,
 ) -> NitroCliResult<(File, BTreeMap<String, String>)> {
     let blobs_path =
         blobs_path().map_err(|e| e.add_subaction("Failed to retrieve blobs path".to_string()))?;
@@ -119,6 +125,9 @@ pub fn build_from_docker(
         artifacts_path()?,
         signing_certificate,
         private_key,
+        img_name,
+        img_version,
+        metadata,
     )
     .map_err(|err| {
         new_nitro_cli_failure!(
@@ -701,6 +710,24 @@ macro_rules! create_app {
                         Arg::with_name("private-key")
                             .long("private-key")
                             .help("Local path to developer's Eliptic Curve private key.")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("image_name")
+                            .long("name")
+                            .help("Name for enclave image")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("image_version")
+                            .long("version")
+                            .help("Version of the enclave image")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("metadata")
+                            .long("metadata")
+                            .help("Path to JSON containing the custom metadata provided by the user.")
                             .takes_value(true),
                     ),
             )

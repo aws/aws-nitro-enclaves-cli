@@ -49,7 +49,7 @@ pub struct EifHeader {
     /// ramdisks
     pub section_sizes: [u64; MAX_NUM_SECTIONS],
     pub unused: u32,
-    /// crc32 IEEE used for validating the eif file is corect, it contains
+    /// crc32 IEEE used for validating the eif file is correct, it contains
     /// the crc for everything except the bytes representing this field.
     /// Needs to be the last field of the header.
     pub eif_crc32: u32,

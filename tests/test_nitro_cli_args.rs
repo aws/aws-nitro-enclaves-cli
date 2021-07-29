@@ -59,6 +59,22 @@ mod test_nitro_cli_args {
     }
 
     #[test]
+    fn describe_eif_correct_command() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "describe-eif", "--eif-path", "dir/image.eif"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn describe_eif_without_path_arg() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "describe-eif", "--eif-path"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
     fn console_without_enclave_id_arg_is_required() {
         let app = create_app!();
         let args = vec!["nitro cli", "console"];

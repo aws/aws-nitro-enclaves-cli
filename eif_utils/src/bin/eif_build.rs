@@ -15,7 +15,7 @@
 use std::path::Path;
 
 use clap::{App, Arg};
-use eif_utils::{EifBuilder, SignEnclaveInfo};
+use eif_utils::{get_pcrs, EifBuilder, SignEnclaveInfo};
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fmt::Debug;
 use std::fs::OpenOptions;
@@ -180,7 +180,17 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
     }
 
     build.write_to(&mut output_file);
+    let signed = build.is_signed();
     println!("Output written into {}", output_path);
-    let measurements = build.boot_measurement();
+    build.measure();
+    let measurements = get_pcrs(
+        &mut build.image_hasher,
+        &mut build.bootstrap_hasher,
+        &mut build.customer_app_hasher,
+        &mut build.certificate_hasher,
+        hasher.clone(),
+        signed,
+    )
+    .expect("Failed to get boot measurements.");
     println!("BootMeasurement: {:?}: {:?}", hasher, measurements);
 }

@@ -129,7 +129,17 @@ def describe_enclaves_ok():
 
         return run_subprocess_ok(args)
 
-# Connects to the enclave console defined by the enclave id with an optional disconnect timeout
+# Runs describe_eif command, describing the EIF at the given path
+# Checks if command is successful and returns a CompletedProcess
+def describe_eif_ok(eif_name):
+        eif_path = TEST_IMAGES + eif_name
+        args = [ "nitro-cli",
+                 "describe-eif",
+                 "--eif-path", eif_path,
+                ]
+        return run_subprocess_ok(args)
+
+# Connects to the enclave console defined by the enclave id
 # Returns the handle to the running process.
 def connect_console(enclave_id, timeout = None):
         args = ["nitro-cli",

@@ -16,7 +16,7 @@ use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, EmptyArgs, ExplainArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::common::document_errors::explain_error;
-use nitro_cli::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
+use nitro_cli::common::json_output::{DescribeOutput, EnclaveRunInfo, EnclaveTerminateInfo};
 use nitro_cli::common::{
     enclave_proc_command_send_single, logger, NitroCliErrorEnum, NitroCliFailure, NitroCliResult,
 };
@@ -27,11 +27,13 @@ use nitro_cli::enclave_proc_comm::{
     enclave_proc_get_flags, enclave_proc_spawn, enclave_process_handle_all_replies,
 };
 use nitro_cli::{
-    build_enclaves, console_enclaves, create_app, new_nitro_cli_failure, terminate_all_enclaves,
+    build_enclaves, console_enclaves, create_app, describe_eif, new_nitro_cli_failure,
+    terminate_all_enclaves,
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
 const DESCRIBE_ENCLAVE_STR: &str = "Describe Enclave";
+const DESCRIBE_EIF_STR: &str = "Describe EIF";
 const TERMINATE_ENCLAVE_STR: &str = "Terminate Enclave";
 const TERMINATE_ALL_ENCLAVES_STR: &str = "Terminate All Enclaves";
 const BUILD_ENCLAVE_STR: &str = "Build Enclave";
@@ -166,7 +168,7 @@ fn main() {
 
             info!("Sent command: Describe");
             replies.extend(comms);
-            enclave_process_handle_all_replies::<EnclaveDescribeInfo>(
+            enclave_process_handle_all_replies::<DescribeOutput>(
                 &mut replies,
                 comm_errors,
                 true,
@@ -189,6 +191,18 @@ fn main() {
                 .map_err(|e| {
                     e.add_subaction("Failed to build enclave".to_string())
                         .set_action(BUILD_ENCLAVE_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+        }
+        ("describe-eif", Some(args)) => {
+            let eif_path = args
+                .value_of("eif-path")
+                .map(|val| val.to_string())
+                .unwrap();
+            describe_eif(eif_path)
+                .map_err(|e| {
+                    e.add_subaction("Failed to describe EIF".to_string())
+                        .set_action(DESCRIBE_EIF_STR.to_string())
                 })
                 .ok_or_exit_with_errno(None);
         }

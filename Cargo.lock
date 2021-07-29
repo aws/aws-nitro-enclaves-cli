@@ -316,6 +316,7 @@ dependencies = [
  "eif_defs",
  "hex 0.3.2",
  "openssl",
+ "serde",
  "serde_cbor",
  "sha2",
 ]
@@ -860,6 +861,7 @@ dependencies = [
  "clap",
  "eif_defs",
  "eif_loader",
+ "eif_utils",
  "enclave_build",
  "flexi_logger",
  "hex 0.3.2",

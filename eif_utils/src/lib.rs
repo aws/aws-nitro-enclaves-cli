@@ -9,8 +9,9 @@ use eif_defs::{
     EifHeader, EifSectionHeader, EifSectionType, PcrInfo, PcrSignature, EIF_MAGIC, MAX_NUM_SECTIONS,
 };
 use openssl::ec::EcKey;
-use serde_cbor::to_vec;
-use sha2::Digest;
+use serde::{Deserialize, Serialize};
+use serde_cbor::{from_slice, to_vec};
+use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;
 
 /// Contains code for EifBuilder a simple library used for building an EifFile
@@ -60,6 +61,54 @@ impl SignEnclaveInfo {
     }
 }
 
+/// Utility function to calculate PCRs, used at build and describe.
+pub fn get_pcrs<T: Digest + Debug + Write + Clone>(
+    image_hasher: &mut EifHasher<T>,
+    bootstrap_hasher: &mut EifHasher<T>,
+    app_hasher: &mut EifHasher<T>,
+    cert_hasher: &mut EifHasher<T>,
+    hasher: T,
+    is_signed: bool,
+) -> Result<BTreeMap<String, String>, String> {
+    let mut measurements = BTreeMap::new();
+    let image_hasher = hex::encode(
+        image_hasher
+            .tpm_extend_finalize_reset()
+            .map_err(|e| format!("Could not get result for image_hasher: {:?}", e))?,
+    );
+    let bootstrap_hasher = hex::encode(
+        bootstrap_hasher
+            .tpm_extend_finalize_reset()
+            .map_err(|e| format!("Could not get result for bootstrap_hasher: {:?}", e))?,
+    );
+    let app_hash = hex::encode(
+        app_hasher
+            .tpm_extend_finalize_reset()
+            .map_err(|e| format!("Could not get result for app_hasher: {:?}", e))?,
+    );
+
+    // Hash certificate only if signing key is set, otherwise related PCR will be zero
+    let cert_hash = if is_signed {
+        Some(hex::encode(
+            cert_hasher
+                .tpm_extend_finalize_reset()
+                .map_err(|e| format!("Could not get result for cert_hash: {:?}", e))?,
+        ))
+    } else {
+        None
+    };
+
+    measurements.insert("HashAlgorithm".to_string(), format!("{:?}", hasher));
+    measurements.insert("PCR0".to_string(), image_hasher);
+    measurements.insert("PCR1".to_string(), bootstrap_hasher);
+    measurements.insert("PCR2".to_string(), app_hash);
+    if let Some(cert_hash) = cert_hash {
+        measurements.insert("PCR8".to_string(), cert_hash);
+    }
+
+    Ok(measurements)
+}
+
 pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     kernel: File,
     cmdline: Vec<u8>,
@@ -71,14 +120,14 @@ pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     default_mem: u64,
     default_cpus: u64,
     /// Hash of the whole EifImage.
-    image_hasher: EifHasher<T>,
+    pub image_hasher: EifHasher<T>,
     /// Hash of the EifSections provided by Amazon
     /// Kernel + cmdline + First Ramdisk
-    bootstrap_hasher: EifHasher<T>,
+    pub bootstrap_hasher: EifHasher<T>,
     /// Hash of the remaining ramdisks.
-    customer_app_hasher: EifHasher<T>,
+    pub customer_app_hasher: EifHasher<T>,
     /// Hash the signing certificate
-    certificate_hasher: EifHasher<T>,
+    pub certificate_hasher: EifHasher<T>,
     hasher_template: T,
     eif_crc: crc32::Digest,
 }
@@ -114,6 +163,10 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             hasher_template: hasher,
             eif_crc: crc32::Digest::new_with_initial(crc32::IEEE, 0),
         }
+    }
+
+    pub fn is_signed(&mut self) -> bool {
+        self.sign_info.is_some()
     }
 
     pub fn add_ramdisk(&mut self, ramdisk_path: &Path) {
@@ -453,7 +506,16 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
     }
 
     pub fn write_to(&mut self, output_file: &mut File) -> BTreeMap<String, String> {
-        let measurements = self.boot_measurement();
+        self.measure();
+        let measurements = get_pcrs(
+            &mut self.image_hasher,
+            &mut self.bootstrap_hasher,
+            &mut self.customer_app_hasher,
+            &mut self.certificate_hasher,
+            self.hasher_template.clone(),
+            self.sign_info.is_some(),
+        )
+        .expect("Failed to get measurements");
         if self.sign_info.is_some() {
             self.generate_eif_signature(&measurements);
         }
@@ -508,47 +570,215 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             self.certificate_hasher.write_all(&cert_der).unwrap();
         }
     }
+}
 
-    pub fn boot_measurement(&mut self) -> BTreeMap<String, String> {
-        self.measure();
-        let mut measurements = BTreeMap::new();
-        let image_hasher = hex::encode(
-            self.image_hasher
-                .tpm_extend_finalize_reset()
-                .expect("Could not get result for image_hasher"),
-        );
-        let bootstrap_hasher = hex::encode(
-            self.bootstrap_hasher
-                .tpm_extend_finalize_reset()
-                .expect("Could not get result for bootstrap_hasher"),
-        );
-        let app_hash = hex::encode(
-            self.customer_app_hasher
-                .tpm_extend_finalize_reset()
-                .expect("Could not get result for app_hasher"),
-        );
-        // Hash certificate only if signing key is set, otherwise related PCR will be zero
-        let cert_hash = if self.sign_info.is_some() {
-            Some(hex::encode(
-                self.certificate_hasher
-                    .tpm_extend_finalize_reset()
-                    .expect("Could not get result for certificate_hasher"),
-            ))
-        } else {
-            None
-        };
+/// The information about the signing certificate to be provided for a `describe-eif` request.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SignCertificateInfo {
+    #[serde(rename = "IssuerName")]
+    /// Certificate's subject name.
+    pub issuer_name: BTreeMap<String, String>,
+    #[serde(rename = "Algorithm")]
+    /// Certificate's signature algorithm
+    pub algorithm: String,
+    #[serde(rename = "NotBefore")]
+    /// Not before validity period
+    pub not_before: String,
+    #[serde(rename = "NotAfter")]
+    /// Not after validity period
+    pub not_after: String,
+    #[serde(rename = "Signature")]
+    /// Certificate's signature in hex format: 'XX:XX:XX..'
+    pub signature: String,
+}
 
-        measurements.insert(
-            "HashAlgorithm".to_string(),
-            format!("{:?}", self.hasher_template),
-        );
-        measurements.insert("PCR0".to_string(), image_hasher);
-        measurements.insert("PCR1".to_string(), bootstrap_hasher);
-        measurements.insert("PCR2".to_string(), app_hash);
-        if let Some(cert_hash) = cert_hash {
-            measurements.insert("PCR8".to_string(), cert_hash);
+impl SignCertificateInfo {
+    /// Create new signing ceritificate information structure
+    pub fn new(
+        issuer_name: BTreeMap<String, String>,
+        algorithm: String,
+        not_before: String,
+        not_after: String,
+        signature: String,
+    ) -> Self {
+        SignCertificateInfo {
+            issuer_name,
+            algorithm,
+            not_before,
+            not_after,
+            signature,
+        }
+    }
+}
+
+/// Used for providing EIF info when requested by
+/// 'describe-eif' or 'describe-enclaves' commands
+pub struct EifReader {
+    /// Deserialized EIF header
+    pub header: EifHeader,
+    /// Serialized signature section
+    pub signature_section: Option<Vec<u8>>,
+    /// Hash of the whole EifImage.
+    pub image_hasher: EifHasher<Sha384>,
+    /// Hash of the EifSections provided by Amazon
+    /// Kernel + cmdline + First Ramdisk
+    pub bootstrap_hasher: EifHasher<Sha384>,
+    /// Hash of the remaining ramdisks.
+    pub app_hasher: EifHasher<Sha384>,
+    /// Hash the signing certificate
+    pub cert_hasher: EifHasher<Sha384>,
+}
+
+impl EifReader {
+    /// Reads EIF and extracts section to be written in the hashers
+    pub fn from_eif(eif_path: String) -> Result<Self, String> {
+        let mut curr_seek = 0;
+        let mut eif_file =
+            File::open(eif_path).map_err(|e| format!("Failed to open the EIF file: {:?}", e))?;
+
+        // Extract EIF header
+        let mut header_buf = vec![0u8; EifHeader::size()];
+        eif_file
+            .read_exact(&mut header_buf)
+            .map_err(|e| format!("Error while reading EIF header: {:?}", e))?;
+        let header = EifHeader::from_be_bytes(&header_buf)
+            .map_err(|e| format!("Error while parsing EIF header: {:?}", e))?;
+
+        curr_seek += EifHeader::size();
+        eif_file
+            .seek(SeekFrom::Start(curr_seek as u64))
+            .map_err(|e| format!("Failed to seek file from start: {:?}", e))?;
+
+        let mut section_buf = vec![0u8; EifSectionHeader::size()];
+        let mut image_hasher = EifHasher::new_without_cache(Sha384::new())
+            .map_err(|e| format!("Could not create image_hasher: {:?}", e))?;
+        let mut bootstrap_hasher = EifHasher::new_without_cache(Sha384::new())
+            .map_err(|e| format!("Could not create bootstrap_hasher: {:?}", e))?;
+        let mut app_hasher = EifHasher::new_without_cache(Sha384::new())
+            .map_err(|e| format!("Could not create app_hasher: {:?}", e))?;
+        let mut cert_hasher = EifHasher::new_without_cache(Sha384::new())
+            .map_err(|e| format!("Could not create cert_hasher: {:?}", e))?;
+        let mut ramdisk_idx = 0;
+        let mut signature_section = None;
+
+        // Read all section headers and treat by type
+        while eif_file
+            .read_exact(&mut section_buf)
+            .map_err(|e| format!("Error while reading EIF header: {:?}", e))
+            .is_ok()
+        {
+            let section = EifSectionHeader::from_be_bytes(&section_buf)
+                .map_err(|e| format!("Error extracting EIF section header: {:?}", e))?;
+
+            let mut buf = vec![0u8; section.section_size as usize];
+            curr_seek += EifSectionHeader::size();
+            eif_file
+                .seek(SeekFrom::Start(curr_seek as u64))
+                .map_err(|e| format!("Failed to seek after EIF header: {:?}", e))?;
+            eif_file
+                .read_exact(&mut buf)
+                .map_err(|e| format!("Error while reading kernel from EIF: {:?}", e))?;
+            curr_seek += section.section_size as usize;
+            eif_file
+                .seek(SeekFrom::Start(curr_seek as u64))
+                .map_err(|e| format!("Failed to seek after EIF section: {:?}", e))?;
+
+            match section.section_type {
+                EifSectionType::EifSectionKernel | EifSectionType::EifSectionCmdline => {
+                    image_hasher.write_all(&buf).map_err(|e| {
+                        format!("Failed to write EIF section to image_hasher: {:?}", e)
+                    })?;
+                    bootstrap_hasher.write_all(&buf).map_err(|e| {
+                        format!("Failed to write EIF section to bootstrap_hasher: {:?}", e)
+                    })?;
+                }
+                EifSectionType::EifSectionRamdisk => {
+                    image_hasher.write_all(&buf).map_err(|e| {
+                        format!("Failed to write ramdisk section to image_hasher: {:?}", e)
+                    })?;
+                    if ramdisk_idx == 0 {
+                        bootstrap_hasher.write_all(&buf).map_err(|e| {
+                            format!(
+                                "Failed to write ramdisk section to bootstrap_hasher: {:?}",
+                                e
+                            )
+                        })?;
+                    } else {
+                        app_hasher.write_all(&buf).map_err(|e| {
+                            format!("Failed to write ramdisk section to app_hasher: {:?}", e)
+                        })?;
+                    }
+                    ramdisk_idx += 1;
+                }
+                EifSectionType::EifSectionSignature => {
+                    signature_section = Some(buf.clone());
+                    // Deserialize PCR0 signature structure and write it to the hasher
+                    let des_sign: Vec<PcrSignature> = from_slice(&buf[..])
+                        .map_err(|e| format!("Error deserializing certificate: {:?}", e))?;
+
+                    let cert = openssl::x509::X509::from_pem(&des_sign[0].signing_certificate)
+                        .map_err(|e| format!("Error while digesting certificate: {:?}", e))?;
+                    let cert_der = cert.to_der().map_err(|e| {
+                        format!("Failed to deserialize sigining certificate: {:?}", e)
+                    })?;
+                    cert_hasher.write_all(&cert_der).map_err(|e| {
+                        format!("Failed to write signature section to cert_hasher: {:?}", e)
+                    })?;
+                }
+                EifSectionType::EifSectionInvalid => {
+                    return Err("Eif contains an invalid section".to_string());
+                }
+            }
         }
 
-        measurements
+        Ok(EifReader {
+            header,
+            signature_section,
+            image_hasher,
+            bootstrap_hasher,
+            app_hasher,
+            cert_hasher,
+        })
+    }
+
+    /// Returns deserialized header section
+    pub fn get_header(&self) -> EifHeader {
+        self.header
+    }
+
+    /// Extract signature section from EIF and parse the signing certificate
+    pub fn get_certificate_info(&self) -> Result<SignCertificateInfo, String> {
+        let signature_buf = match &self.signature_section {
+            Some(section) => section,
+            None => {
+                return Err("Signature section missing from EIF.".to_string());
+            }
+        };
+        // Deserialize PCR0 signature structure and write it to the hasher
+        let des_sign: Vec<PcrSignature> = from_slice(&signature_buf[..])
+            .map_err(|e| format!("Error deserializing certificate: {:?}", e))?;
+
+        let cert = openssl::x509::X509::from_pem(&des_sign[0].signing_certificate)
+            .map_err(|e| format!("Error while digesting certificate: {:?}", e))?;
+
+        // Parse issuer into a BTreeMap
+        let mut issuer_name = BTreeMap::new();
+        for (_, e) in cert.issuer_name().entries().enumerate() {
+            issuer_name.insert(
+                e.object().to_string(),
+                format!("{:?}", e.data()).replace(&['\"'][..], ""),
+            );
+        }
+
+        return Ok(SignCertificateInfo {
+            issuer_name,
+            algorithm: format!("{:#?}", cert.signature_algorithm().object()),
+            not_before: format!("{:#?}", cert.not_before()),
+            not_after: format!("{:#?}", cert.not_after()),
+            // Change format from [\  XX, \  X, ..] to XX:XX:XX...
+            signature: format!("{:02X?}", cert.signature().as_slice().to_vec())
+                .replace(&vec!['[', ']'][..], "")
+                .replace(", ", ":"),
+        });
     }
 }

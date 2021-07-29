@@ -3,14 +3,16 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+use eif_utils::{get_pcrs, EifReader};
 use log::debug;
+use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::thread::JoinHandle;
 
 use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::construct_error_message;
-use crate::common::json_output::EnclaveTerminateInfo;
+use crate::common::json_output::{DescribeOutput, EnclaveBuildInfo, EnclaveTerminateInfo};
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
@@ -60,8 +62,26 @@ pub fn run_enclaves(
     // Launch parallel computing of PCRs
     let path = args.eif_path.clone();
     let handle = std::thread::spawn(move || {
-        EnclaveManager::get_pcrs(&path)
-            .map_err(|e| e.add_subaction("Failed to save PCR values".to_string()))
+        let mut eif_reader = EifReader::from_eif(path).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed initialize EIF reader: {:?}", e),
+                NitroCliErrorEnum::EifParsingError
+            )
+        })?;
+        get_pcrs(
+            &mut eif_reader.image_hasher,
+            &mut eif_reader.bootstrap_hasher,
+            &mut eif_reader.app_hasher,
+            &mut eif_reader.cert_hasher,
+            Sha384::new(),
+            eif_reader.signature_section.is_some(),
+        )
+        .map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to calculate PCRs: {:?}", e),
+                NitroCliErrorEnum::EifParsingError
+            )
+        })
     });
     enclave_manager
         .run_enclave(connection)
@@ -128,13 +148,21 @@ pub fn terminate_enclaves(
 pub fn describe_enclaves(
     enclave_manager: &EnclaveManager,
     connection: &Connection,
+    add_info: bool,
 ) -> NitroCliResult<()> {
     debug!("describe_enclaves");
 
     let info = get_enclave_describe_info(enclave_manager)
         .map_err(|e| e.add_subaction(String::from("Execute Describe Enclave command")))?;
+    // Check if the run_enclave command version calculated the measurements
+    let mut build_info: Option<EnclaveBuildInfo> = None;
+    if add_info {
+        build_info = Some(enclave_manager.get_measurements()?);
+    }
+    let output = DescribeOutput::new(info, build_info);
+
     connection.println(
-        serde_json::to_string_pretty(&info)
+        serde_json::to_string_pretty(&output)
             .map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Failed to display enclave describe data: {:?}", err),

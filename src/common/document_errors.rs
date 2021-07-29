@@ -65,6 +65,7 @@ lazy_static! {
             (NitroCliErrorEnum::SignalMaskingError, "E54"),
             (NitroCliErrorEnum::SignalUnmaskingError, "E55"),
             (NitroCliErrorEnum::LoggerError, "E56"),
+            (NitroCliErrorEnum::HasherError, "E57"),
         ].iter().cloned().collect();
 }
 
@@ -320,6 +321,9 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         }
         "E56" => {
             ret.push_str("Logger error. Such error appears when attempting to initialize the underlying logging system fails.");
+        }
+        "E57" => {
+            ret.push_str("Hasher error. Such error appears when trying to initialize a hasher or write bytes to it, resulting in a IO error.");
         }
         _ => {
             ret.push_str(format!("No such error code {}", error_code_str).as_str());

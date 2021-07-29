@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![allow(clippy::too_many_arguments)]
 
 /// The module which provides top-level enclave commands.
 pub mod commands;
@@ -223,6 +224,7 @@ fn handle_command(
     enclave_manager: &mut EnclaveManager,
     terminate_thread: &mut Option<std::thread::JoinHandle<()>>,
     pcr_thread: &mut Option<JoinHandle<NitroCliResult<BTreeMap<String, String>>>>,
+    add_info: &mut bool,
 ) -> NitroCliResult<(i32, bool)> {
     Ok(match cmd {
         EnclaveProcessCommandType::Run => {
@@ -242,6 +244,7 @@ fn handle_command(
                 })?;
                 *enclave_manager = run_result.enclave_manager;
                 *pcr_thread = run_result.pcr_thread;
+                *add_info = true;
 
                 info!("Enclave ID = {}", enclave_manager.enclave_id);
                 logger
@@ -316,10 +319,8 @@ fn handle_command(
             // Evaluate thread result at first describe, then set thread to None.
             if pcr_thread.is_some() {
                 enclave_manager
-                    .set_measurements(
-                        pcr_thread
-                            .take()
-                            .unwrap()
+                    .set_measurements(match pcr_thread.take() {
+                        Some(thread) => thread
                             .join()
                             .map_err(|e| {
                                 new_nitro_cli_failure!(
@@ -330,12 +331,22 @@ fn handle_command(
                             .map_err(|e| {
                                 e.add_subaction("Failed to save PCR values".to_string())
                             })?,
-                    )
-                    .expect("Failed to set measuements inside enclave handle.");
+                        None => {
+                            return Err(new_nitro_cli_failure!(
+                                "Thread handle not found",
+                                NitroCliErrorEnum::ThreadJoinFailure
+                            ));
+                        }
+                    })
+                    .map_err(|e| {
+                        e.add_subaction(
+                            "Failed to set measurements inside enclave handle.".to_string(),
+                        )
+                    })?;
                 *pcr_thread = None;
             }
 
-            describe_enclaves(&enclave_manager, connection).map_err(|e| {
+            describe_enclaves(&enclave_manager, connection, *add_info).map_err(|e| {
                 e.add_subaction("Failed to describe enclave".to_string())
                     .set_action("Describe Enclaves".to_string())
             })?;
@@ -360,6 +371,7 @@ fn process_event_loop(
         None;
     let mut done = false;
     let mut ret_value = Ok(());
+    let mut add_info = false;
 
     // Start the signal handler before spawning any other threads. This is done since the
     // handler will mask all relevant signals from the current thread and this setting will
@@ -418,6 +430,7 @@ fn process_event_loop(
             &mut enclave_manager,
             &mut terminate_thread,
             &mut pcr_thread,
+            &mut add_info,
         );
 
         // Obtain the status code and whether the event loop must be exited.

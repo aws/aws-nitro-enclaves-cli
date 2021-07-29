@@ -168,6 +168,8 @@ pub enum NitroCliErrorEnum {
     SignalUnmaskingError,
     /// General error for handling logger-related errors.
     LoggerError,
+    /// Hasher operation error
+    HasherError,
 }
 
 impl Default for NitroCliErrorEnum {

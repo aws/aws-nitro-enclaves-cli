@@ -8,14 +8,14 @@ mod tests {
     use nitro_cli::common::commands_parser::{
         BuildEnclavesArgs, RunEnclavesArgs, TerminateEnclavesArgs,
     };
-    use nitro_cli::common::json_output::EnclaveDescribeInfo;
+    use nitro_cli::common::json_output::{DescribeEifInfo, EnclaveDescribeInfo};
     use nitro_cli::enclave_proc::commands::{describe_enclaves, run_enclaves, terminate_enclaves};
     use nitro_cli::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
     use nitro_cli::enclave_proc::utils::{
         flags_to_string, generate_enclave_id, get_enclave_describe_info,
     };
     use nitro_cli::utils::Console;
-    use nitro_cli::{build_enclaves, build_from_docker, enclave_console};
+    use nitro_cli::{build_enclaves, build_from_docker, describe_eif, enclave_console};
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
     use std::convert::TryInto;
     use std::fs::OpenOptions;
@@ -610,26 +610,88 @@ mod tests {
                     .expect("Failed to join thread.")
                     .expect("Failed to save PCRs."),
             )
-            .expect("Failed to set measuements inside enclave handle.");
+            .expect("Failed to set measurements inside enclave handle.");
 
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
-        let replies: Vec<EnclaveDescribeInfo> = vec![info];
-        let reply = &replies[0];
+        get_enclave_describe_info(&enclave_manager).unwrap();
+        let build_info = enclave_manager.get_measurements().unwrap();
 
         assert_eq!(
-            reply.measurements.get(&"0".to_string()).unwrap(),
+            build_info.measurements.get(&"PCR0".to_string()).unwrap(),
             "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
         );
         assert_eq!(
-            reply.measurements.get(&"1".to_string()).unwrap(),
+            build_info.measurements.get(&"PCR1".to_string()).unwrap(),
             "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
         );
         assert_eq!(
-            reply.measurements.get(&"2".to_string()).unwrap(),
+            build_info.measurements.get(&"PCR2".to_string()).unwrap(),
             "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
         );
 
         let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");
         terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
+    }
+
+    #[test]
+    fn build_describe_simple_eif() {
+        let dir = tempdir().unwrap();
+        let eif_path = dir.path().join("test.eif");
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed");
+
+        let eif_info = describe_eif(args.output).unwrap();
+
+        assert_eq!(eif_info.version, 3);
+        assert_eq!(eif_info.is_signed, false);
+        assert!(eif_info.cert_info.is_none());
+    }
+
+    #[test]
+    fn build_describe_signed_simple_eif() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: Some(cert_path),
+            private_key: Some(key_path),
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed");
+
+        let eif_info = describe_eif(args.output).unwrap();
+
+        assert_eq!(eif_info.version, 3);
+        assert_eq!(eif_info.is_signed, true);
+        assert!(eif_info.cert_info.is_some());
     }
 }

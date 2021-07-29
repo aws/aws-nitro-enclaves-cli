@@ -14,8 +14,9 @@ pub mod enclave_proc_comm;
 /// The CLI-specific utilities module.
 pub mod utils;
 
+use eif_utils::{get_pcrs, EifReader};
 use log::debug;
-use serde::Serialize;
+use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fs::{File, OpenOptions};
@@ -24,7 +25,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
 use common::commands_parser::{BuildEnclavesArgs, EmptyArgs};
-use common::json_output::EnclaveTerminateInfo;
+use common::json_output::{DescribeEifInfo, EnclaveBuildInfo, EnclaveTerminateInfo};
 use common::{enclave_proc_command_send_single, get_sockets_dir_path};
 use common::{EnclaveProcessCommandType, NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use enclave_proc_comm::enclave_process_handle_all_replies;
@@ -40,20 +41,6 @@ pub const CID_TO_CONSOLE_PORT_OFFSET: u32 = 10000;
 
 /// Default blobs path to be used if the corresponding environment variable is not set.
 const DEFAULT_BLOBS_PATH: &str = "/usr/share/nitro_enclaves/blobs/";
-
-/// Information obtained from a newly-build enclave image file.
-#[derive(Serialize)]
-pub struct EnclaveBuildInfo {
-    #[serde(rename(serialize = "Measurements"))]
-    measurements: BTreeMap<String, String>,
-}
-
-impl EnclaveBuildInfo {
-    /// Construct a new `EnclaveBuildInfo` instance from the given measurements.
-    pub fn new(measurements: BTreeMap<String, String>) -> Self {
-        EnclaveBuildInfo { measurements }
-    }
-}
 
 /// Build an enclave image file with the provided arguments.
 pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
@@ -166,6 +153,68 @@ pub fn build_from_docker(
     );
 
     Ok((file_output, measurements))
+}
+
+/// Returns information related to the given EIF
+///
+/// Calculates PCRs 0, 1, 2, 8 at each call in addition to metadata,
+/// EIF details, identification provided by the user at build.
+pub fn describe_eif(eif_path: String) -> NitroCliResult<DescribeEifInfo> {
+    let mut eif_reader = EifReader::from_eif(eif_path).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to initialize EIF reader: {:?}", e),
+            NitroCliErrorEnum::EifParsingError
+        )
+    })?;
+    let measurements = get_pcrs(
+        &mut eif_reader.image_hasher,
+        &mut eif_reader.bootstrap_hasher,
+        &mut eif_reader.app_hasher,
+        &mut eif_reader.cert_hasher,
+        Sha384::new(),
+        eif_reader.signature_section.is_some(),
+    )
+    .map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to get PCR values: {:?}", e),
+            NitroCliErrorEnum::EifParsingError
+        )
+    })?;
+
+    let header = eif_reader.get_header();
+
+    let mut info = DescribeEifInfo::new(
+        header.version,
+        EnclaveBuildInfo::new(measurements.clone()),
+        false,
+        None,
+    );
+
+    // Check if signature section is present
+    if measurements.get(&"PCR8".to_string()).is_some() {
+        let cert_info = eif_reader.get_certificate_info().map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to get certificate sigining info: {:?}", err),
+                NitroCliErrorEnum::EifParsingError
+            )
+        })?;
+        info.is_signed = true;
+        info.cert_info = Some(cert_info);
+    }
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&info)
+            .map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to display EIF describe data: {:?}", err),
+                    NitroCliErrorEnum::SerdeError
+                )
+            })?
+            .as_str(),
+    );
+
+    Ok(info)
 }
 
 /// Returns the value of the `NITRO_CLI_BLOBS` environment variable.
@@ -452,6 +501,17 @@ macro_rules! create_app {
                         Arg::with_name("private-key")
                             .long("private-key")
                             .help("Local path to developer's Eliptic Curve private key.")
+                            .takes_value(true),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("describe-eif")
+                    .about("Returns information about the EIF found at a given path.")
+                    .arg(
+                        Arg::with_name("eif-path")
+                            .long("eif-path")
+                            .help("Path to the EIF to describe.")
+                            .required(true)
                             .takes_value(true),
                     ),
             )

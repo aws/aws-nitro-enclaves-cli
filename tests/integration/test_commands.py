@@ -121,3 +121,25 @@ def test_describe_enclaves(init_resources):
         result = describe_enclaves_ok()
         result_json = json.loads(result.stdout.decode('UTF-8'))
         assert not result_json
+
+# Test describe_eif command is successful and returns as expected
+def test_describe_eif(init_resources):
+        result = run_enclave_ok(SAMPLE_EIF, "1028", "2")
+        result_json = json.loads(result.stdout.decode('UTF-8'))
+        enclave_id = result_json["EnclaveID"]
+
+        result = describe_enclaves_ok()
+        result_json = json.loads(result.stdout.decode('UTF-8'))
+        run_measurements = result_json[0]["Measurements"]
+
+        terminate_enclave_ok(enclave_id)
+
+        result = describe_eif_ok(SAMPLE_EIF)
+        result_json = json.loads(result.stdout.decode('UTF-8'))
+        static_measurements = result_json["Measurements"]
+
+        assert static_measurements["HashAlgorithm"] == run_measurements["HashAlgorithm"]
+        assert static_measurements["PCR0"] == run_measurements["PCR0"]
+        assert static_measurements["PCR1"] == run_measurements["PCR1"]
+        assert static_measurements["PCR2"] == run_measurements["PCR2"]
+        assert not result_json["IsSigned"]

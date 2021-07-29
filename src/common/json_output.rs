@@ -4,6 +4,7 @@
 #![deny(warnings)]
 #![allow(clippy::too_many_arguments)]
 
+use eif_utils::SignCertificateInfo;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -34,9 +35,6 @@ pub struct EnclaveDescribeInfo {
     #[serde(rename = "Flags")]
     /// The bit-mask which provides the enclave's launch flags.
     pub flags: String,
-    #[serde(rename = "PCRs")]
-    /// Contains the PCR values.
-    pub measurements: BTreeMap<String, String>,
 }
 
 impl EnclaveDescribeInfo {
@@ -49,7 +47,6 @@ impl EnclaveDescribeInfo {
         memory_mib: u64,
         state: String,
         flags: String,
-        measurements: BTreeMap<String, String>,
     ) -> Self {
         EnclaveDescribeInfo {
             enclave_id,
@@ -60,7 +57,29 @@ impl EnclaveDescribeInfo {
             memory_mib,
             state,
             flags,
-            measurements,
+        }
+    }
+}
+
+/// Output structure for describe command containing additional fields,
+/// like measurements, not found in older NitroCLI versions
+#[derive(Clone, Serialize, Deserialize)]
+pub struct DescribeOutput {
+    #[serde(flatten)]
+    /// General describe info found in all versions of NitroCLI
+    describe_info: EnclaveDescribeInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(flatten)]
+    /// Build measurements containing PCRs
+    build_info: Option<EnclaveBuildInfo>,
+}
+
+impl DescribeOutput {
+    /// Creates new describe output from available
+    pub fn new(describe_info: EnclaveDescribeInfo, build_info: Option<EnclaveBuildInfo>) -> Self {
+        DescribeOutput {
+            describe_info,
+            build_info,
         }
     }
 }
@@ -130,16 +149,51 @@ impl EnclaveTerminateInfo {
 }
 
 /// The information to be provided for a `build-enclave` request.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct EnclaveBuildInfo {
-    #[serde(rename(serialize = "Measurements"))]
+    #[serde(rename = "Measurements")]
     /// The measurement results (hashes) of various enclave properties.
-    measurements: BTreeMap<String, String>,
+    pub measurements: BTreeMap<String, String>,
 }
 
 impl EnclaveBuildInfo {
     /// Create a new `EnclaveBuildInfo` instance from the given measurements.
     pub fn new(measurements: BTreeMap<String, String>) -> Self {
         EnclaveBuildInfo { measurements }
+    }
+}
+
+/// The information to be provided for a `describe-eif` request.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct DescribeEifInfo {
+    #[serde(rename = "EifVersion")]
+    /// EIF version.
+    pub version: u16,
+    #[serde(flatten)]
+    /// Contains the PCR values.
+    pub build_info: EnclaveBuildInfo,
+    #[serde(rename = "IsSigned")]
+    /// Specifies if the image is signed or not.
+    pub is_signed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "SigningCertificate")]
+    /// Certificate's signature algorithm
+    pub cert_info: Option<SignCertificateInfo>,
+}
+
+impl DescribeEifInfo {
+    /// Create describe information structure for EIF.
+    pub fn new(
+        version: u16,
+        build_info: EnclaveBuildInfo,
+        is_signed: bool,
+        cert_info: Option<SignCertificateInfo>,
+    ) -> Self {
+        DescribeEifInfo {
+            version,
+            build_info,
+            is_signed,
+            cert_info,
+        }
     }
 }

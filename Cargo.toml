@@ -19,16 +19,14 @@ signal-hook = "0.3"
 serde_cbor = "0.11"
 eif_loader = { path = "./eif_loader" }
 eif_defs = { path = "./eif_defs" }
+eif_utils = { path = "./eif_utils" }
 enclave_build = { path = "./enclave_build" }
 openssl = "0.10"
 vsock = "0.1.5"
-<<<<<<< HEAD
 vmm-sys-util = "0.8.0"
-=======
 sha2 = "0.9.5"
 hex = "0.3.2"
 aws-nitro-enclaves-cose = "0.1"
->>>>>>> Change saving PCRs to parallel
 
 lazy_static = "1.4.0"
 

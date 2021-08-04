@@ -874,6 +874,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "tempfile",
+ "vmm-sys-util",
  "vsock",
 ]
 
@@ -1672,6 +1673,16 @@ name = "version_check"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
+
+[[package]]
+name = "vmm-sys-util"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01cf11afbc4ebc0d5c7a7748a77d19e2042677fc15faa2f4ccccb27c18a60605"
+dependencies = [
+ "bitflags",
+ "libc",
+]
 
 [[package]]
 name = "void"

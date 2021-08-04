@@ -473,7 +473,7 @@ mod tests {
         let replies: Vec<EnclaveDescribeInfo> = vec![info];
         let _reply = &replies[0];
 
-        assert_eq!(enclave_console(enclave_cid).is_err(), true);
+        assert_eq!(enclave_console(enclave_cid, None).is_err(), true);
 
         terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
     }

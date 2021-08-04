@@ -163,6 +163,8 @@ impl TerminateEnclavesArgs {
 pub struct ConsoleArgs {
     /// The ID of the enclave whose console is to be shown.
     pub enclave_id: String,
+    /// The time in seconds after the console disconnects from the enclave.
+    pub disconnect_timeout_sec: Option<u64>,
 }
 
 impl ConsoleArgs {
@@ -171,6 +173,8 @@ impl ConsoleArgs {
         Ok(ConsoleArgs {
             enclave_id: parse_enclave_id(args)
                 .map_err(|e| e.add_subaction("Parse enclave ID".to_string()))?,
+            disconnect_timeout_sec: parse_disconnect_timeout(args)
+                .map_err(|e| e.add_subaction("Parse disconnect timeout".to_string()))?,
         })
     }
 }
@@ -315,6 +319,24 @@ fn parse_enclave_id(args: &ArgMatches) -> NitroCliResult<String> {
         )
     })?;
     Ok(enclave_id.to_string())
+}
+
+/// Parse the disconnect timeout from the command-line arguments.
+fn parse_disconnect_timeout(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
+    let disconnect_timeout = match args.value_of("disconnect-timeout") {
+        Some(arg) => Some(arg.parse::<u64>().map_err(|_| {
+            new_nitro_cli_failure!(
+                "`disconnect-timeout` argument can't be parsed as a number",
+                NitroCliErrorEnum::InvalidArgument
+            )
+            .add_info(vec![
+                "disconnect-timeout",
+                args.value_of("disconnect-timeout").unwrap(),
+            ])
+        })?),
+        None => None,
+    };
+    Ok(disconnect_timeout)
 }
 
 /// Parse the list of requested CPU IDs from the command-line arguments.

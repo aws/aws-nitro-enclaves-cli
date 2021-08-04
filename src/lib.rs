@@ -216,15 +216,21 @@ fn artifacts_path() -> NitroCliResult<String> {
 }
 
 /// Wrapper over the console connection function.
-pub fn console_enclaves(enclave_cid: u64) -> NitroCliResult<()> {
+pub fn console_enclaves(
+    enclave_cid: u64,
+    disconnect_timeout_sec: Option<u64>,
+) -> NitroCliResult<()> {
     debug!("console_enclaves");
     println!("Connecting to the console for enclave {}...", enclave_cid);
-    enclave_console(enclave_cid)?;
+    enclave_console(enclave_cid, disconnect_timeout_sec)?;
     Ok(())
 }
 
 /// Connects to the enclave console and prints it continously.
-pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
+pub fn enclave_console(
+    enclave_cid: u64,
+    disconnect_timeout_sec: Option<u64>,
+) -> NitroCliResult<()> {
     let console = Console::new(
         VMADDR_CID_HYPERVISOR,
         u32::try_from(enclave_cid).map_err(|err| {
@@ -237,7 +243,7 @@ pub fn enclave_console(enclave_cid: u64) -> NitroCliResult<()> {
     .map_err(|e| e.add_subaction("Connect to enclave console".to_string()))?;
     println!("Successfully connected to the console.");
     console
-        .read_to(io::stdout().by_ref())
+        .read_to(io::stdout().by_ref(), disconnect_timeout_sec)
         .map_err(|e| e.add_subaction("Connect to enclave console".to_string()))?;
 
     Ok(())
@@ -462,6 +468,13 @@ macro_rules! create_app {
                             .takes_value(true)
                             .help("Enclave ID, used to uniquely identify an enclave")
                             .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("disconnect-timeout")
+                            .long("disconnect-timeout")
+                            .takes_value(true)
+                            .help("The time in seconds after the console disconnects from the enclave")
+                            .required(false)
                     ),
             )
             .subcommand(

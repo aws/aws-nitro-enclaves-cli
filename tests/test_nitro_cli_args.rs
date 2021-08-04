@@ -97,6 +97,35 @@ mod test_nitro_cli_args {
     }
 
     #[test]
+    fn console_correct_disconnect_timeout_command() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "console",
+            "--enclave-id",
+            "i-1234_enc123",
+            "--disconnect-timeout",
+            "10",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn console_disconnect_timeout_takes_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "console",
+            "--enclave-id",
+            "i-1234_enc123",
+            "--disconnect-timeout",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
     fn build_enclave_docker_uri_arg_is_required() {
         let app = create_app!();
         let args = vec!["nitro cli", "build-enclave", "--output-file", "image.eif"];

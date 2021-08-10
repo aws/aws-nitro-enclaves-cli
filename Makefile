@@ -250,7 +250,7 @@ nitro-audit: build-setup build-container
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			cargo audit -f /nitro_src/Cargo.lock'
+			cargo audit -f /nitro_src/Cargo.lock --ignore RUSTSEC-2021-0080'
 
 nitro-about: build-setup build-container
 	$(DOCKER) run \

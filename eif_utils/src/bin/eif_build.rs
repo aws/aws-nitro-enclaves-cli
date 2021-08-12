@@ -15,7 +15,8 @@
 use std::path::Path;
 
 use clap::{App, Arg};
-use eif_utils::{get_pcrs, EifBuilder, SignEnclaveInfo};
+use eif_utils::{get_pcrs, EifBuilder, EifIdentityInfo, SignEnclaveInfo};
+use serde_json::json;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fmt::Debug;
 use std::fs::OpenOptions;
@@ -88,6 +89,24 @@ fn main() {
                 .help("Sets algorithm to be used for measuring the image")
                 .group("measurement_alg"),
         )
+        .arg(
+            Arg::with_name("image_name")
+                .long("name")
+                .help("Name for enclave image")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("image_version")
+                .long("version")
+                .help("Version of the enclave image")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("metadata")
+                .long("metadata")
+                .help("Path to JSON containing the custom metadata provided by the user.")
+                .takes_value(true),
+        )
         .get_matches();
 
     let kernel_path = matches
@@ -122,6 +141,27 @@ fn main() {
         _ => panic!("Both signing-certificate and private-key parameters must be provided"),
     };
 
+    let img_name = matches.value_of("image_name").map(|val| val.to_string());
+    let img_version = matches.value_of("image_name").map(|val| val.to_string());
+    let metadata = matches.value_of("metadata").map(|val| val.to_string());
+
+    let arg_data = EifIdentityInfo {
+        img_name: match img_name {
+            Some(name) => name,
+            // Set default value kernel file name
+            None => {
+                let path_split: Vec<&str> = kernel_path.split('/').collect();
+                path_split[path_split.len() - 1].to_string()
+            }
+        },
+        img_version: match img_version {
+            Some(name) => name,
+            None => "1.0".to_string(),
+        },
+        metadata_path: metadata,
+        docker_info: json!({}),
+    };
+
     if sha512 {
         build_eif(
             kernel_path,
@@ -130,6 +170,7 @@ fn main() {
             output_path,
             sign_info,
             Sha512::new(),
+            arg_data,
         );
     } else if sha256 {
         build_eif(
@@ -139,6 +180,7 @@ fn main() {
             output_path,
             sign_info,
             Sha256::new(),
+            arg_data,
         );
     } else {
         build_eif(
@@ -148,6 +190,7 @@ fn main() {
             output_path,
             sign_info,
             Sha384::new(),
+            arg_data,
         );
     }
 }
@@ -159,6 +202,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
     output_path: &str,
     sign_info: Option<SignEnclaveInfo>,
     hasher: T,
+    eif_data: EifIdentityInfo,
 ) {
     let mut output_file = OpenOptions::new()
         .read(true)
@@ -174,6 +218,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
         sign_info,
         hasher.clone(),
         0, // flags
+        eif_data,
     );
     for ramdisk in ramdisks {
         build.add_ramdisk(Path::new(ramdisk));

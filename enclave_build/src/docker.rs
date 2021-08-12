@@ -32,7 +32,7 @@ pub enum DockerError {
 
 /// Struct exposing the Docker functionalities to the EIF builder
 pub struct DockerUtil {
-    docker: Docker,
+    pub docker: Docker,
     docker_image: String,
 }
 

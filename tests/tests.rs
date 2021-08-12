@@ -903,6 +903,8 @@ mod tests {
         assert_eq!(eif_info.version, 3);
         assert_eq!(eif_info.is_signed, false);
         assert!(eif_info.cert_info.is_none());
+        assert!(eif_info.crc_check);
+        assert!(eif_info.sign_check.is_none());
     }
 
     #[test]
@@ -943,6 +945,8 @@ mod tests {
         assert_eq!(eif_info.version, 3);
         assert_eq!(eif_info.is_signed, true);
         assert!(eif_info.cert_info.is_some());
+        assert!(eif_info.crc_check);
+        assert!(eif_info.sign_check.unwrap());
     }
 
     #[test]

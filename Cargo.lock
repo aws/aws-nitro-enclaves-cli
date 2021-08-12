@@ -264,6 +264,7 @@ name = "eif_utils"
 version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-cose",
+ "chrono",
  "clap",
  "crc",
  "eif_defs",
@@ -271,6 +272,7 @@ dependencies = [
  "openssl",
  "serde",
  "serde_cbor",
+ "serde_json",
  "sha2",
 ]
 

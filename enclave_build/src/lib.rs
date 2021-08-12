@@ -12,9 +12,13 @@ mod yaml_generator;
 use docker::DockerUtil;
 use eif_defs::EIF_HDR_ARCH_ARM64;
 use eif_utils::{EifBuilder, EifIdentityInfo, SignEnclaveInfo};
+use serde_json::json;
 use sha2::Digest;
 use std::collections::BTreeMap;
+use tokio::runtime::Runtime;
 use yaml_generator::YamlGenerator;
+
+pub const DEFAULT_TAG: &str = "1.0";
 
 pub struct Docker2Eif<'a> {
     docker_image: String,
@@ -85,24 +89,30 @@ impl<'a> Docker2Eif<'a> {
                 if !Path::new(&meta).is_file() {
                     return Err(Docker2EifError::MetadataPathError);
                 } else {
-                    Some(File::open(meta.clone()).map_err(|e| {
-                        eprintln!("Cannot open metadata file: {}", e);
-                        Docker2EifError::MetadataFileError
-                    })?)
+                    Some(meta.clone())
                 }
             }
             None => None,
         };
 
-        // TODO: set default values for image name and version in next commit
-        let default = &"default".to_string();
+        let uri_split: Vec<&str> = docker_image.split(':').collect();
+        if uri_split.is_empty() {
+            return Err(Docker2EifError::DockerError);
+        }
+
+        let repo = uri_split[0].to_string();
+        let mut tag = DEFAULT_TAG.to_string();
+        if uri_split.len() > 1 {
+            tag = uri_split[1].to_string();
+        }
+
         let img_name = match img_name {
             Some(name) => name,
-            None => default,
+            None => &repo,
         };
         let img_version = match img_version {
             Some(version) => version,
-            None => default,
+            None => &tag,
         };
 
         let sign_info = match (certificate_path, key_path) {
@@ -113,6 +123,8 @@ impl<'a> Docker2Eif<'a> {
             ),
             _ => return Err(Docker2EifError::SignArgsError),
         };
+
+        let docker_info = json!({});
 
         Ok(Docker2Eif {
             docker_image,
@@ -129,6 +141,7 @@ impl<'a> Docker2Eif<'a> {
                 img_name.to_string(),
                 img_version.to_string(),
                 meta_file,
+                docker_info,
             ),
         })
     }
@@ -155,6 +168,17 @@ impl<'a> Docker2Eif<'a> {
     }
 
     pub fn create(&mut self) -> Result<BTreeMap<String, String>, Docker2EifError> {
+        let info = async {
+            self.docker
+                .docker
+                .images()
+                .get(&self.docker_image)
+                .inspect()
+                .await
+        };
+        let runtime = Runtime::new().map_err(|_| Docker2EifError::DockerError)?;
+        let docker_info = runtime.block_on(info).unwrap();
+
         let (cmd_file, env_file) = self.docker.load().map_err(|e| {
             eprintln!("Docker error: {:?}", e);
             Docker2EifError::DockerError
@@ -232,12 +256,23 @@ impl<'a> Docker2Eif<'a> {
             _ => return Err(Docker2EifError::UnsupportedArchError),
         };
 
+        let arg_data = EifIdentityInfo {
+            img_name: self.eif_data.img_name.to_string(),
+            img_version: self.eif_data.img_version.to_string(),
+            metadata_path: match &self.eif_data.metadata_path {
+                Some(meta) => Some(meta.to_string()),
+                None => None,
+            },
+            docker_info: json!(docker_info),
+        };
+
         let mut build = EifBuilder::new(
             Path::new(&self.kernel_img_path),
             self.cmdline.clone(),
             self.sign_info.clone(),
             sha2::Sha384::new(),
             flags,
+            arg_data,
         );
 
         // Linuxkit adds -initrd.img sufix to the file names.

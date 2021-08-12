@@ -178,6 +178,13 @@ pub struct DescribeEifInfo {
     #[serde(rename = "SigningCertificate")]
     /// Certificate's signature algorithm
     pub cert_info: Option<SignCertificateInfo>,
+    #[serde(rename = "CheckCRC")]
+    /// Specifies if the CRC check passed.
+    pub crc_check: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "SignatureCheck")]
+    /// Specifies if the EIF signature check passed.
+    pub sign_check: Option<bool>,
 }
 
 impl DescribeEifInfo {
@@ -187,12 +194,16 @@ impl DescribeEifInfo {
         build_info: EnclaveBuildInfo,
         is_signed: bool,
         cert_info: Option<SignCertificateInfo>,
+        crc_check: bool,
+        sign_check: Option<bool>,
     ) -> Self {
         DescribeEifInfo {
             version,
             build_info,
             is_signed,
             cert_info,
+            crc_check,
+            sign_check,
         }
     }
 }

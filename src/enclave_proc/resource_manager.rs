@@ -16,6 +16,7 @@ use bindings::*;
 use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
 use libc::c_int;
 use log::{debug, info};
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
@@ -161,6 +162,8 @@ struct EnclaveHandle {
     state: EnclaveState,
     /// PCR values.
     build_info: EnclaveBuildInfo,
+    /// EIF metadata
+    metadata: Value,
 }
 
 /// The structure which manages an enclave in a thread-safe manner.
@@ -554,6 +557,7 @@ impl EnclaveHandle {
             eif_file: Some(eif_file),
             state: EnclaveState::default(),
             build_info: EnclaveBuildInfo::new(BTreeMap::new()),
+            metadata: json!(null),
         })
     }
 
@@ -961,6 +965,20 @@ impl EnclaveManager {
         Ok(())
     }
 
+    /// Set metadata field inside EnclaveHandle
+    pub fn set_metadata(&mut self, metadata: Value) -> NitroCliResult<()> {
+        self.enclave_handle
+            .lock()
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to acquire lock: {:?}", e),
+                    NitroCliErrorEnum::LockAcquireFailure
+                )
+            })?
+            .metadata = metadata;
+        Ok(())
+    }
+
     /// Get the resources needed for describing an enclave.
     ///
     /// The enclave handle is locked during this operation.
@@ -991,6 +1009,17 @@ impl EnclaveManager {
             )
         })?;
         Ok(locked_handle.build_info.clone())
+    }
+
+    /// Get metadata from enclave handle
+    pub fn get_metadata(&self) -> NitroCliResult<Value> {
+        let locked_handle = self.enclave_handle.lock().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to acquire lock: {:?}", e),
+                NitroCliErrorEnum::LockAcquireFailure
+            )
+        })?;
+        Ok(locked_handle.metadata.clone())
     }
 
     /// Get the resources (enclave CID) needed for connecting to the enclave console.

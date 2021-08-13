@@ -26,9 +26,10 @@ pub const EIF_HDR_ARCH_ARM64: u16 = 0x1;
 
 /// Current EIF version to be incremented every time we change the format
 /// of this structures, we assume changes are backwards compatible.
-/// V0 -> V1: Add support to generate and check CRC.
-/// V1 -> V2: Add the signature section.
-pub const CURRENT_VERSION: u16 = 3;
+/// V1 -> V2: Add support to generate and check CRC.
+/// V2 -> V3: Add the signature section.
+/// V3 -> V4: Add the metadata section.
+pub const CURRENT_VERSION: u16 = 4;
 
 #[derive(Clone, Copy, Debug)]
 pub struct EifHeader {
@@ -252,6 +253,8 @@ impl PcrInfo {
     }
 }
 
+/// Structure used for (de)serializing metadata when
+/// writing or reading the metadata section of the EIF
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Metadata {
     #[serde(rename = "ImageName")]

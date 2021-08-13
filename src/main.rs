@@ -13,7 +13,7 @@ use log::info;
 use std::os::unix::net::UnixStream;
 
 use nitro_cli::common::commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, EmptyArgs, ExplainArgs, PcrArgs, RunEnclavesArgs,
+    BuildEnclavesArgs, ConsoleArgs, DescribeArgs, EmptyArgs, ExplainArgs, PcrArgs, RunEnclavesArgs,
     TerminateEnclavesArgs,
 };
 use nitro_cli::common::document_errors::explain_error;
@@ -194,10 +194,11 @@ fn main() {
                 .ok_or_exit_with_errno(None);
             }
         }
-        ("describe-enclaves", _) => {
-            let (comms, comm_errors) = enclave_proc_command_send_all::<EmptyArgs>(
+        ("describe-enclaves", Some(args)) => {
+            let describe_args = DescribeArgs::new_with(args);
+            let (comms, comm_errors) = enclave_proc_command_send_all::<DescribeArgs>(
                 EnclaveProcessCommandType::Describe,
-                None,
+                Some(&describe_args),
             )
             .map_err(|e| {
                 e.add_subaction(

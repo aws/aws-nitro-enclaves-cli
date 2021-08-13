@@ -481,6 +481,7 @@ function driver_insert {
     # Trigger the udev rule.
     sudo_run "udevadm control --reload"
     sudo_run "udevadm trigger /dev/$DRIVER_NAME" || fail "Could not apply the NE udev rule."
+    sudo_run "chgrp $NE_GROUP_NAME /dev/$DRIVER_NAME" || fail "Could not change the group owner of the NE misc device file."
 
     # The previous operation may need some time to complete.
     while [ "$NE_GROUP_NAME" != "$(stat -c '%G' /dev/$DRIVER_NAME)" ] && [ "$loop_idx" -lt 3 ]; do

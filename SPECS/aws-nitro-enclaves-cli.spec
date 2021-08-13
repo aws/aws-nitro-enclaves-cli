@@ -112,6 +112,7 @@ systemd-tmpfiles --create /usr/lib/tmpfiles.d/%{ne_name}.conf
 echo "KERNEL==\"nitro_enclaves\", SUBSYSTEM==\"misc\", OWNER=\"root\", GROUP=\""%{ne_group}"\", \
     MODE=\"0660\", TAG+=\"systemd\"" > /usr/lib/udev/rules.d/99-nitro_enclaves.rules
 udevadm trigger -y nitro_enclaves
+chgrp %{ne_group} /dev/%{ne_name}
 
 echo -e "
     * In order to successfully run Nitro Enclaves, please add your user to group '"%{ne_group}"'"
@@ -165,6 +166,7 @@ if [ $1 -eq 2 ]; then
     echo "KERNEL==\"nitro_enclaves\", SUBSYSTEM==\"misc\", OWNER=\"root\", GROUP=\""%{ne_group}"\", \
         MODE=\"0660\", TAG+=\"systemd\"" > /usr/lib/udev/rules.d/99-nitro_enclaves.rules
     udevadm trigger -y nitro_enclaves
+    chgrp %{ne_group} /dev/%{ne_name}
 fi
 
 

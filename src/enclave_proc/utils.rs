@@ -25,6 +25,19 @@ pub const MiB: u64 = 1024 * KiB;
 #[allow(non_upper_case_globals)]
 pub const GiB: u64 = 1024 * MiB;
 
+/// The amount of information required at describe-enclaves.
+/// Added for backwards compatibility between NitroCLI versions
+/// that display different describe outputs.
+#[derive(Clone, Copy)]
+pub enum InfoLevel {
+    /// Standard output with minimal information
+    Basic,
+    /// Adds PCR values on top of Basic
+    Measured,
+    /// Adds EIF metadata on top of Measured
+    Metadata,
+}
+
 /// Get a string representation of the bit-mask which holds the enclave launch flags.
 pub fn flags_to_string(flags: u64) -> String {
     if flags & NE_ENCLAVE_DEBUG_MODE == NE_ENCLAVE_DEBUG_MODE {
@@ -50,6 +63,9 @@ pub fn get_enclave_describe_info(
         memory_mib,
         state.to_string(),
         flags_to_string(flags),
+        None,
+        None,
+        None,
         None,
     );
     Ok(info)

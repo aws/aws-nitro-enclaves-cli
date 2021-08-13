@@ -216,9 +216,25 @@ impl ConsoleArgs {
     }
 }
 
-/// The arguments used by the `describe-enclaves` command.
+/// Empty set of arguments.
 #[derive(Serialize, Deserialize)]
 pub struct EmptyArgs {}
+
+/// The arguments used by `describe-enclaves` command.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DescribeArgs {
+    /// True if metadata is requested.
+    pub metadata: bool,
+}
+
+impl DescribeArgs {
+    /// Construct a new `DescribeArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> Self {
+        DescribeArgs {
+            metadata: args.is_present("metadata"),
+        }
+    }
+}
 
 /// The arguments used by the `explain` command.
 #[derive(Debug, Clone)]

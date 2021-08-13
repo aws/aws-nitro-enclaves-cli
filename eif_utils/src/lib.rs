@@ -6,13 +6,14 @@ use aws_nitro_enclaves_cose::{header_map::HeaderMap, CoseSign1};
 use crc::{crc32, Hasher32};
 use eif_defs::eif_hasher::EifHasher;
 use eif_defs::{
-    EifHeader, EifSectionHeader, EifSectionType, PcrInfo, PcrSignature, EIF_MAGIC, MAX_NUM_SECTIONS,
+    EifHeader, EifSectionHeader, EifSectionType, Metadata, PcrInfo, PcrSignature, EIF_MAGIC,
+    MAX_NUM_SECTIONS,
 };
 use openssl::asn1::Asn1Time;
 use openssl::pkey::PKey;
 use serde::{Deserialize, Serialize};
 use serde_cbor::{from_slice, to_vec};
-use serde_json::Value;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha384};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -35,8 +36,10 @@ use std::mem::size_of;
 use std::path::Path;
 use std::time::SystemTime;
 
+pub const MAX_FILE_SIZE: u64 = 4096;
 pub const DEFAULT_SECTIONS_COUNT: u16 = 2;
 pub const UNKNOWN_DEFAULT: &str = "Unknown";
+pub const META_SECTION: u16 = 1;
 #[cfg(target_arch = "x86_64")]
 pub const KERNEL_CONFIG_PATH: &str = "../../blobs/x86_64/bzImage.config";
 #[cfg(target_arch = "aarch64")]
@@ -119,34 +122,6 @@ pub fn get_pcrs<T: Digest + Debug + Write + Clone>(
     Ok(measurements)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Metadata {
-    #[serde(flatten)]
-    /// Metadata generated at every build automatically
-    pub generated_meta: BTreeMap<String, String>,
-    #[serde(rename = "DockerInfo")]
-    /// Information about the docker image
-    pub docker_info: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    /// Metadata provided by the user
-    pub custom_meta: Option<Value>,
-}
-
-impl Metadata {
-    pub fn new(
-        generated_meta: BTreeMap<String, String>,
-        docker_info: Value,
-        custom_meta: Option<Value>,
-    ) -> Self {
-        Metadata {
-            generated_meta,
-            docker_info,
-            custom_meta,
-        }
-    }
-}
-
 /// Structure that groups together all metadata provided at build-time
 #[derive(Debug)]
 pub struct EifIdentityInfo {
@@ -179,6 +154,7 @@ pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     sign_info: Option<SignEnclaveInfo>,
     signature: Option<Vec<u8>>,
     signature_size: u64,
+    metadata: Vec<u8>,
     eif_hdr_flags: u16,
     default_mem: u64,
     default_cpus: u64,
@@ -215,6 +191,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             sign_info,
             signature: None,
             signature_size: 0,
+            metadata: Vec::new(),
             eif_hdr_flags: flags,
             default_mem: 1024 * 1024 * 1024,
             default_cpus: 2,
@@ -241,9 +218,12 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         self.ramdisks.push(ramdisk_file);
     }
 
-    /// The first two sections are the kernel and the cmdline.
+    /// The first two sections are the kernel and the cmdline and the last is metadata.
     fn num_sections(&self) -> u16 {
-        DEFAULT_SECTIONS_COUNT + self.ramdisks.len() as u16 + self.sign_info.iter().count() as u16
+        DEFAULT_SECTIONS_COUNT
+            + self.ramdisks.len() as u16
+            + self.sign_info.iter().count() as u16
+            + META_SECTION
     }
 
     fn sections_offsets(&self) -> [u64; MAX_NUM_SECTIONS] {
@@ -257,6 +237,10 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
         if self.sign_info.is_some() {
             result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.signature_offset();
+            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len() + 1] =
+                self.metadata_offset();
+        } else {
+            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.metadata_offset();
         }
 
         result
@@ -274,6 +258,10 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
         if self.sign_info.is_some() {
             result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.signature_size();
+            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len() + 1] =
+                self.metadata_size();
+        } else {
+            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.metadata_size();
         }
 
         result
@@ -325,6 +313,18 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
     fn signature_size(&self) -> u64 {
         self.signature_size
+    }
+
+    fn metadata_offset(&self) -> u64 {
+        if self.sign_info.is_none() {
+            self.signature_offset()
+        } else {
+            self.signature_offset() + EifSectionHeader::size() as u64 + self.signature_size()
+        }
+    }
+
+    fn metadata_size(&self) -> u64 {
+        self.metadata.len() as u64
     }
 
     /// Generate the signature of a certain PCR.
@@ -380,6 +380,59 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             unused: 0,
             eif_crc32: self.eif_crc.sum32(),
         }
+    }
+
+    /// Get metadata parts, add them to the structure and
+    /// serialize all the information as JSON
+    pub fn save_metadata(&mut self) -> Result<(), String> {
+        let generated_meta = self.get_generated_meta();
+
+        let mut custom_meta: Option<serde_json::Value> = None;
+        match &self.eif_data.metadata_path {
+            Some(meta_path) => {
+                // Check file size
+                let file_meta = std::fs::metadata(meta_path)
+                    .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+                if file_meta.len() > MAX_FILE_SIZE {
+                    return Err("Metadata file size exceeded limit of 4KB.".to_string());
+                }
+
+                // Get json Value
+                let custom_file = File::open(meta_path)
+                    .map_err(|e| format!("Failed to open custom metadata file: {}", e))?;
+                let json_value: Value = serde_json::from_reader(custom_file)
+                    .map_err(|e| format!("Failed to deserialize json: {}", e))?;
+
+                // Check json format, all keys and values should be: "String": "String"
+                let json_map = match json_value.as_object() {
+                    Some(map) => map.to_owned(),
+                    None => return Err("JSON does not respect format String:String".to_string()),
+                };
+
+                for (_key, value) in json_map {
+                    if !value.is_string() {
+                        return Err("JSON does not respect format String:String".to_string());
+                    }
+                }
+
+                custom_meta = Some(json_value);
+            }
+            None => {}
+        }
+
+        let metadata = Metadata::new(
+            self.eif_data.img_name.clone(),
+            self.eif_data.img_version.clone(),
+            generated_meta,
+            self.eif_data.docker_info.clone(),
+            custom_meta,
+        );
+
+        let json = json!(metadata);
+        self.metadata = serde_json::to_vec(&json)
+            .map_err(|e| format!("Could not serialize metadata: {}", e))?;
+
+        Ok(())
     }
 
     /// Compute the crc for the whole enclave image, excluding the
@@ -453,6 +506,16 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             self.eif_crc.write(&eif_buffer[..]);
             self.eif_crc.write(&signature[..]);
         }
+
+        let eif_section = EifSectionHeader {
+            section_type: EifSectionType::EifSectionMetadata,
+            flags: 0,
+            section_size: self.metadata_size(),
+        };
+
+        let eif_buffer = eif_section.to_be_bytes();
+        self.eif_crc.write(&eif_buffer[..]);
+        self.eif_crc.write(&self.metadata[..]);
     }
 
     pub fn write_header(&mut self, file: &mut File) {
@@ -572,32 +635,25 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         }
     }
 
-    pub fn write_metadata(&mut self) {
-        let generated_meta = self.get_generated_meta();
+    pub fn write_metadata(&mut self, eif_file: &mut File) {
+        let eif_section = EifSectionHeader {
+            section_type: EifSectionType::EifSectionMetadata,
+            flags: 0,
+            section_size: self.metadata_size(),
+        };
 
-        let mut custom_meta: Option<serde_json::Value> = None;
-        match &self.eif_data.metadata_path {
-            Some(meta_path) => {
-                let meta_file =
-                    File::open(meta_path).expect("Failed to opens custom metadata file.");
-                custom_meta =
-                    Some(serde_json::from_reader(meta_file).expect("Failed to deserialize json."));
-            }
-            None => {}
-        }
+        eif_file
+            .seek(SeekFrom::Start(self.metadata_offset()))
+            .expect("Could not seek while writing metadata section");
 
-        let metadata = Metadata::new(
-            generated_meta,
-            self.eif_data.docker_info.clone(),
-            custom_meta,
-        );
+        let eif_buffer = eif_section.to_be_bytes();
+        eif_file
+            .write_all(&eif_buffer[..])
+            .expect("Failed to write metadata header");
 
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&metadata)
-                .expect("Failed to print custom metadata.")
-                .as_str(),
-        );
+        eif_file
+            .write_all(&self.metadata)
+            .expect("Failed to write metadata content");
     }
 
     pub fn write_to(&mut self, output_file: &mut File) -> BTreeMap<String, String> {
@@ -614,13 +670,14 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         if self.sign_info.is_some() {
             self.generate_eif_signature(&measurements);
         }
+        self.save_metadata().expect("Failed to save metadata");
         self.compute_crc();
         self.write_header(output_file);
         self.write_kernel(output_file);
         self.write_cmdline(output_file);
         self.write_ramdisks(output_file);
         self.write_signature(output_file);
-        self.write_metadata();
+        self.write_metadata(output_file);
         measurements
     }
 
@@ -877,6 +934,8 @@ pub struct EifReader {
     pub cert_hasher: EifHasher<Sha384>,
     pub eif_crc: u32,
     pub sign_check: Option<bool>,
+    /// Generated and custom EIF metadata
+    pub metadata: Value,
 }
 
 impl EifReader {
@@ -917,6 +976,7 @@ impl EifReader {
             .map_err(|e| format!("Could not create cert_hasher: {:?}", e))?;
         let mut ramdisk_idx = 0;
         let mut signature_section = None;
+        let mut metadata = json!(null);
 
         // Read all section headers and treat by type
         while eif_file
@@ -936,11 +996,12 @@ impl EifReader {
             eif_file
                 .read_exact(&mut buf)
                 .map_err(|e| format!("Error while reading kernel from EIF: {:?}", e))?;
+            eif_crc.write(&buf);
+
             curr_seek += section.section_size as usize;
             eif_file
                 .seek(SeekFrom::Start(curr_seek as u64))
                 .map_err(|e| format!("Failed to seek after EIF section: {:?}", e))?;
-            eif_crc.write(&buf);
 
             match section.section_type {
                 EifSectionType::EifSectionKernel | EifSectionType::EifSectionCmdline => {
@@ -984,8 +1045,12 @@ impl EifReader {
                         format!("Failed to write signature section to cert_hasher: {:?}", e)
                     })?;
                 }
-                EifSectionType::EifSectionInvalid | EifSectionType::EifSectionMetadata => {
-                    return Err("Eif contains an invalid section".to_string());
+                EifSectionType::EifSectionMetadata => {
+                    metadata = serde_json::from_slice(&buf[..])
+                        .map_err(|e| format!("Error deserializing metadata: {:?}", e))?;
+                }
+                EifSectionType::EifSectionInvalid => {
+                    return Err("Found invalid EIF section".to_string());
                 }
             }
         }
@@ -999,7 +1064,28 @@ impl EifReader {
             cert_hasher,
             eif_crc: eif_crc.sum32(),
             sign_check: None,
+            metadata,
         })
+    }
+
+    pub fn get_name(&self) -> Option<Value> {
+        self.metadata.get("ImageName").cloned()
+    }
+
+    pub fn get_version(&self) -> Option<Value> {
+        self.metadata.get("ImageVersion").cloned()
+    }
+
+    pub fn get_generated_meta(&self) -> Option<Value> {
+        self.metadata.get("GeneratedMetadata").cloned()
+    }
+
+    pub fn get_docker_info(&self) -> Option<Value> {
+        self.metadata.get("DockerInfo").cloned()
+    }
+
+    pub fn get_custom_meta(&self) -> Option<Value> {
+        self.metadata.get("CustomMetadata").cloned()
     }
 
     /// Returns deserialized header section

@@ -20,10 +20,11 @@ mod tests {
         new_enclave_name,
     };
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
+    use serde_json::json;
     use std::convert::TryInto;
-    use std::fs::OpenOptions;
+    use std::fs::{File, OpenOptions};
     use std::io::Write;
-    use tempfile::tempdir;
+    use tempfile::{tempdir, TempDir};
 
     use openssl::asn1::Asn1Time;
     use openssl::ec::{EcGroup, EcKey};
@@ -726,15 +727,15 @@ mod tests {
 
         assert!(pcr_thread.is_some());
 
+        let thread_result = pcr_thread
+            .take()
+            .unwrap()
+            .join()
+            .expect("Failed to join thread.")
+            .expect("Failed to save PCRs.");
+
         enclave_manager
-            .set_measurements(
-                pcr_thread
-                    .take()
-                    .unwrap()
-                    .join()
-                    .expect("Failed to join thread.")
-                    .expect("Failed to save PCRs."),
-            )
+            .set_measurements(thread_result.0)
             .expect("Failed to set measurements inside enclave handle.");
 
         get_enclave_describe_info(&enclave_manager).unwrap();
@@ -799,6 +800,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed");
 
@@ -884,6 +888,9 @@ mod tests {
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -900,7 +907,7 @@ mod tests {
 
         let eif_info = describe_eif(args.output).unwrap();
 
-        assert_eq!(eif_info.version, 3);
+        assert_eq!(eif_info.version, "3");
         assert_eq!(eif_info.is_signed, false);
         assert!(eif_info.cert_info.is_none());
         assert!(eif_info.crc_check);
@@ -942,7 +949,7 @@ mod tests {
 
         let eif_info = describe_eif(args.output).unwrap();
 
-        assert_eq!(eif_info.version, 3);
+        assert_eq!(eif_info.version, "3");
         assert_eq!(eif_info.is_signed, true);
         assert!(eif_info.cert_info.is_some());
         assert!(eif_info.crc_check);
@@ -965,6 +972,9 @@ mod tests {
             output: eif_path,
             signing_certificate: Some(cert_path.clone()),
             private_key: Some(key_path),
+            img_name: None,
+            img_version: None,
+            metadata: None,
         };
 
         build_from_docker(
@@ -973,6 +983,9 @@ mod tests {
             &args.output,
             &args.signing_certificate,
             &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
         )
         .expect("Docker build failed");
 

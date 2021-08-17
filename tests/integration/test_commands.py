@@ -5,6 +5,8 @@ from subprocess import TimeoutExpired
 import pytest
 import json
 import os
+import math
+import time
 
 @pytest.fixture
 def init_resources():
@@ -52,6 +54,24 @@ def test_run_with_console(init_resources):
 
                 assert out_str.find("Unpacking initramfs") != -1
                 assert not err_str
+
+def test_run_with_console_timeout(init_resources):
+        result = run_enclave_ok(SAMPLE_EIF, "1028", "2", ["--debug-mode"])
+        result_json = json.loads(result.stdout.decode('UTF-8'))
+        init_resources.enclave_id = result_json["EnclaveID"]
+
+        try:
+                start = time.time()
+                console_proc = connect_console(init_resources.enclave_id, 10)
+                console_proc.communicate(timeout=15)
+                end = time.time()
+        except TimeoutExpired:
+                console_proc.kill()
+                console_proc.communicate()
+                # Console should disconnect before the communicate timeout expires
+                assert 0
+
+        assert math.floor(end - start) == 10
 
 # Test run with invalid number of CPUS
 def test_run_invalid_cpu_count(init_resources):

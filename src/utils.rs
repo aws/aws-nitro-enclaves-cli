@@ -14,7 +14,8 @@ use std::io::Write;
 use std::mem::size_of;
 use std::os::unix::io::RawFd;
 use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
+use vmm_sys_util::epoll::{ControlOperation, Epoll, EpollEvent, EventSet};
 
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::new_nitro_cli_failure;
@@ -141,8 +142,60 @@ impl Console {
     }
 
     /// Read a chunk of raw data from the console and output it.
-    pub fn read_to(&self, output: &mut dyn Write) -> NitroCliResult<()> {
+    pub fn read_to(
+        &self,
+        output: &mut dyn Write,
+        disconnect_timeout_sec: Option<u64>,
+    ) -> NitroCliResult<()> {
+        // Initialize variables
+        let (epoll, mut events, mut epoll_timeout_us, mut start_epoll_time) = (
+            Epoll::new().map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to create epoll: {:?}", e),
+                    NitroCliErrorEnum::EpollError
+                )
+            })?,
+            [EpollEvent::default(); 1],
+            0,
+            Instant::now(),
+        );
+
+        if disconnect_timeout_sec.is_some() {
+            let epoll_event = EpollEvent::new(EventSet::IN, self.fd as u64);
+            epoll
+                .ctl(ControlOperation::Add, self.fd, epoll_event)
+                .map_err(|e| {
+                    new_nitro_cli_failure!(
+                        &format!("Failed to add fd to epoll: {:?}", e),
+                        NitroCliErrorEnum::EpollError
+                    )
+                })?;
+
+            // Disconnect timeout in microseconds
+            epoll_timeout_us = (disconnect_timeout_sec.unwrap_or(0) * 1000 * 1000) as i128;
+        }
+
         loop {
+            if disconnect_timeout_sec.is_some() {
+                start_epoll_time = Instant::now();
+
+                // Use epoll_wait to exit the blocking state when the fd is ready to be read
+                // or when the disconnect time has passed
+                let num_events = epoll
+                    .wait((epoll_timeout_us / 1000) as i32, &mut events)
+                    .map_err(|e| {
+                        new_nitro_cli_failure!(
+                            &format!("Failed to wait on epoll: {:?}", e),
+                            NitroCliErrorEnum::EpollError
+                        )
+                    })?;
+
+                // If the timeout expires, no event happend and the console disconnects
+                if num_events == 0 {
+                    break;
+                }
+            }
+
             let mut buffer = [0u8; BUFFER_SIZE];
             let size = read(self.fd, &mut buffer).map_err(|e| {
                 new_nitro_cli_failure!(
@@ -165,6 +218,11 @@ impl Console {
                         NitroCliErrorEnum::EnclaveConsoleWriteOutputError
                     )
                 })?;
+            }
+
+            // Account for the read/write/epoll_wait elapsed time
+            if disconnect_timeout_sec.is_some() {
+                epoll_timeout_us -= start_epoll_time.elapsed().as_micros() as i128;
             }
         }
 

@@ -222,7 +222,8 @@ fn main() {
                 })
                 .ok_or_exit_with_errno(None);
             }
-            console_enclaves(enclave_cid)
+
+            console_enclaves(enclave_cid, console_args.disconnect_timeout_sec)
                 .map_err(|e| {
                     e.add_subaction("Failed to connect to enclave console".to_string())
                         .set_action(ENCLAVE_CONSOLE_STR.to_string())

@@ -21,6 +21,7 @@ eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
 openssl = "0.10"
 vsock = "0.1.5"
+vmm-sys-util = "0.8.0"
 
 lazy_static = "1.4.0"
 

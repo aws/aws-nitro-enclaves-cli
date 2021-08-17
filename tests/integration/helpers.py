@@ -129,12 +129,15 @@ def describe_enclaves_ok():
 
         return run_subprocess_ok(args)
 
-# Connects to the enclave console defined by the enclave id
+# Connects to the enclave console defined by the enclave id with an optional disconnect timeout
 # Returns the handle to the running process.
-def connect_console(enclave_id):
+def connect_console(enclave_id, timeout = None):
         args = ["nitro-cli",
                 "console",
                 "--enclave-id", enclave_id]
+
+        if timeout is not None:
+                args.extend(["--disconnect-timeout", str(timeout)])
 
         return subprocess.Popen(args, stdout = PIPE, stderr = PIPE)
 

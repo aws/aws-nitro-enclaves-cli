@@ -337,7 +337,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
         kernel_file
             .seek(SeekFrom::Start(0))
-            .expect("Could not seek kernel to begining");
+            .expect("Could not seek kernel to beginning");
         let mut buffer = Vec::new();
         kernel_file
             .read_to_end(&mut buffer)
@@ -472,7 +472,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
             ramdisk
                 .seek(SeekFrom::Start(0))
-                .expect("Could not seek ramdisk to begining");
+                .expect("Could not seek ramdisk to beginning");
             let mut buffer = Vec::new();
             ramdisk
                 .read_to_end(&mut buffer)
@@ -532,7 +532,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         let mut kernel_file = &self.kernel;
         kernel_file
             .seek(SeekFrom::Start(0))
-            .expect("Could not seek kernel to begining");
+            .expect("Could not seek kernel to beginning");
         let mut buffer = Vec::new();
         kernel_file
             .read_to_end(&mut buffer)
@@ -546,7 +546,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         for (index, mut ramdisk) in (&self.ramdisks).iter().enumerate() {
             ramdisk
                 .seek(SeekFrom::Start(0))
-                .expect("Could not seek kernel to begining");
+                .expect("Could not seek kernel to beginning");
             let mut buffer = Vec::new();
             ramdisk
                 .read_to_end(&mut buffer)
@@ -593,7 +593,7 @@ pub struct SignCertificateInfo {
 }
 
 impl SignCertificateInfo {
-    /// Create new signing ceritificate information structure
+    /// Create new signing certificate information structure
     pub fn new(
         issuer_name: BTreeMap<String, String>,
         algorithm: String,
@@ -719,13 +719,13 @@ impl EifReader {
                     let cert = openssl::x509::X509::from_pem(&des_sign[0].signing_certificate)
                         .map_err(|e| format!("Error while digesting certificate: {:?}", e))?;
                     let cert_der = cert.to_der().map_err(|e| {
-                        format!("Failed to deserialize sigining certificate: {:?}", e)
+                        format!("Failed to deserialize signing certificate: {:?}", e)
                     })?;
                     cert_hasher.write_all(&cert_der).map_err(|e| {
                         format!("Failed to write signature section to cert_hasher: {:?}", e)
                     })?;
                 }
-                EifSectionType::EifSectionInvalid => {
+                EifSectionType::EifSectionInvalid | EifSectionType::EifSectionMetadata => {
                     return Err("Eif contains an invalid section".to_string());
                 }
             }

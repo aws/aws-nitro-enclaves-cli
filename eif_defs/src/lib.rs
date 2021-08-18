@@ -14,7 +14,8 @@ use byteorder::{BigEndian, ByteOrder};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use std::mem::size_of;
+use serde_json::Value;
+use std::{collections::BTreeMap, mem::size_of};
 
 pub const EIF_MAGIC: [u8; 4] = [46, 101, 105, 102]; // .eif in ascii
 pub const MAX_NUM_SECTIONS: usize = 32;
@@ -168,6 +169,7 @@ pub enum EifSectionType {
     EifSectionCmdline,
     EifSectionRamdisk,
     EifSectionSignature,
+    EifSectionMetadata,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -246,6 +248,44 @@ impl PcrInfo {
         PcrInfo {
             register_index,
             register_value,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Metadata {
+    #[serde(rename = "ImageName")]
+    /// Eif name added at build
+    pub img_name: String,
+    #[serde(rename = "ImageVersion")]
+    /// Eif version added at build
+    pub img_version: String,
+    #[serde(rename = "GeneratedMetadata")]
+    /// Metadata generated at every build automatically
+    pub generated_meta: BTreeMap<String, String>,
+    #[serde(rename = "DockerInfo")]
+    /// Information about the docker image
+    pub docker_info: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "CustomMetadata")]
+    /// Metadata provided by the user
+    pub custom_meta: Option<Value>,
+}
+
+impl Metadata {
+    pub fn new(
+        img_name: String,
+        img_version: String,
+        generated_meta: BTreeMap<String, String>,
+        docker_info: Value,
+        custom_meta: Option<Value>,
+    ) -> Self {
+        Metadata {
+            img_name,
+            img_version,
+            generated_meta,
+            docker_info,
+            custom_meta,
         }
     }
 }
@@ -341,7 +381,9 @@ mod tests {
     #[test]
     fn test_eif_section_header_from_be_bytes_invalid_section_type() {
         let mut bytes = [0u8; 12];
-        bytes[1] = 5;
+        // As there are 6 EIF section types, set the enum index to 6
+        // so we get an invalid section to cause the error.
+        bytes[1] = 6;
 
         assert_eq!(EifSectionHeader::from_be_bytes(&bytes).is_err(), true);
     }

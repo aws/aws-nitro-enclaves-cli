@@ -290,6 +290,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "serde",
+ "serde_json",
  "sha2",
 ]
 

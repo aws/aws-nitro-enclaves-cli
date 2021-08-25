@@ -472,8 +472,40 @@ mod test_dev_driver {
         assert_eq!(result.is_err(), false);
 
         // Start without cpu pair.
+        #[cfg(target_arch = "aarch64")]
+        let mut check_dmesg = CheckDmesg::new().expect("Failed to obtain dmesg object");
+        #[cfg(target_arch = "aarch64")]
+        check_dmesg
+            .record_current_line()
+            .expect("Failed to record current line");
+
         let result = enclave.start(EnclaveStartInfo::new_empty());
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(result.is_err(), true);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(result.is_err(), false);
+
+        #[cfg(target_arch = "aarch64")]
+        check_dmesg.expect_no_changes().unwrap();
+
+        #[cfg(target_arch = "aarch64")]
+        drop(enclave);
+
+        #[cfg(target_arch = "aarch64")]
+        let mut enclave = driver.create_enclave().unwrap();
+
+        // Add memory to the enclave.
+        #[cfg(target_arch = "aarch64")]
+        for region in &mut mem_regions {
+            let result = enclave.add_mem_region(EnclaveMemoryRegion::new_from(region));
+            assert_eq!(result.is_err(), false);
+        }
+
+        // Add the first available cpu.
+        #[cfg(target_arch = "aarch64")]
+        let result = enclave.add_cpu(candidates[0]);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(result.is_err(), false);
 
         // Add the first cpu pair.
         let result = enclave.add_cpu(candidates[1]);

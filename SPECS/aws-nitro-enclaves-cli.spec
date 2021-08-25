@@ -22,7 +22,6 @@ Release:    0%{?dist}
 
 License:    Apache 2.0
 
-BuildArch: noarch
 ExclusiveArch: x86_64, aarch64
 
 Source0: aws-nitro-enclaves-cli.tar.gz

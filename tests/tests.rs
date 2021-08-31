@@ -15,7 +15,9 @@ mod tests {
         flags_to_string, generate_enclave_id, get_enclave_describe_info,
     };
     use nitro_cli::utils::Console;
-    use nitro_cli::{build_enclaves, build_from_docker, describe_eif, enclave_console};
+    use nitro_cli::{
+        build_enclaves, build_from_docker, describe_eif, enclave_console, new_enclave_name,
+    };
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
     use std::convert::TryInto;
     use std::fs::OpenOptions;
@@ -256,7 +258,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 64,
             debug_mode: Some(true),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
         run_describe_terminate(args);
     }
@@ -295,7 +297,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 256,
             debug_mode: Some(true),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
         run_describe_terminate(args);
     }
@@ -329,7 +331,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 2046,
             debug_mode: Some(true),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
         run_describe_terminate(args);
     }
@@ -427,7 +429,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
 
         run_describe_terminate(run_args);
@@ -462,7 +464,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(false),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
 
         let mut enclave_manager = run_enclaves(&run_args, None)
@@ -516,7 +518,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
 
         let mut enclave_manager = run_enclaves(&run_args, None)
@@ -600,7 +602,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 64,
             debug_mode: Some(true),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
         let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let mut enclave_manager = run_result.enclave_manager;
@@ -621,7 +623,9 @@ mod tests {
 
         get_enclave_describe_info(&enclave_manager).unwrap();
         let build_info = enclave_manager.get_measurements().unwrap();
+        let enclave_name = enclave_manager.enclave_name.clone();
 
+        assert_eq!(enclave_name, "testName");
         assert_eq!(
             build_info.measurements.get(&"PCR0".to_string()).unwrap(),
             "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
@@ -637,6 +641,99 @@ mod tests {
 
         let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");
         terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
+    }
+
+    #[test]
+    fn build_run_default_enclave_name() {
+        let dir = tempdir().unwrap();
+        let eif_path = dir.path().join("test.eif");
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path.to_str().unwrap().to_string(),
+            signing_certificate: None,
+            private_key: None,
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed")
+        .1;
+
+        setup_env();
+        let mut run_args = RunEnclavesArgs {
+            enclave_cid: None,
+            eif_path: args.output,
+            cpu_ids: None,
+            cpu_count: Some(2),
+            memory_mib: 64,
+            debug_mode: Some(true),
+            enclave_name: None,
+        };
+        let names = Vec::new();
+        run_args.enclave_name =
+            Some(new_enclave_name(run_args.clone(), names).expect("Failed to set new name."));
+        let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
+        let mut enclave_manager = run_result.enclave_manager;
+
+        get_enclave_describe_info(&enclave_manager).unwrap();
+        let enclave_name = enclave_manager.enclave_name.clone();
+
+        // Assert that EIF name has been set
+        assert_eq!(enclave_name, "test");
+
+        terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
+    }
+
+    #[test]
+    fn new_enclave_names() {
+        let dir = tempdir().unwrap();
+        let eif_path = dir.path().join("test.eif");
+
+        let mut run_args = RunEnclavesArgs {
+            enclave_cid: None,
+            eif_path: eif_path.to_str().unwrap().to_string(),
+            cpu_ids: None,
+            cpu_count: Some(2),
+            memory_mib: 64,
+            debug_mode: Some(true),
+            enclave_name: Some("enclaveName".to_string()),
+        };
+        let mut names = Vec::new();
+        let name =
+            new_enclave_name(run_args.clone(), names.clone()).expect("Failed to set new name.");
+        names.push(name);
+
+        run_args.enclave_name = Some("enclaveNameOther".to_string());
+        let name =
+            new_enclave_name(run_args.clone(), names.clone()).expect("Failed to set new name.");
+        names.push(name);
+
+        run_args.enclave_name = Some("enclaveName".to_string());
+        let name =
+            new_enclave_name(run_args.clone(), names.clone()).expect("Failed to set new name.");
+        names.push(name);
+
+        run_args.enclave_name = Some("enclaveName".to_string());
+        let name =
+            new_enclave_name(run_args.clone(), names.clone()).expect("Failed to set new name.");
+        names.push(name);
+
+        assert_eq!(
+            names,
+            vec![
+                "enclaveName",
+                "enclaveNameOther",
+                "enclaveName_1",
+                "enclaveName_2"
+            ]
+        );
     }
 
     #[test]

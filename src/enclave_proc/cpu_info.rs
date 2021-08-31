@@ -277,7 +277,7 @@ mod tests {
             debug_mode: None,
             cpu_ids: None,
             cpu_count: Some(343),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
 
         let mut result = cpu_info.get_cpu_config(&run_args);
@@ -309,7 +309,7 @@ mod tests {
             debug_mode: None,
             cpu_ids: None,
             cpu_count: Some(2),
-            enclave_name: None,
+            enclave_name: Some("testName".to_string()),
         };
 
         let mut result = cpu_info.get_cpu_config(&run_args);

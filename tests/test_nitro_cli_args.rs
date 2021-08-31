@@ -51,6 +51,41 @@ mod test_nitro_cli_args {
     }
 
     #[test]
+    fn terminate_enclave_name() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "terminate-enclave",
+            "--enclave-name",
+            "testName",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn terminate_enclave_name_is_required() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "terminate-enclave", "--enclave-name"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn terminate_enclave_name_takes_multiple_values() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "terminate-enclave",
+            "--enclave-name",
+            "name1",
+            "name2",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
     fn describe_enclaves_correct_command() {
         let app = create_app!();
         let args = vec!["nitro cli", "describe-enclaves"];
@@ -113,6 +148,30 @@ mod test_nitro_cli_args {
     }
 
     #[test]
+    fn console_enclave_name() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "console", "--enclave-name", "testName"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn console_enclave_name_is_required() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "console", "--enclave-name"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn console_enclave_name_takes_multiple_values() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "console", "--enclave-name", "name1", "name2"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
     fn console_correct_disconnect_timeout_command() {
         let app = create_app!();
         let args = vec![
@@ -120,6 +179,21 @@ mod test_nitro_cli_args {
             "console",
             "--enclave-id",
             "i-1234_enc123",
+            "--disconnect-timeout",
+            "10",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn console_correct_disconnect_timeout_command_with_name() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "console",
+            "--enclave-name",
+            "testName",
             "--disconnect-timeout",
             "10",
         ];
@@ -435,6 +509,51 @@ mod test_nitro_cli_args {
             "1024",
             "--eif-path",
             "dir/image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn run_enclave_correct_command_with_name() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "10001",
+            "--memory",
+            "512",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+            "1234",
+            "--debug-mode",
+            "--enclave-name",
+            "testName",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn run_enclave_name_takes_value() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "run-enclave",
+            "--cpu-ids",
+            "10000",
+            "10001",
+            "--memory",
+            "512",
+            "--eif-path",
+            "dir/image.eif",
+            "--enclave-cid",
+            "1234",
+            "--debug-mode",
+            "--enclave-name",
         ];
 
         assert_eq!(app.get_matches_from_safe(args).is_err(), true)

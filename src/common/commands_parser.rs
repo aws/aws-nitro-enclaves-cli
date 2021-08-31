@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_CID_PARENT};
+use crate::get_id_by_name;
 use crate::new_nitro_cli_failure;
 
 /// The arguments used by the `run-enclave` command.
@@ -155,10 +156,19 @@ pub struct TerminateEnclavesArgs {
 impl TerminateEnclavesArgs {
     /// Construct a new `TerminateEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        Ok(TerminateEnclavesArgs {
-            enclave_id: parse_enclave_id(args)
-                .map_err(|e| e.add_subaction("Parse enclave ID".to_string()))?,
-        })
+        // If a name is given, find the corresponding EnclaveID
+        match parse_enclave_name(args)
+            .map_err(|e| e.add_subaction("Parse Enclave Name".to_string()))?
+        {
+            Some(name) => Ok(TerminateEnclavesArgs {
+                enclave_id: get_id_by_name(name)
+                    .map_err(|e| e.add_subaction("Get ID by Name".to_string()))?,
+            }),
+            None => Ok(TerminateEnclavesArgs {
+                enclave_id: parse_enclave_id(args)
+                    .map_err(|e| e.add_subaction("Parse enclave ID".to_string()))?,
+            }),
+        }
     }
 }
 
@@ -174,9 +184,19 @@ pub struct ConsoleArgs {
 impl ConsoleArgs {
     /// Construct a new `ConsoleArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        Ok(ConsoleArgs {
-            enclave_id: parse_enclave_id(args)
+        // If a name is given, find the corresponding EnclaveID
+        let enclave_id = match parse_enclave_name(args)
+            .map_err(|e| e.add_subaction("Parse Enclave Name".to_string()))?
+        {
+            Some(name) => {
+                get_id_by_name(name).map_err(|e| e.add_subaction("Get ID by Name".to_string()))?
+            }
+            None => parse_enclave_id(args)
                 .map_err(|e| e.add_subaction("Parse enclave ID".to_string()))?,
+        };
+
+        Ok(ConsoleArgs {
+            enclave_id,
             disconnect_timeout_sec: parse_disconnect_timeout(args)
                 .map_err(|e| e.add_subaction("Parse disconnect timeout".to_string()))?,
         })

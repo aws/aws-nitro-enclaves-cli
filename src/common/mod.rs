@@ -195,6 +195,8 @@ pub enum EnclaveProcessCommandType {
     GetEnclaveCID,
     /// Request an enclave's flags (sent by the CLI).
     GetEnclaveFlags,
+    /// Request an enclave's name (sent by the CLI).
+    GetEnclaveName,
     /// Notify the socket connection listener to shut down (sent by the enclave process to itself).
     ConnectionListenerStop,
     /// Do not execute a command due to insufficient privileges (sent by the CLI, modified by the enclave process).

@@ -55,12 +55,14 @@ pub fn get_enclave_describe_info(
 
 /// Obtain the enclave information requested by the `run-enclaves` command.
 pub fn get_run_enclaves_info(
+    enclave_name: String,
     enclave_cid: u64,
     slot_id: u64,
     cpu_ids: Vec<u32>,
     memory: u64,
 ) -> NitroCliResult<EnclaveRunInfo> {
     let info = EnclaveRunInfo::new(
+        enclave_name,
         generate_enclave_id(slot_id)?,
         enclave_cid,
         cpu_ids.len(),
@@ -175,12 +177,14 @@ mod tests {
     /// exactly the same values as the supplied arguments.
     #[test]
     fn test_get_run_enclaves_info() {
+        let enclave_name = "testName".to_string();
         let enclave_cid: u64 = 0;
         let slot_id: u64 = 7;
         let cpu_ids: Vec<u32> = vec![1, 3];
         let memory: u64 = 64;
 
-        let result = get_run_enclaves_info(enclave_cid, slot_id, cpu_ids.clone(), memory);
+        let result =
+            get_run_enclaves_info(enclave_name, enclave_cid, slot_id, cpu_ids.clone(), memory);
 
         assert!(result.is_ok());
 
@@ -198,12 +202,14 @@ mod tests {
     /// id, which is obtained through a call to `get_run_enclaves_info()`.
     #[test]
     fn test_get_enclave_id() {
+        let enclave_name = "testName".to_string();
         let enclave_cid: u64 = 0;
         let slot_id: u64 = 8;
         let cpu_ids: Vec<u32> = vec![1, 3];
         let memory: u64 = 64;
 
-        let result = get_run_enclaves_info(enclave_cid, slot_id, cpu_ids.clone(), memory);
+        let result =
+            get_run_enclaves_info(enclave_name, enclave_cid, slot_id, cpu_ids.clone(), memory);
 
         assert!(result.is_ok());
 

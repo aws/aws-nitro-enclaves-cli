@@ -65,19 +65,28 @@ impl EnclaveDescribeInfo {
 /// like measurements, not found in older NitroCLI versions
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DescribeOutput {
+    /// Enclave name assigned by the user
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "EnclaveName")]
+    pub enclave_name: Option<String>,
     #[serde(flatten)]
     /// General describe info found in all versions of NitroCLI
     describe_info: EnclaveDescribeInfo,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
     /// Build measurements containing PCRs
-    build_info: Option<EnclaveBuildInfo>,
+    pub build_info: Option<EnclaveBuildInfo>,
 }
 
 impl DescribeOutput {
     /// Creates new describe output from available
-    pub fn new(describe_info: EnclaveDescribeInfo, build_info: Option<EnclaveBuildInfo>) -> Self {
+    pub fn new(
+        enclave_name: Option<String>,
+        describe_info: EnclaveDescribeInfo,
+        build_info: Option<EnclaveBuildInfo>,
+    ) -> Self {
         DescribeOutput {
+            enclave_name,
             describe_info,
             build_info,
         }
@@ -87,6 +96,9 @@ impl DescribeOutput {
 /// The information to be provided for a `run-enclave` request.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EnclaveRunInfo {
+    #[serde(rename = "EnclaveName")]
+    /// The name of the enclave.
+    pub enclave_name: String,
     #[serde(rename = "EnclaveID")]
     /// The full ID of the enclave.
     pub enclave_id: String,
@@ -110,6 +122,7 @@ pub struct EnclaveRunInfo {
 impl EnclaveRunInfo {
     /// Create a new `EnclaveRunInfo` instance from the given enclave information.
     pub fn new(
+        enclave_name: String,
         enclave_id: String,
         enclave_cid: u64,
         cpu_count: usize,
@@ -117,6 +130,7 @@ impl EnclaveRunInfo {
         memory_mib: u64,
     ) -> Self {
         EnclaveRunInfo {
+            enclave_name,
             enclave_id,
             process_id: std::process::id(),
             enclave_cid,
@@ -130,6 +144,10 @@ impl EnclaveRunInfo {
 /// The information to be provided for a `terminate-enclave` request.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EnclaveTerminateInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "EnclaveName")]
+    /// The name of the enclave. Optional for older versions.
+    pub enclave_name: Option<String>,
     #[serde(rename = "EnclaveID")]
     /// The full ID of the enclave.
     pub enclave_id: String,
@@ -140,8 +158,9 @@ pub struct EnclaveTerminateInfo {
 
 impl EnclaveTerminateInfo {
     /// Create a new `EnclaveTerminateInfo` instance from the given enclave information.
-    pub fn new(enclave_id: String, terminated: bool) -> Self {
+    pub fn new(enclave_name: Option<String>, enclave_id: String, terminated: bool) -> Self {
         EnclaveTerminateInfo {
+            enclave_name,
             enclave_id,
             terminated,
         }

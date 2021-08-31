@@ -48,12 +48,24 @@ pub fn run_enclaves(
         .map_err(|e| e.add_subaction("Failed to construct CPU information".to_string()))?
         .get_cpu_config(args)
         .map_err(|e| e.add_subaction("Failed to get CPU configuration".to_string()))?;
+
+    let enclave_name = match &args.enclave_name {
+        Some(enclave_name) => enclave_name,
+        None => {
+            return Err(new_nitro_cli_failure!(
+                "Failed to set enclave name in the manager".to_string(),
+                NitroCliErrorEnum::FileOperationFailure
+            ))
+        }
+    };
+
     let mut enclave_manager = EnclaveManager::new(
         args.enclave_cid,
         args.memory_mib,
         cpu_ids,
         eif_file,
         args.debug_mode.unwrap_or(false),
+        enclave_name.to_string(),
     )
     .map_err(|e| {
         e.add_subaction("Failed to construct EnclaveManager with given arguments".to_string())
@@ -102,6 +114,7 @@ pub fn terminate_enclaves(
     connection: Option<&Connection>,
 ) -> NitroCliResult<()> {
     let enclave_id = enclave_manager.enclave_id.clone();
+    let enclave_name = Some(enclave_manager.enclave_name.clone());
 
     debug!("terminate_enclaves");
     enclave_manager
@@ -133,7 +146,7 @@ pub fn terminate_enclaves(
     // We notify the CLI of the termination's status.
     safe_conn_println(
         connection,
-        serde_json::to_string_pretty(&EnclaveTerminateInfo::new(enclave_id, true))
+        serde_json::to_string_pretty(&EnclaveTerminateInfo::new(enclave_name, enclave_id, true))
             .map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Failed to display enclave termination data: {:?}", err),
@@ -156,10 +169,12 @@ pub fn describe_enclaves(
         .map_err(|e| e.add_subaction(String::from("Execute Describe Enclave command")))?;
     // Check if the run_enclave command version calculated the measurements
     let mut build_info: Option<EnclaveBuildInfo> = None;
+    let mut name: Option<String> = None;
     if add_info {
         build_info = Some(enclave_manager.get_measurements()?);
+        name = Some(enclave_manager.enclave_name.clone());
     }
-    let output = DescribeOutput::new(info, build_info);
+    let output = DescribeOutput::new(name, info, build_info);
 
     connection.println(
         serde_json::to_string_pretty(&output)

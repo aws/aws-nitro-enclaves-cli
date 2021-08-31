@@ -37,6 +37,7 @@ use super::common::{
 use crate::common::commands_parser::{EmptyArgs, RunEnclavesArgs};
 use crate::common::logger::EnclaveProcLogWriter;
 use crate::common::signal_handler::SignalHandler;
+use crate::enclave_proc::connection::safe_conn_println;
 use crate::new_nitro_cli_failure;
 
 use commands::{describe_enclaves, run_enclaves, terminate_enclaves};
@@ -310,6 +311,25 @@ fn handle_command(
             (0, false)
         }
 
+        EnclaveProcessCommandType::GetEnclaveName => {
+            connection.write_u64(MSG_ENCLAVE_CONFIRM).map_err(|e| {
+                e.add_subaction("Failed to write confirmation".to_string())
+                    .set_action("Get Enclave Name".to_string())
+            })?;
+            safe_conn_println(
+                Some(connection),
+                serde_json::to_string_pretty(&enclave_manager.enclave_name)
+                    .map_err(|err| {
+                        new_nitro_cli_failure!(
+                            &format!("Failed to write enclave name to connection: {:?}", err),
+                            NitroCliErrorEnum::SerdeError
+                        )
+                    })?
+                    .as_str(),
+            )?;
+            (0, false)
+        }
+
         EnclaveProcessCommandType::Describe => {
             connection.write_u64(MSG_ENCLAVE_CONFIRM).map_err(|e| {
                 e.add_subaction("Failed to write confirmation".to_string())
@@ -466,11 +486,12 @@ fn process_event_loop(
             };
         }
 
-        // Only the commands comming from the CLI must be replied to with the status code.
+        // Only the commands coming from the CLI must be replied to with the status code.
         match cmd {
             EnclaveProcessCommandType::Run
             | EnclaveProcessCommandType::Terminate
-            | EnclaveProcessCommandType::Describe => {
+            | EnclaveProcessCommandType::Describe
+            | EnclaveProcessCommandType::GetEnclaveName => {
                 connection.write_status(status_code).map_err(|_| {
                     new_nitro_cli_failure!(
                         "Process event loop failed",

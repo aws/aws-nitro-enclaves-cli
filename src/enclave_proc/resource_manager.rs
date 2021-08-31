@@ -166,6 +166,8 @@ struct EnclaveHandle {
 pub struct EnclaveManager {
     /// The full ID of the managed enclave.
     pub enclave_id: String,
+    /// Name of the managed enclave.
+    pub enclave_name: String,
     /// A thread-safe handle to the enclave's resources.
     enclave_handle: Arc<Mutex<EnclaveHandle>>,
 }
@@ -554,7 +556,11 @@ impl EnclaveHandle {
     }
 
     /// Initialize the enclave environment and start the enclave.
-    fn create_enclave(&mut self, connection: Option<&Connection>) -> NitroCliResult<String> {
+    fn create_enclave(
+        &mut self,
+        enclave_name: String,
+        connection: Option<&Connection>,
+    ) -> NitroCliResult<String> {
         self.init_memory(connection)
             .map_err(|e| e.add_subaction("Memory initialization issue".to_string()))?;
         self.init_cpus()
@@ -586,6 +592,7 @@ impl EnclaveHandle {
         self.enclave_cid = Some(enclave_start.enclave_cid);
 
         let info = get_run_enclaves_info(
+            enclave_name,
             enclave_start.enclave_cid,
             self.slot_uid,
             self.cpu_ids.clone(),
@@ -887,12 +894,14 @@ impl EnclaveManager {
         cpu_ids: EnclaveCpuConfig,
         eif_file: File,
         debug_mode: bool,
+        enclave_name: String,
     ) -> NitroCliResult<Self> {
         let enclave_handle =
             EnclaveHandle::new(enclave_cid, memory_mib, cpu_ids, eif_file, debug_mode)
                 .map_err(|e| e.add_subaction("Failed to create enclave handle".to_string()))?;
         Ok(EnclaveManager {
             enclave_id: String::new(),
+            enclave_name,
             enclave_handle: Arc::new(Mutex::new(enclave_handle)),
         })
     }
@@ -911,7 +920,7 @@ impl EnclaveManager {
                     NitroCliErrorEnum::LockAcquireFailure
                 )
             })?
-            .create_enclave(connection)
+            .create_enclave(self.enclave_name.clone(), connection)
             .map_err(|e| e.add_subaction("Failed to create enclave".to_string()))?;
         Ok(())
     }

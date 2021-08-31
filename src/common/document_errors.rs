@@ -66,6 +66,7 @@ lazy_static! {
             (NitroCliErrorEnum::SignalUnmaskingError, "E55"),
             (NitroCliErrorEnum::LoggerError, "E56"),
             (NitroCliErrorEnum::HasherError, "E57"),
+            (NitroCliErrorEnum::EnclaveNamingError, "E58"),
         ].iter().cloned().collect();
 }
 
@@ -324,6 +325,9 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         }
         "E57" => {
             ret.push_str("Hasher error. Such error appears when trying to initialize a hasher or write bytes to it, resulting in a IO error.");
+        }
+        "E58" => {
+            ret.push_str("Naming error. Such error appears when trying to perform an enclave operation using the enclave name and the name is invalid.");
         }
         _ => {
             ret.push_str(format!("No such error code {}", error_code_str).as_str());

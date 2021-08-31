@@ -419,6 +419,39 @@ pub fn get_all_enclave_names() -> NitroCliResult<Vec<String>> {
     Ok(objects)
 }
 
+/// Sends the name to all the running enclaves and expects a response
+/// with the ID of the one that uniquely matched
+pub fn get_id_by_name(name: String) -> NitroCliResult<String> {
+    let (comms, _) = enclave_proc_command_send_all::<String>(
+        EnclaveProcessCommandType::GetIDbyName,
+        Some(&name),
+    )
+    .map_err(|e| {
+        e.add_subaction("Failed to send GetIDbyName command to all enclave processes".to_string())
+            .set_action("Get Enclave Names".to_string())
+    })?;
+
+    let mut replies: Vec<UnixStream> = vec![];
+    replies.extend(comms);
+    let mut objects: Vec<String> = enclave_proc_handle_outputs::<String>(&mut replies)
+        .iter()
+        .map(|v| v.0.clone())
+        .collect();
+
+    // Check if the name was not found or if there are multiple matches
+    if objects.len() != 1 {
+        return Err(new_nitro_cli_failure!(
+            match objects.len() {
+                0 => "No enclave matched the given name.".to_string(),
+                _ => "Conflicting enclave names have been found.".to_string(),
+            },
+            NitroCliErrorEnum::EnclaveNamingError
+        ));
+    }
+
+    Ok(objects.remove(0))
+}
+
 /// Macro defining the arguments configuration for a *Nitro CLI* application.
 #[macro_export]
 macro_rules! create_app {
@@ -511,16 +544,30 @@ macro_rules! create_app {
                             .long("enclave-id")
                             .takes_value(true)
                             .help("Enclave ID, used to uniquely identify an enclave")
-                            .required(true)
-                            .conflicts_with("all"),
+                            .required_unless("all")
+                            .required_unless("enclave-name")
+                            .conflicts_with("all")
+                            .conflicts_with("enclave-name"),
                     )
                     .arg(
                         Arg::with_name("all")
                             .long("all")
                             .takes_value(false)
                             .help("Terminate all running enclave instances belonging to the current user")
-                            .required(false)
-                            .conflicts_with("enclave-id"),
+                            .required_unless("enclave-id")
+                            .required_unless("enclave-name")
+                            .conflicts_with("enclave-id")
+                            .conflicts_with("enclave-name"),
+                    )
+                    .arg(
+                        Arg::with_name("enclave-name")
+                            .long("enclave-name")
+                            .takes_value(true)
+                            .help("Enclave name, used to uniquely identify an enclave")
+                            .required_unless("enclave-id")
+                            .required_unless("all")
+                            .conflicts_with("enclave-id")
+                            .conflicts_with("all"),
                     ),
             )
             .subcommand(
@@ -586,7 +633,8 @@ macro_rules! create_app {
                             .long("enclave-id")
                             .takes_value(true)
                             .help("Enclave ID, used to uniquely identify an enclave")
-                            .required(true),
+                            .required_unless("enclave-name")
+                            .conflicts_with("enclave-name"),
                     )
                     .arg(
                         Arg::with_name("disconnect-timeout")
@@ -594,6 +642,14 @@ macro_rules! create_app {
                             .takes_value(true)
                             .help("The time in seconds after the console disconnects from the enclave")
                             .required(false)
+                    )
+                    .arg(
+                        Arg::with_name("enclave-name")
+                            .long("enclave-name")
+                            .takes_value(true)
+                            .help("Enclave name, used to uniquely identify an enclave")
+                            .required_unless("enclave-id")
+                            .conflicts_with("enclave-id"),
                     ),
             )
             .subcommand(

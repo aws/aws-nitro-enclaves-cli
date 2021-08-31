@@ -330,6 +330,33 @@ fn handle_command(
             (0, false)
         }
 
+        EnclaveProcessCommandType::GetIDbyName => {
+            connection.write_u64(MSG_ENCLAVE_CONFIRM).map_err(|e| {
+                e.add_subaction("Failed to write confirmation".to_string())
+                    .set_action("Name to ID".to_string())
+            })?;
+            let name = connection.read::<String>().map_err(|e| {
+                e.add_subaction("Failed to get enclave name".to_string())
+                    .set_action("Name to ID".to_string())
+            })?;
+
+            // Respond only if the current enclave name matches
+            if enclave_manager.enclave_name == name {
+                safe_conn_println(
+                    Some(connection),
+                    serde_json::to_string_pretty(&enclave_manager.enclave_id)
+                        .map_err(|err| {
+                            new_nitro_cli_failure!(
+                                &format!("Failed to display RunEnclaves data: {:?}", err),
+                                NitroCliErrorEnum::SerdeError
+                            )
+                        })?
+                        .as_str(),
+                )?;
+            }
+            (0, false)
+        }
+
         EnclaveProcessCommandType::Describe => {
             connection.write_u64(MSG_ENCLAVE_CONFIRM).map_err(|e| {
                 e.add_subaction("Failed to write confirmation".to_string())
@@ -491,7 +518,8 @@ fn process_event_loop(
             EnclaveProcessCommandType::Run
             | EnclaveProcessCommandType::Terminate
             | EnclaveProcessCommandType::Describe
-            | EnclaveProcessCommandType::GetEnclaveName => {
+            | EnclaveProcessCommandType::GetEnclaveName
+            | EnclaveProcessCommandType::GetIDbyName => {
                 connection.write_status(status_code).map_err(|_| {
                     new_nitro_cli_failure!(
                         "Process event loop failed",

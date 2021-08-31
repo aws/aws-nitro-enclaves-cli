@@ -170,6 +170,8 @@ pub enum NitroCliErrorEnum {
     LoggerError,
     /// Hasher operation error
     HasherError,
+    /// Enclave naming error
+    EnclaveNamingError,
 }
 
 impl Default for NitroCliErrorEnum {
@@ -197,6 +199,8 @@ pub enum EnclaveProcessCommandType {
     GetEnclaveFlags,
     /// Request an enclave's name (sent by the CLI).
     GetEnclaveName,
+    /// Request the ID of an enclave only if the name matches (sent by the CLI).
+    GetIDbyName,
     /// Notify the socket connection listener to shut down (sent by the enclave process to itself).
     ConnectionListenerStop,
     /// Do not execute a command due to insufficient privileges (sent by the CLI, modified by the enclave process).

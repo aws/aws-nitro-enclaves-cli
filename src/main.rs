@@ -27,8 +27,8 @@ use nitro_cli::enclave_proc_comm::{
     enclave_proc_get_flags, enclave_proc_spawn, enclave_process_handle_all_replies,
 };
 use nitro_cli::{
-    build_enclaves, console_enclaves, create_app, describe_eif, new_nitro_cli_failure,
-    terminate_all_enclaves,
+    build_enclaves, console_enclaves, create_app, describe_eif, get_all_enclave_names,
+    new_enclave_name, new_nitro_cli_failure, terminate_all_enclaves,
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
@@ -39,6 +39,7 @@ const TERMINATE_ALL_ENCLAVES_STR: &str = "Terminate All Enclaves";
 const BUILD_ENCLAVE_STR: &str = "Build Enclave";
 const ENCLAVE_CONSOLE_STR: &str = "Enclave Console";
 const EXPLAIN_ERR_STR: &str = "Explain Error";
+const NEW_NAME_STR: &str = "New Enclave Name";
 
 /// *Nitro CLI* application entry point.
 fn main() {
@@ -70,7 +71,7 @@ fn main() {
 
     match args.subcommand() {
         ("run-enclave", Some(args)) => {
-            let run_args = RunEnclavesArgs::new_with(args)
+            let mut run_args = RunEnclavesArgs::new_with(args)
                 .map_err(|err| {
                     err.add_subaction("Failed to construct RunEnclave arguments".to_string())
                         .set_action(RUN_ENCLAVE_STR.to_string())
@@ -82,6 +83,21 @@ fn main() {
                         .set_action(RUN_ENCLAVE_STR.to_string())
                 })
                 .ok_or_exit_with_errno(None);
+
+            let names = get_all_enclave_names()
+                .map_err(|e| {
+                    e.add_subaction("Failed to handle all enclave process replies".to_string())
+                        .set_action("Get Enclaves Name".to_string())
+                })
+                .ok_or_exit_with_errno(None);
+            run_args.enclave_name = Some(
+                new_enclave_name(run_args.clone(), names)
+                    .map_err(|err| {
+                        err.add_subaction("Failed to assign a new enclave name".to_string())
+                            .set_action(NEW_NAME_STR.to_string())
+                    })
+                    .ok_or_exit_with_errno(None),
+            );
 
             enclave_proc_command_send_single(
                 EnclaveProcessCommandType::Run,

@@ -256,6 +256,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 64,
             debug_mode: Some(true),
+            enclave_name: None,
         };
         run_describe_terminate(args);
     }
@@ -294,6 +295,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 256,
             debug_mode: Some(true),
+            enclave_name: None,
         };
         run_describe_terminate(args);
     }
@@ -327,6 +329,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 2046,
             debug_mode: Some(true),
+            enclave_name: None,
         };
         run_describe_terminate(args);
     }
@@ -424,6 +427,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
+            enclave_name: None,
         };
 
         run_describe_terminate(run_args);
@@ -458,6 +462,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(false),
+            enclave_name: None,
         };
 
         let mut enclave_manager = run_enclaves(&run_args, None)
@@ -511,6 +516,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
+            enclave_name: None,
         };
 
         let mut enclave_manager = run_enclaves(&run_args, None)
@@ -594,6 +600,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 64,
             debug_mode: Some(true),
+            enclave_name: None,
         };
         let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let mut enclave_manager = run_result.enclave_manager;

@@ -42,6 +42,8 @@ This repository contains a collection of tools and commands used for managing th
   6. [Optional] You could add ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.sh in your local shell configuration.
   7. You are now ready to go.
 
+  A set of steps options to install Nitro CLI from GitHub sources e.g. for [CentOS Stream 8](docs/centos_stream_8_how_to_install_nitro_cli_from_github_sources.md), [Fedora 34](docs/fedora_34_how_to_install_nitro_cli_from_github_sources.md), [RHEL 8.4](docs/rhel_8.4_how_to_install_nitro_cli_from_github_sources.md), [Ubuntu 20.04](docs/ubuntu_20.04_how_to_install_nitro_cli_from_github_sources.md), can be found in the [docs](docs) directory.
+
 ### How to install (Amazon Linux repository):
 #### Running enclaves
   1. Ensure that your EC2 instance was created with enclave support enabled and that your system (*and container if applicable*) has read/write access to `/dev/nitro_enclaves`.

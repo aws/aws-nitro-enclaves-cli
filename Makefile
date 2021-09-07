@@ -142,7 +142,7 @@ init: init.c build-setup
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ CC=${CC} cargo build \
+			OPENSSL_STATIC=yes OPENSSL_DIR=/musl_openssl/ CC=${CC} ARCH=$(TOOLCHAIN_ARCH_TARGET) cargo build \
 				--release \
 				--manifest-path=/nitro_src/Cargo.toml \
 				--target=${CARGO_TARGET} \

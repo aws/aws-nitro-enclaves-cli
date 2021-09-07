@@ -101,11 +101,17 @@ pub fn build_from_docker(
             .add_info(vec![output_path, "Open"])
         })?;
 
+    let kernel_image_name = match std::env::consts::ARCH {
+        "aarch64" => "Image",
+        "x86_64" => "bzImage",
+        _ => "undefined",
+    };
+
     let mut docker2eif = enclave_build::Docker2Eif::new(
         docker_uri.to_string(),
         format!("{}/init", blobs_path),
         format!("{}/nsm.ko", blobs_path),
-        format!("{}/bzImage", blobs_path),
+        format!("{}/{}", blobs_path, kernel_image_name),
         cmdline.trim().to_string(),
         format!("{}/linuxkit", blobs_path),
         &mut file_output,
@@ -252,7 +258,8 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<DescribeEifInfo> {
 ///
 /// This variable specifies where all the blobs necessary for building
 /// an enclave image are stored. As of now the blobs are:
-/// - *bzImage*: A kernel image.
+/// - *bzImage*: A kernel image if the local arch is x86_64 or
+/// - *Image*  : A kernel image if the local arch is aarch64
 /// - *init*: The initial init process that is bootstraping the environment.
 /// - *linuxkit*: A slightly modified version of linuxkit.
 /// - *cmdline*: A file containing the kernel commandline.

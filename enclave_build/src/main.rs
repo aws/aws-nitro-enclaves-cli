@@ -38,7 +38,7 @@ fn main() {
             Arg::with_name("kernel_img_path")
                 .short("k")
                 .long("kernel")
-                .help("Path to a bzImage linux kernel")
+                .help("Path to a bzImage/Image file for x86_64/aarch64 linux kernel")
                 .takes_value(true)
                 .required(true),
         )

@@ -41,9 +41,10 @@ pub const DEFAULT_SECTIONS_COUNT: u16 = 2;
 pub const UNKNOWN_DEFAULT: &str = "Unknown";
 pub const META_SECTION: u16 = 1;
 #[cfg(target_arch = "x86_64")]
-pub const KERNEL_CONFIG_PATH: &str = "../../blobs/x86_64/bzImage.config";
+pub const CONFIG_FILE: &str = "bzImage.config";
 #[cfg(target_arch = "aarch64")]
-pub const KERNEL_CONFIG_PATH: &str = "../../blobs/aarch64/bzImage.config";
+pub const CONFIG_FILE: &str = "Image.config";
+const DEFAULT_BLOBS_PATH: &str = "/usr/share/nitro_enclaves/blobs/";
 
 #[derive(Clone, Debug)]
 pub struct SignEnclaveInfo {
@@ -695,8 +696,11 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         meta.insert("BuildTool".to_string(), tool_name);
         meta.insert("BuildToolVersion".to_string(), tool_version);
 
-        let config_file =
-            File::open(KERNEL_CONFIG_PATH).expect("Failed to open kernel image config file.");
+        let blobs_path =
+            std::env::var("NITRO_CLI_BLOBS").unwrap_or_else(|_| DEFAULT_BLOBS_PATH.to_string());
+
+        let config_file = File::open(format!("{}/{}", blobs_path, CONFIG_FILE))
+            .expect("Failed to open kernel image config file.");
         let os_string: String = BufReader::new(config_file)
             .lines()
             .nth(2)

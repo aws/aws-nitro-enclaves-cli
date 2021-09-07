@@ -29,7 +29,7 @@ fn main() {
                 .long("kernel")
                 .value_name("FILE")
                 .required(true)
-                .help("Sets path to a bzImage file")
+                .help("Sets path to a bzImage/Image file for x86_64/aarch64 architecture")
                 .takes_value(true),
         )
         .arg(

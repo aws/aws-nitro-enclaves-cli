@@ -86,8 +86,8 @@ This repository contains a collection of tools and commands used for managing th
   The components of the Nitro Enclaves CLI are organized as follows (all paths are relative to the Nitro Enclaves CLI's root directory):
 
   - 'blobs': Binary blobs providing pre-compiled components needed for the building of enclave images:
-      - 'blobs/aarch64/bzImage': Kernel image
-      - 'blobs/aarch64/bzImage.config': Kernel config
+      - 'blobs/aarch64/Image': Kernel image
+      - 'blobs/aarch64/Image.config': Kernel config
       - 'blobs/aarch64/cmdline': Kernel boot command line
       - 'blobs/aarch64/init': Init process executable
       - 'blobs/aarch64/linuxkit': LinuxKit-based user-space environment

@@ -136,7 +136,7 @@ init: init.c build-setup
 	strip --strip-all $(OBJ_PATH)/init
 
 # See .build-container rule for explanation.
-.build-nitro-cli: $(shell find $(BASE_PATH)/src -name "*.rs")
+.build-nitro-cli: $(shell find $(BASE_PATH)/src $(BASE_PATH)/enclave_build/src -name "*.rs")
 	$(DOCKER) run \
 		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \

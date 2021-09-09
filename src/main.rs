@@ -16,7 +16,7 @@ use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, EmptyArgs, ExplainArgs, RunEnclavesArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::common::document_errors::explain_error;
-use nitro_cli::common::json_output::{DescribeOutput, EnclaveRunInfo, EnclaveTerminateInfo};
+use nitro_cli::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
 use nitro_cli::common::{
     enclave_proc_command_send_single, logger, NitroCliErrorEnum, NitroCliFailure, NitroCliResult,
 };
@@ -184,7 +184,7 @@ fn main() {
 
             info!("Sent command: Describe");
             replies.extend(comms);
-            enclave_process_handle_all_replies::<DescribeOutput>(
+            enclave_process_handle_all_replies::<EnclaveDescribeInfo>(
                 &mut replies,
                 comm_errors,
                 true,

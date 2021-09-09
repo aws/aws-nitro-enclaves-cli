@@ -42,6 +42,7 @@ pub fn get_enclave_describe_info(
     let (slot_uid, enclave_cid, cpus_count, cpu_ids, memory_mib, flags, state) =
         enclave_manager.get_description_resources()?;
     let info = EnclaveDescribeInfo::new(
+        None,
         generate_enclave_id(slot_uid)?,
         enclave_cid,
         cpus_count,
@@ -49,6 +50,7 @@ pub fn get_enclave_describe_info(
         memory_mib,
         state.to_string(),
         flags_to_string(flags),
+        None,
     );
     Ok(info)
 }

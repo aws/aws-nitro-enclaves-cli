@@ -12,7 +12,7 @@ use std::thread::JoinHandle;
 
 use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::construct_error_message;
-use crate::common::json_output::{DescribeOutput, EnclaveBuildInfo, EnclaveTerminateInfo};
+use crate::common::json_output::{EnclaveBuildInfo, EnclaveTerminateInfo};
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
@@ -165,7 +165,7 @@ pub fn describe_enclaves(
 ) -> NitroCliResult<()> {
     debug!("describe_enclaves");
 
-    let info = get_enclave_describe_info(enclave_manager)
+    let mut info = get_enclave_describe_info(enclave_manager)
         .map_err(|e| e.add_subaction(String::from("Execute Describe Enclave command")))?;
     // Check if the run_enclave command version calculated the measurements
     let mut build_info: Option<EnclaveBuildInfo> = None;
@@ -174,10 +174,11 @@ pub fn describe_enclaves(
         build_info = Some(enclave_manager.get_measurements()?);
         name = Some(enclave_manager.enclave_name.clone());
     }
-    let output = DescribeOutput::new(name, info, build_info);
+    info.enclave_name = name;
+    info.build_info = build_info;
 
     connection.println(
-        serde_json::to_string_pretty(&output)
+        serde_json::to_string_pretty(&info)
             .map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Failed to display enclave describe data: {:?}", err),

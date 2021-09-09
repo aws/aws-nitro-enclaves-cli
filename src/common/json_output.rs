@@ -11,6 +11,10 @@ use std::collections::BTreeMap;
 /// The information to be provided for a `describe-enclaves` request.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EnclaveDescribeInfo {
+    /// Enclave name assigned by the user
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "EnclaveName")]
+    pub enclave_name: Option<String>,
     #[serde(rename = "EnclaveID")]
     /// The full ID of the enclave.
     pub enclave_id: String,
@@ -35,11 +39,16 @@ pub struct EnclaveDescribeInfo {
     #[serde(rename = "Flags")]
     /// The bit-mask which provides the enclave's launch flags.
     pub flags: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(flatten)]
+    /// Build measurements containing PCRs
+    pub build_info: Option<EnclaveBuildInfo>,
 }
 
 impl EnclaveDescribeInfo {
     /// Create a new `EnclaveDescribeInfo` instance from the given enclave information.
     pub fn new(
+        enclave_name: Option<String>,
         enclave_id: String,
         enclave_cid: u64,
         cpu_count: u64,
@@ -47,8 +56,10 @@ impl EnclaveDescribeInfo {
         memory_mib: u64,
         state: String,
         flags: String,
+        build_info: Option<EnclaveBuildInfo>,
     ) -> Self {
         EnclaveDescribeInfo {
+            enclave_name,
             enclave_id,
             process_id: std::process::id(),
             enclave_cid,
@@ -57,37 +68,6 @@ impl EnclaveDescribeInfo {
             memory_mib,
             state,
             flags,
-        }
-    }
-}
-
-/// Output structure for describe command containing additional fields,
-/// like measurements, not found in older NitroCLI versions
-#[derive(Clone, Serialize, Deserialize)]
-pub struct DescribeOutput {
-    /// Enclave name assigned by the user
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "EnclaveName")]
-    pub enclave_name: Option<String>,
-    #[serde(flatten)]
-    /// General describe info found in all versions of NitroCLI
-    describe_info: EnclaveDescribeInfo,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    /// Build measurements containing PCRs
-    pub build_info: Option<EnclaveBuildInfo>,
-}
-
-impl DescribeOutput {
-    /// Creates new describe output from available
-    pub fn new(
-        enclave_name: Option<String>,
-        describe_info: EnclaveDescribeInfo,
-        build_info: Option<EnclaveBuildInfo>,
-    ) -> Self {
-        DescribeOutput {
-            enclave_name,
-            describe_info,
             build_info,
         }
     }

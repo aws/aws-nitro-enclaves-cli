@@ -32,6 +32,13 @@ mod tests {
     // Remote Docker image
     const SAMPLE_DOCKER: &str =
         "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample";
+    const SAMPLE_DOCKER_PCR0: &str =
+        "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838";
+    const SAMPLE_DOCKER_PCR1: &str =
+        "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342";
+    const SAMPLE_DOCKER_PCR2: &str =
+        "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90";
+
     // Local Docker image
     const COMMAND_EXECUTER_DOCKER: &str = "command_executer:eif";
 
@@ -85,18 +92,9 @@ mod tests {
         )
         .expect("Docker build failed")
         .1;
-        assert_eq!(
-            measurements.get("PCR0").unwrap(),
-            "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
-        );
-        assert_eq!(
-            measurements.get("PCR1").unwrap(),
-            "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
-        );
-        assert_eq!(
-            measurements.get("PCR2").unwrap(),
-            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
-        );
+        assert_eq!(measurements.get("PCR0").unwrap(), SAMPLE_DOCKER_PCR0);
+        assert_eq!(measurements.get("PCR1").unwrap(), SAMPLE_DOCKER_PCR1);
+        assert_eq!(measurements.get("PCR2").unwrap(), SAMPLE_DOCKER_PCR2);
     }
 
     #[test]
@@ -213,18 +211,9 @@ mod tests {
         )
         .expect("Docker build failed")
         .1;
-        assert_eq!(
-            measurements.get("PCR0").unwrap(),
-            "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
-        );
-        assert_eq!(
-            measurements.get("PCR1").unwrap(),
-            "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
-        );
-        assert_eq!(
-            measurements.get("PCR2").unwrap(),
-            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
-        );
+        assert_eq!(measurements.get("PCR0").unwrap(), SAMPLE_DOCKER_PCR0);
+        assert_eq!(measurements.get("PCR1").unwrap(), SAMPLE_DOCKER_PCR1);
+        assert_eq!(measurements.get("PCR2").unwrap(), SAMPLE_DOCKER_PCR2);
     }
 
     #[test]
@@ -617,15 +606,15 @@ mod tests {
 
         assert_eq!(
             build_info.measurements.get(&"PCR0".to_string()).unwrap(),
-            "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
+            SAMPLE_DOCKER_PCR0
         );
         assert_eq!(
             build_info.measurements.get(&"PCR1".to_string()).unwrap(),
-            "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
+            SAMPLE_DOCKER_PCR1
         );
         assert_eq!(
             build_info.measurements.get(&"PCR2".to_string()).unwrap(),
-            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
+            SAMPLE_DOCKER_PCR2
         );
 
         let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");

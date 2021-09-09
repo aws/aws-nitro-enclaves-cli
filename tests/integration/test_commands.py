@@ -76,19 +76,21 @@ def test_run_with_console_timeout(init_resources):
     result = run_enclave_ok(SAMPLE_EIF, "1028", "2", ["--debug-mode"])
     result_json = json.loads(result.stdout.decode('UTF-8'))
     init_resources.enclave_id = result_json["EnclaveID"]
+    
+    for console_timeout in [10, 20, 40, 60]:
+        try:
+            start = time.time()
+            console_proc = connect_console(
+                init_resources.enclave_id, console_timeout)
+            console_proc.communicate(timeout=console_timeout+1)
+            end = time.time()
+        except TimeoutExpired:
+            console_proc.kill()
+            console_proc.communicate()
+            # Console should disconnect before the communicate timeout expires
+            assert 0
 
-    try:
-        start = time.time()
-        console_proc = connect_console(init_resources.enclave_id, 10)
-        console_proc.communicate(timeout=15)
-        end = time.time()
-    except TimeoutExpired:
-        console_proc.kill()
-        console_proc.communicate()
-        # Console should disconnect before the communicate timeout expires
-        assert 0
-
-    assert math.floor(end - start) == 10
+        assert math.floor(end - start) == console_timeout
 
 
 def test_run_invalid_cpu_count(init_resources):

@@ -17,7 +17,8 @@ RUN apt-get update && \
 	libclang-dev \
 	clang \
 	wget \
-	unzip
+	unzip \
+	jq
 
 # Install docker for nitro-cli build-enclave runs
 RUN curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg > /tmp/dkey; apt-key add /tmp/dkey && \

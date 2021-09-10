@@ -94,6 +94,14 @@ mod test_nitro_cli_args {
     }
 
     #[test]
+    fn describe_enclaves_request_metadata_correct() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "describe-enclaves", "--metadata"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
     fn describe_eif_correct_command() {
         let app = create_app!();
         let args = vec!["nitro cli", "describe-eif", "--eif-path", "dir/image.eif"];
@@ -287,6 +295,51 @@ mod test_nitro_cli_args {
         ];
 
         assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn build_enclave_with_metadata_correct_command() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--docker-dir",
+            "dir/",
+            "--output-file",
+            "image.eif",
+            "--name",
+            "TestName",
+            "--version",
+            "4.0",
+            "--metadata",
+            "meta.json",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn build_enclave_with_metadata_file_is_required() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--docker-dir",
+            "dir/",
+            "--output-file",
+            "image.eif",
+            "--name",
+            "TestName",
+            "--version",
+            "4.0",
+            "--metadata",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
     }
 
     #[test]

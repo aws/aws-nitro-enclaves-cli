@@ -8,6 +8,10 @@ use nix::sys::epoll::{self, EpollEvent, EpollFlags, EpollOp};
 use std::fs::set_permissions;
 use std::fs::Permissions;
 use std::io;
+
+#[cfg(test)]
+use std::os::raw::c_char;
+
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -317,7 +321,7 @@ mod tests {
     const TMP_DIR: &str = "./npe";
 
     fn unset_envvar(varname: &String) {
-        unsafe { libc::unsetenv(varname.as_ptr() as *const i8) };
+        unsafe { libc::unsetenv(varname.as_ptr() as *const c_char) };
     }
 
     /// Inspects the content of /proc/<PID>/status in order to

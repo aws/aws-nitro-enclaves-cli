@@ -20,6 +20,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::io::{Read, Write};
+
+#[cfg(test)]
+use std::os::raw::c_char;
+
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
@@ -568,7 +572,7 @@ mod tests {
 
     fn unset_envvar(varname: &String) {
         let _ = unsafe {
-            libc::unsetenv(varname.as_ptr() as *const i8);
+            libc::unsetenv(varname.as_ptr() as *const c_char);
         };
     }
 

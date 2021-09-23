@@ -3,7 +3,7 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-use eif_utils::{get_pcrs, EifReader};
+use eif_utils::{get_pcrs, EifReader, PcrSignatureChecker};
 use log::debug;
 use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;
@@ -70,6 +70,23 @@ pub fn run_enclaves(
     .map_err(|e| {
         e.add_subaction("Failed to construct EnclaveManager with given arguments".to_string())
     })?;
+
+    let mut signature_checker = PcrSignatureChecker::from_eif(&args.eif_path).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to create EIF signature checker: {:?}", e),
+            NitroCliErrorEnum::EIFSignatureCheckerError
+        )
+    })?;
+
+    // Verify the certificate only if signature section exists
+    if !signature_checker.is_empty() {
+        signature_checker.verify().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Invalid signing certificate: {:?}", e),
+                NitroCliErrorEnum::EIFSignatureCheckerError
+            )
+        })?;
+    }
 
     // Launch parallel computing of PCRs
     let path = args.eif_path.clone();

@@ -8,10 +8,12 @@ use eif_defs::eif_hasher::EifHasher;
 use eif_defs::{
     EifHeader, EifSectionHeader, EifSectionType, PcrInfo, PcrSignature, EIF_MAGIC, MAX_NUM_SECTIONS,
 };
+use openssl::asn1::Asn1Time;
 use openssl::ec::EcKey;
 use serde::{Deserialize, Serialize};
 use serde_cbor::{from_slice, to_vec};
 use sha2::{Digest, Sha384};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 /// Contains code for EifBuilder a simple library used for building an EifFile
@@ -608,6 +610,122 @@ impl SignCertificateInfo {
             not_after,
             signature,
         }
+    }
+}
+
+/// PCR Signature verifier that checks the validity of
+/// the certificate used to sign the enclave
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PcrSignatureChecker {
+    signing_certificate: Vec<u8>,
+    signature: Vec<u8>,
+}
+
+impl PcrSignatureChecker {
+    pub fn new(pcr_signature: &PcrSignature) -> Self {
+        PcrSignatureChecker {
+            signing_certificate: pcr_signature.signing_certificate.clone(),
+            signature: pcr_signature.signature.clone(),
+        }
+    }
+
+    /// Reads EIF section headers and looks for a signature.
+    /// Seek to the signature section, if present, and save the certificate and signature
+    pub fn from_eif(eif_path: &str) -> Result<Self, String> {
+        let mut signing_certificate = Vec::new();
+        let mut signature = Vec::new();
+
+        let mut curr_seek = 0;
+        let mut eif_file =
+            File::open(eif_path).map_err(|e| format!("Failed to open the EIF file: {:?}", e))?;
+
+        // Skip header
+        let mut header_buf = vec![0u8; EifHeader::size()];
+        eif_file
+            .read_exact(&mut header_buf)
+            .map_err(|e| format!("Error while reading EIF header: {:?}", e))?;
+
+        curr_seek += EifHeader::size();
+        eif_file
+            .seek(SeekFrom::Start(curr_seek as u64))
+            .map_err(|e| format!("Failed to seek file from start: {:?}", e))?;
+
+        let mut section_buf = vec![0u8; EifSectionHeader::size()];
+
+        // Read all section headers and skip if different from signature section
+        while eif_file.read_exact(&mut section_buf).is_ok() {
+            let section = EifSectionHeader::from_be_bytes(&section_buf)
+                .map_err(|e| format!("Error extracting EIF section header: {:?}", e))?;
+            curr_seek += EifSectionHeader::size();
+
+            if section.section_type == EifSectionType::EifSectionSignature {
+                let mut buf = vec![0u8; section.section_size as usize];
+                eif_file
+                    .seek(SeekFrom::Start(curr_seek as u64))
+                    .map_err(|e| format!("Failed to seek after EIF section header: {:?}", e))?;
+                eif_file.read_exact(&mut buf).map_err(|e| {
+                    format!("Error while reading signature section from EIF: {:?}", e)
+                })?;
+
+                // Deserialize PCR signature structure and save certificate and signature
+                let des_sign: Vec<PcrSignature> = from_slice(&buf[..])
+                    .map_err(|e| format!("Error deserializing certificate: {:?}", e))?;
+
+                signing_certificate = des_sign[0].signing_certificate.clone();
+                signature = des_sign[0].signature.clone();
+            }
+
+            curr_seek += section.section_size as usize;
+            eif_file
+                .seek(SeekFrom::Start(curr_seek as u64))
+                .map_err(|e| format!("Failed to seek after EIF section: {:?}", e))?;
+        }
+
+        Ok(Self {
+            signing_certificate,
+            signature,
+        })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.signing_certificate.len() == 0 && self.signature.len() == 0
+    }
+
+    /// Verifies the validity of the signing certificate
+    pub fn verify(&mut self) -> Result<(), String> {
+        let signature = COSESign1::from_bytes(&self.signature[..])
+            .map_err(|err| format!("Could not deserialize the signature: {:?}", err))?;
+        let cert = openssl::x509::X509::from_pem(&self.signing_certificate[..])
+            .map_err(|_| "Could not deserialize the signing certificate".to_string())?;
+        let public_key = cert
+            .public_key()
+            .map_err(|_| "Could not get the public key from the signing certificate".to_string())?
+            .ec_key()
+            .map_err(|err| format!("Could not get the internal elliptic curve key: {:?}", err))?;
+
+        // Verify the signature
+        let result = signature
+            .verify_signature(public_key.as_ref())
+            .map_err(|err| format!("Could not verify EIF signature: {:?}", err))?;
+        if !result {
+            return Err("The EIF signature is not valid".to_string());
+        }
+
+        // Verify that the signing certificate is not expired
+        let current_time = Asn1Time::days_from_now(0).map_err(|err| err.to_string())?;
+        if current_time
+            .compare(cert.not_after())
+            .map_err(|err| err.to_string())?
+            == Ordering::Greater
+            || current_time
+                .compare(cert.not_before())
+                .map_err(|err| err.to_string())?
+                == Ordering::Less
+        {
+            return Err("The signing certificate is expired".to_string());
+        }
+
+        Ok(())
     }
 }
 

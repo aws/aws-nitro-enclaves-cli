@@ -67,6 +67,7 @@ lazy_static! {
             (NitroCliErrorEnum::LoggerError, "E56"),
             (NitroCliErrorEnum::HasherError, "E57"),
             (NitroCliErrorEnum::EnclaveNamingError, "E58"),
+            (NitroCliErrorEnum::EIFSignatureCheckerError, "E59"),
         ].iter().cloned().collect();
 }
 
@@ -328,6 +329,9 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         }
         "E58" => {
             ret.push_str("Naming error. Such error appears when trying to perform an enclave operation using the enclave name and the name is invalid.");
+        }
+        "E59" => {
+            ret.push_str("EIF signature checker error. Such error appears when validation of the signing certificate fails.");
         }
         _ => {
             ret.push_str(format!("No such error code {}", error_code_str).as_str());

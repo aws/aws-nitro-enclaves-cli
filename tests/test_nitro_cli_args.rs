@@ -558,4 +558,43 @@ mod test_nitro_cli_args {
 
         assert_eq!(app.get_matches_from_safe(args).is_err(), true)
     }
+
+    #[test]
+    fn pcr_input_takes_value() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "pcr", "--input"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn pcr_certificate_takes_value() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "pcr", "--signing-certificate"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn pcr_conflicting_arguments() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "pcr",
+            "--signing-certificate",
+            "cert.pem",
+            "--input",
+            "test.bin",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn pcr_certificate_correct() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "pcr", "--signing-certificate", "cert.pem"];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
 }

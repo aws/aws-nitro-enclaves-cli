@@ -16,6 +16,8 @@ TEST_IMAGES = "test_images/"
 ARCH =  subprocess.run(["uname", "-m"], stdout=PIPE, stderr=PIPE,
         check=False).stdout.decode('UTF-8').rstrip("\n")
 SAMPLE_EIF = "vsock-sample-server-" + ARCH + ".eif"
+SIGNED_EIF = "vsock-sample-server-" + ARCH + "-signed.eif"
+SIGN_CERT = "cert.pem"
 
 
 def run_cmd_ok(cmd_string):
@@ -221,3 +223,18 @@ def get_cpu_count():
     output = result.stdout.decode('UTF-8').splitlines()
     cpu_ids = [id for id in output if not id.startswith("#")]
     return len(cpu_ids)
+
+
+def get_pcr(cert_name):
+    """
+    Runs pcr command, hashing the file at the given path
+    :return: PCR value of the input and returns a CompletedProcess
+    """
+    cert_path = TEST_IMAGES + cert_name
+    args = [
+        "nitro-cli",
+        "pcr",
+        "--signing-certificate",
+        cert_path,
+    ]
+    return run_subprocess_ok(args)

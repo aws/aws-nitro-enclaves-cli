@@ -12,7 +12,7 @@ from subprocess import TimeoutExpired
 import pytest
 from helpers import run_enclave_ok, run_enclave_err, terminate_enclave_ok, connect_console,\
     describe_enclaves_ok, describe_eif_ok, get_cpu_count, SAMPLE_EIF, kill_all_nitro_processes,\
-    connect_console_by_name, terminate_enclave_by_name
+    connect_console_by_name, terminate_enclave_by_name, SIGNED_EIF, SIGN_CERT, get_pcr
 
 
 @pytest.fixture(name="init_resources")
@@ -76,7 +76,7 @@ def test_run_with_console_timeout(init_resources):
     result = run_enclave_ok(SAMPLE_EIF, "1028", "2", ["--debug-mode"])
     result_json = json.loads(result.stdout.decode('UTF-8'))
     init_resources.enclave_id = result_json["EnclaveID"]
-    
+
     for console_timeout in [10, 20, 40, 60]:
         try:
             start = time.time()
@@ -200,3 +200,19 @@ def test_enclave_name(init_resources): # pylint: disable=unused-argument
     assert enclave_name == "testName"
     assert describe_name == "testName"
     assert terminate_name == "testName"
+
+
+def test_pcr_certificate(init_resources): # pylint: disable=unused-argument
+    """
+    Test pcr command is successful and returns as expected.
+    EIF PCR8 should be the same as the certificate hash.
+    """
+    result = describe_eif_ok(SIGNED_EIF)
+    result_json = json.loads(result.stdout.decode('UTF-8'))
+    static_measurements = result_json["Measurements"]
+
+    result = get_pcr(SIGN_CERT)
+    result_json = json.loads(result.stdout.decode('UTF-8'))
+    cert_pcr = result_json["PCR8"]
+
+    assert static_measurements["PCR8"] == cert_pcr

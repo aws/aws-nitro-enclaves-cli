@@ -14,9 +14,10 @@ mod tests {
     use nitro_cli::enclave_proc::utils::{
         flags_to_string, generate_enclave_id, get_enclave_describe_info,
     };
-    use nitro_cli::utils::Console;
+    use nitro_cli::utils::{Console, PcrType};
     use nitro_cli::{
-        build_enclaves, build_from_docker, describe_eif, enclave_console, new_enclave_name,
+        build_enclaves, build_from_docker, describe_eif, enclave_console, get_file_pcr,
+        new_enclave_name,
     };
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
     use std::convert::TryInto;
@@ -855,5 +856,47 @@ mod tests {
         assert_eq!(eif_info.version, 3);
         assert_eq!(eif_info.is_signed, true);
         assert!(eif_info.cert_info.is_some());
+    }
+
+    #[test]
+    fn get_certificate_pcr() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: Some(cert_path.clone()),
+            private_key: Some(key_path),
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+        )
+        .expect("Docker build failed");
+
+        // Describe EIF and get PCR8
+        let eif_info = describe_eif(args.output).unwrap();
+        // Hash signing certificate and verify that PCR8 is the same (identifying the certificate)
+        let pcr = get_file_pcr(cert_path, PcrType::SigningCertificate).unwrap();
+
+        assert_eq!(
+            eif_info
+                .build_info
+                .measurements
+                .get(&"PCR8".to_string())
+                .unwrap(),
+            pcr.get(&"PCR8".to_string()).unwrap(),
+        );
     }
 }

@@ -98,8 +98,22 @@ mkdir -p /var/log/nitro_enclaves || test_failed
 # Build EIFS for testing
 mkdir -p test_images || test_failed
 export HOME="/root"
+
+# Simple EIF
 nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" \
 	--output-file test_images/vsock-sample-server-"${ARCH}".eif || test_failed
+
+# Generate signing certificate
+openssl ecparam -name secp384r1 -genkey -out test_images/key.pem || test_failed
+openssl req -new -key test_images/key.pem -sha384 -nodes \
+	-subj "/CN=AWS/C=US/ST=WA/L=Seattle/O=Amazon/OU=AWS" -out test_images/csr.pem || test_failed
+openssl x509 -req -days 20  -in test_images/csr.pem -out test_images/cert.pem \
+	-sha384 -signkey test_images/key.pem || test_failed
+# Signed EIF
+nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" \
+	--output-file test_images/vsock-sample-server-"${ARCH}"-signed.eif \
+	--private-key test_images/key.pem --signing-certificate test_images/cert.pem || test_failed
+
 
 # Build enclave image using Docker ENTRYPOINT instruction
 mkdir -p examples/"${ARCH}"/hello-entrypoint || test_failed

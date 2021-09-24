@@ -35,6 +35,14 @@ const SO_VM_SOCKETS_CONNECT_TIMEOUT: i32 = 6;
 /// The amount of time to wait between consecutive console reads, in milliseconds.
 const TIMEOUT: u64 = 100;
 
+/// Defines the types of PCRs that can be measured by `pcr` command
+pub enum PcrType {
+    /// Used for files containing the bytes for hashing
+    DefaultType,
+    /// Used for `.pem` files that we want to hash. Additional serializing is needed
+    SigningCertificate,
+}
+
 /// The structure representing the console of an enclave.
 pub struct Console {
     /// The file descriptor used for connecting to the enclave's console.

@@ -14,6 +14,7 @@ pub mod enclave_proc_comm;
 /// The CLI-specific utilities module.
 pub mod utils;
 
+use eif_defs::eif_hasher::EifHasher;
 use eif_utils::{get_pcrs, EifReader};
 use log::debug;
 use sha2::{Digest, Sha384};
@@ -33,7 +34,7 @@ use enclave_proc_comm::{
 };
 use log::info;
 
-use utils::Console;
+use utils::{Console, PcrType};
 
 /// Hypervisor CID as defined by <http://man7.org/linux/man-pages/man7/vsock.7.html>.
 pub const VMADDR_CID_HYPERVISOR: u32 = 0;
@@ -459,6 +460,81 @@ pub fn get_id_by_name(name: String) -> NitroCliResult<String> {
     Ok(objects.remove(0))
 }
 
+/// For the given file, return the PCR value
+///
+/// Based on the pcr_type, calculate the PCR hash of the input. The default
+/// type takes the bytes of the input file and adds them to the hasher.
+/// The certificate type performs additional serialization before hashing.
+pub fn get_file_pcr(path: String, pcr_type: PcrType) -> NitroCliResult<BTreeMap<String, String>> {
+    let mut key = "PCR".to_string();
+    // Initialize hasher
+    let mut hasher = EifHasher::new_without_cache(Sha384::new()).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Could not create hasher: {:?}", e),
+            NitroCliErrorEnum::HasherError
+        )
+    })?;
+    let mut file = File::open(path).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to open file: {:?}", e),
+            NitroCliErrorEnum::FileOperationFailure
+        )
+    })?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to read file: {:?}", e),
+            NitroCliErrorEnum::FileOperationFailure
+        )
+    })?;
+    // Treat the input buffer by PCR type
+    match pcr_type {
+        PcrType::DefaultType => {}
+        PcrType::SigningCertificate => {
+            key = "PCR8".to_string();
+            let cert = openssl::x509::X509::from_pem(&buf[..]).map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to deserialize .pem: {:?}", e),
+                    NitroCliErrorEnum::HasherError
+                )
+            })?;
+            buf = cert.to_der().map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to serialize certificate: {:?}", e),
+                    NitroCliErrorEnum::HasherError
+                )
+            })?;
+        }
+    }
+    hasher.write_all(&buf).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Could not write to hasher: {:?}", e),
+            NitroCliErrorEnum::HasherError
+        )
+    })?;
+    let hash = hex::encode(hasher.tpm_extend_finalize_reset().map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Could not get result for hasher: {:?}", e),
+            NitroCliErrorEnum::HasherError
+        )
+    })?);
+
+    let mut result = BTreeMap::new();
+    result.insert(key, hash);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&result)
+            .map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to display PCR(s): {:?}", err),
+                    NitroCliErrorEnum::SerdeError
+                )
+            })?
+            .as_str(),
+    );
+    Ok(result)
+}
+
 /// Macro defining the arguments configuration for a *Nitro CLI* application.
 #[macro_export]
 macro_rules! create_app {
@@ -657,6 +733,26 @@ macro_rules! create_app {
                             .help("Enclave name, used to uniquely identify an enclave")
                             .required_unless("enclave-id")
                             .conflicts_with("enclave-id"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("pcr")
+                    .about("Return the PCR hash value of the given input")
+                    .arg(
+                        Arg::with_name("signing-certificate")
+                            .long("signing-certificate")
+                            .takes_value(true)
+                            .help("Takes the path to the '.pem' signing certificate and returns PCR8. Can be used to identify the certificate used to sign an EIF")
+                            .required_unless("input")
+                            .conflicts_with("input"),
+                    )
+                    .arg(
+                        Arg::with_name("input")
+                            .long("input")
+                            .takes_value(true)
+                            .help("Given a path to a file, returns the PCR hash of the bytes it contains")
+                            .required_unless("signing-certificate")
+                            .conflicts_with("signing-certificate"),
                     ),
             )
             .subcommand(

@@ -13,7 +13,8 @@ use log::info;
 use std::os::unix::net::UnixStream;
 
 use nitro_cli::common::commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, EmptyArgs, ExplainArgs, RunEnclavesArgs, TerminateEnclavesArgs,
+    BuildEnclavesArgs, ConsoleArgs, EmptyArgs, ExplainArgs, PcrArgs, RunEnclavesArgs,
+    TerminateEnclavesArgs,
 };
 use nitro_cli::common::document_errors::explain_error;
 use nitro_cli::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
@@ -28,7 +29,7 @@ use nitro_cli::enclave_proc_comm::{
 };
 use nitro_cli::{
     build_enclaves, console_enclaves, create_app, describe_eif, get_all_enclave_names,
-    new_enclave_name, new_nitro_cli_failure, terminate_all_enclaves,
+    get_file_pcr, new_enclave_name, new_nitro_cli_failure, terminate_all_enclaves,
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
@@ -40,6 +41,7 @@ const BUILD_ENCLAVE_STR: &str = "Build Enclave";
 const ENCLAVE_CONSOLE_STR: &str = "Enclave Console";
 const EXPLAIN_ERR_STR: &str = "Explain Error";
 const NEW_NAME_STR: &str = "New Enclave Name";
+const FILE_PCR_STR: &str = "File PCR";
 
 /// *Nitro CLI* application entry point.
 fn main() {
@@ -257,6 +259,21 @@ fn main() {
                 .map_err(|e| {
                     e.add_subaction("Failed to connect to enclave console".to_string())
                         .set_action(ENCLAVE_CONSOLE_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+        }
+        ("pcr", Some(args)) => {
+            let pcr_args = PcrArgs::new_with(args)
+                .map_err(|e| {
+                    e.add_subaction("Failed to construct PCR arguments".to_string())
+                        .set_action(FILE_PCR_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+
+            get_file_pcr(pcr_args.path, pcr_args.pcr_type)
+                .map_err(|e| {
+                    e.add_subaction("Failed to get the PCR hash of the file contents".to_string())
+                        .set_action(FILE_PCR_STR.to_string())
                 })
                 .ok_or_exit_with_errno(None);
         }

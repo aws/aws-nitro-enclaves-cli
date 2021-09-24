@@ -13,6 +13,7 @@ use std::fs::File;
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_CID_PARENT};
 use crate::get_id_by_name;
 use crate::new_nitro_cli_failure;
+use crate::utils::PcrType;
 
 /// The arguments used by the `run-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -222,6 +223,38 @@ impl ExplainArgs {
                 .map_err(|e| e.add_subaction("Parse error code".to_string()))?,
         })
     }
+}
+
+/// The arguments used by `pcr` command
+pub struct PcrArgs {
+    /// Path to the file needed for hashing
+    pub path: String,
+    /// The type of file we need to hash
+    pub pcr_type: PcrType,
+}
+
+impl PcrArgs {
+    /// Construct a new `PcrArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        let (val_name, pcr_type) = match args.is_present("signing-certificate") {
+            true => ("signing-certificate", PcrType::SigningCertificate),
+            false => ("input", PcrType::DefaultType),
+        };
+        let path = parse_file_path(args, val_name)
+            .map_err(|e| e.add_subaction("Parse PCR file".to_string()))?;
+        Ok(Self { path, pcr_type })
+    }
+}
+
+/// Parse file path to hash from the command-line arguments.
+fn parse_file_path(args: &ArgMatches, val_name: &str) -> NitroCliResult<String> {
+    let path = args.value_of(val_name).ok_or_else(|| {
+        new_nitro_cli_failure!(
+            "`input` or `signing-certificate` argument not found",
+            NitroCliErrorEnum::MissingArgument
+        )
+    })?;
+    Ok(path.to_string())
 }
 
 /// Parse the requested amount of enclave memory from the command-line arguments.

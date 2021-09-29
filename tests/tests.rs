@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
@@ -32,8 +32,12 @@ mod tests {
     use openssl::x509::{X509Name, X509};
 
     // Remote Docker image
+    #[cfg(target_arch = "x86_64")]
     const SAMPLE_DOCKER: &str =
-        "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample";
+        "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-x86_64";
+    #[cfg(target_arch = "aarch64")]
+    const SAMPLE_DOCKER: &str =
+        "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64";
     // Local Docker image
     const COMMAND_EXECUTER_DOCKER: &str = "command_executer:eif";
 
@@ -87,17 +91,35 @@ mod tests {
         )
         .expect("Docker build failed")
         .1;
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
+            "4e408fd54d73aef49fc02087b282eaba9691c9fa4174b2a9b68d7b1d52132609ec9953df0f87ec384225afe305e9061d"
         );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            measurements.get("PCR0").unwrap(),
+            "e11d760e09bddd3f8ef84eb21dfdde1fd1fc0664b3cec852aa26eced5ab6b67b3261a369dc2afdb6bef7fc1595eaa0cf"
+        );
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR1").unwrap(),
             "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
         );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            measurements.get("PCR1").unwrap(),
+            "1b8ff3c2f3338f04f64d8fc1f19ef7a6b432ed2dbe3157eac7ca6d0de775ff98c12de2f8a4560e2e218d5d8b2a1795c2"
+        );
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
+            "10ffd6773d365539696fa3520c28312cf657152fc3f89538d02af5e8b579e964a9f9a5c763470a122763f4fd0a1dd2d7"
+        );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            measurements.get("PCR2").unwrap(),
+            "28737c9aa5d964c0daaddd1460b7b50c46788f1c037aa6317d66b3eb95823840c0ae774e6ee744deb8293265d97bbd1f"
         );
     }
 
@@ -215,17 +237,35 @@ mod tests {
         )
         .expect("Docker build failed")
         .1;
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
+            "4e408fd54d73aef49fc02087b282eaba9691c9fa4174b2a9b68d7b1d52132609ec9953df0f87ec384225afe305e9061d"
         );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            measurements.get("PCR0").unwrap(),
+            "e11d760e09bddd3f8ef84eb21dfdde1fd1fc0664b3cec852aa26eced5ab6b67b3261a369dc2afdb6bef7fc1595eaa0cf"
+        );
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR1").unwrap(),
             "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
         );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            measurements.get("PCR1").unwrap(),
+            "1b8ff3c2f3338f04f64d8fc1f19ef7a6b432ed2dbe3157eac7ca6d0de775ff98c12de2f8a4560e2e218d5d8b2a1795c2"
+        );
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
+            "10ffd6773d365539696fa3520c28312cf657152fc3f89538d02af5e8b579e964a9f9a5c763470a122763f4fd0a1dd2d7"
+        );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            measurements.get("PCR2").unwrap(),
+            "28737c9aa5d964c0daaddd1460b7b50c46788f1c037aa6317d66b3eb95823840c0ae774e6ee744deb8293265d97bbd1f"
         );
     }
 
@@ -256,7 +296,7 @@ mod tests {
             eif_path: build_args.output,
             cpu_ids: None,
             cpu_count: Some(2),
-            memory_mib: 64,
+            memory_mib: 128,
             debug_mode: Some(true),
             enclave_name: Some("testName".to_string()),
         };
@@ -600,7 +640,7 @@ mod tests {
             eif_path: args.output,
             cpu_ids: None,
             cpu_count: Some(2),
-            memory_mib: 64,
+            memory_mib: 128,
             debug_mode: Some(true),
             enclave_name: Some("testName".to_string()),
         };
@@ -626,17 +666,35 @@ mod tests {
         let enclave_name = enclave_manager.enclave_name.clone();
 
         assert_eq!(enclave_name, "testName");
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             build_info.measurements.get(&"PCR0".to_string()).unwrap(),
-            "93a8a6a775cd1e1ab8b6121d1b0ce08e99e0976dabfa40663fa8ea9633421305de18c8f95aa2b82d3feb918fe912c838"
+            "4e408fd54d73aef49fc02087b282eaba9691c9fa4174b2a9b68d7b1d52132609ec9953df0f87ec384225afe305e9061d"
         );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            build_info.measurements.get(&"PCR0".to_string()).unwrap(),
+            "e11d760e09bddd3f8ef84eb21dfdde1fd1fc0664b3cec852aa26eced5ab6b67b3261a369dc2afdb6bef7fc1595eaa0cf"
+        );
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             build_info.measurements.get(&"PCR1".to_string()).unwrap(),
             "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
         );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            build_info.measurements.get(&"PCR1".to_string()).unwrap(),
+            "1b8ff3c2f3338f04f64d8fc1f19ef7a6b432ed2dbe3157eac7ca6d0de775ff98c12de2f8a4560e2e218d5d8b2a1795c2"
+        );
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             build_info.measurements.get(&"PCR2".to_string()).unwrap(),
-            "52528ebeccf82b21cea3f3a9d055f1bb3d18254d77dcda2bbd7f39cecd96b7eea842913800cc1b0bc261b7ad1b83be90"
+            "10ffd6773d365539696fa3520c28312cf657152fc3f89538d02af5e8b579e964a9f9a5c763470a122763f4fd0a1dd2d7"
+        );
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            build_info.measurements.get(&"PCR2".to_string()).unwrap(),
+            "28737c9aa5d964c0daaddd1460b7b50c46788f1c037aa6317d66b3eb95823840c0ae774e6ee744deb8293265d97bbd1f"
         );
 
         let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");
@@ -672,7 +730,7 @@ mod tests {
             eif_path: args.output,
             cpu_ids: None,
             cpu_count: Some(2),
-            memory_mib: 64,
+            memory_mib: 128,
             debug_mode: Some(true),
             enclave_name: None,
         };
@@ -701,7 +759,7 @@ mod tests {
             eif_path: eif_path.to_str().unwrap().to_string(),
             cpu_ids: None,
             cpu_count: Some(2),
-            memory_mib: 64,
+            memory_mib: 128,
             debug_mode: Some(true),
             enclave_name: Some("enclaveName".to_string()),
         };

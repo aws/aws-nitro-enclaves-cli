@@ -27,7 +27,7 @@ function clean_up_and_exit() {
 	make clean
 	rm -rf test_images
 	# Cleanup pulled images during testing
-	docker rmi 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample 2> /dev/null || true
+	docker rmi 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" 2> /dev/null || true
 	docker rmi hello-world:latest 2> /dev/null || true
 
 	rm -rf examples/"${ARCH}"/hello-entrypoint
@@ -98,8 +98,8 @@ mkdir -p /var/log/nitro_enclaves || test_failed
 # Build EIFS for testing
 mkdir -p test_images || test_failed
 export HOME="/root"
-nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample \
-	--output-file test_images/vsock-sample.eif || test_failed
+nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" \
+	--output-file test_images/vsock-sample-server-"${ARCH}".eif || test_failed
 
 # Build enclave image using Docker ENTRYPOINT instruction
 mkdir -p examples/"${ARCH}"/hello-entrypoint || test_failed

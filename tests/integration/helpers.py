@@ -1,4 +1,4 @@
-# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/python3
 """
@@ -13,7 +13,9 @@ import signal
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__)) + "/../../"
 TEST_IMAGES = "test_images/"
-SAMPLE_EIF = "vsock-sample.eif"
+ARCH =  subprocess.run(["uname", "-m"], stdout=PIPE, stderr=PIPE,
+        check=False).stdout.decode('UTF-8').rstrip("\n")
+SAMPLE_EIF = "vsock-sample-server-" + ARCH + ".eif"
 
 
 def run_cmd_ok(cmd_string):

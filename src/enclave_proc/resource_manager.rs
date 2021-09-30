@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![allow(unknown_lints)]
+#![allow(deref_nullptr)]
 
 mod bindings {
     #![allow(missing_docs)]

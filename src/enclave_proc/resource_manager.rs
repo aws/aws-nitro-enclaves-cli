@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![allow(unknown_lints)]
+#![allow(deref_nullptr)]
 
 mod bindings {
     #![allow(missing_docs)]
@@ -578,10 +580,27 @@ impl EnclaveHandle {
             .start(connection)
             .map_err(|e| e.add_subaction("Enclave start issue".to_string()))?;
 
-        // Update the poll timeout to be 1 minute per 100 GiB of enclave memory.
-        let poll_timeout: c_int = ((1 + (self.allocated_memory_mib * MiB - 1) / (100 * GiB))
-            as i32)
-            .saturating_mul(TIMEOUT_MINUTE_MS);
+        // Get eif size to feed it to calculate_necessary_timeout helper function
+        let eif_size = self
+            .eif_file
+            .as_ref()
+            .ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "Failed to get EIF file",
+                    NitroCliErrorEnum::FileOperationFailure
+                )
+            })?
+            .metadata()
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to get enclave image file metadata: {:?}", e),
+                    NitroCliErrorEnum::FileOperationFailure
+                )
+            })?
+            .len();
+
+        // Update the poll timeout based on the eif size or allocated memory
+        let poll_timeout = calculate_necessary_timeout(eif_size);
 
         enclave_ready(listener, poll_timeout).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
@@ -1163,4 +1182,38 @@ pub fn between_packets_delay() -> Option<Duration> {
     }
 
     None
+}
+
+/// Helper function which contains heuristic for enclave build timeout calculation
+///
+/// # Arguments
+///
+/// * `eif_size` - The EIF size in bytes
+///
+/// # Examples
+///
+/// ```
+/// // Returns the timeout based on the 8GiB EIF size
+/// let timeout = calculate_necessary_timeout(8 * GiB);
+/// ```
+fn calculate_necessary_timeout(eif_size: u64) -> c_int {
+    // in case we have a valid eif_size give TIMEOUT_MINUTE_MS ms for each 6GiB
+    let poll_timeout: c_int =
+        ((1 + (eif_size - 1) / (6 * GiB)) as i32).saturating_mul(TIMEOUT_MINUTE_MS);
+
+    poll_timeout
+}
+
+#[cfg(test)]
+mod tests {
+    use super::calculate_necessary_timeout;
+    use crate::enclave_proc::utils::GiB;
+    use eif_loader::TIMEOUT_MINUTE_MS;
+
+    #[test]
+    fn test_timeout_calculation() {
+        assert_eq!(calculate_necessary_timeout(2 * GiB), TIMEOUT_MINUTE_MS);
+        assert_eq!(calculate_necessary_timeout(6 * GiB), TIMEOUT_MINUTE_MS);
+        assert_eq!(calculate_necessary_timeout(10 * GiB), 2 * TIMEOUT_MINUTE_MS);
+    }
 }

@@ -176,6 +176,8 @@ pub enum NitroCliErrorEnum {
     HasherError,
     /// Enclave naming error
     EnclaveNamingError,
+    /// Signature checker error
+    EIFSignatureCheckerError,
 }
 
 impl Default for NitroCliErrorEnum {

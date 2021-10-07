@@ -1,4 +1,4 @@
-// Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
@@ -15,7 +15,9 @@ use nitro_cli::enclave_proc::resource_manager::{
 };
 use nitro_cli::enclave_proc::utils::MiB;
 
-const ENCLAVE_MEM_CHUNKS: u64 = 40;
+const ENCLAVE_MEM_2MB_CHUNKS: u64 = 48;
+#[cfg(target_arch = "aarch64")]
+const ENCLAVE_MEM_32MB_CHUNKS: u64 = 3;
 pub const NE_DEVICE_PATH: &str = "/dev/nitro_enclaves";
 
 /// This is similar to `MemoryRegion`, except it doesn't implement `Drop`.
@@ -422,8 +424,30 @@ mod test_dev_driver {
         assert_eq!(result.is_err(), true);
 
         // Allocate memory for the enclave.
-        for _i in 0..ENCLAVE_MEM_CHUNKS {
+        #[cfg(target_arch = "x86_64")]
+        for _i in 0..ENCLAVE_MEM_2MB_CHUNKS {
             mem_regions.push(MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap());
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            let mut mem_2mb_chunks = ENCLAVE_MEM_2MB_CHUNKS;
+
+            for _i in 0..ENCLAVE_MEM_32MB_CHUNKS {
+                let region = MemoryRegion::new(libc::MAP_HUGE_32MB);
+
+                if region.is_err() {
+                    break;
+                }
+
+                mem_regions.push(region.unwrap());
+
+                mem_2mb_chunks = mem_2mb_chunks - (32 / 2);
+            }
+
+            for _i in 0..mem_2mb_chunks {
+                mem_regions.push(MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap());
+            }
         }
 
         // Add memory to the enclave.
@@ -578,8 +602,30 @@ mod test_dev_driver {
         let mut driver = NitroEnclavesDeviceDriver::new().expect("Failed to open NE device");
 
         // Allocate memory for the enclave.
-        for _i in 0..ENCLAVE_MEM_CHUNKS {
+        #[cfg(target_arch = "x86_64")]
+        for _i in 0..ENCLAVE_MEM_2MB_CHUNKS {
             mem_regions.push(MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap());
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            let mut mem_2mb_chunks = ENCLAVE_MEM_2MB_CHUNKS;
+
+            for _i in 0..ENCLAVE_MEM_32MB_CHUNKS {
+                let region = MemoryRegion::new(libc::MAP_HUGE_32MB);
+
+                if region.is_err() {
+                    break;
+                }
+
+                mem_regions.push(region.unwrap());
+
+                mem_2mb_chunks = mem_2mb_chunks - (32 / 2);
+            }
+
+            for _i in 0..mem_2mb_chunks {
+                mem_regions.push(MemoryRegion::new(libc::MAP_HUGE_2MB).unwrap());
+            }
         }
 
         let cpu_info = CpuInfo::new().expect("Failed to obtain CpuInfo.");

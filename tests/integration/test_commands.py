@@ -1,4 +1,4 @@
-# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/python3
 """
@@ -8,12 +8,17 @@ This module tests various enclave commands.
 import json
 import math
 import time
+import subprocess
+from subprocess import PIPE
+from subprocess import check_output
 from subprocess import TimeoutExpired
 import pytest
 from helpers import run_enclave_ok, run_enclave_err, terminate_enclave_ok, connect_console,\
     describe_enclaves_ok, describe_eif_ok, get_cpu_count, SAMPLE_EIF, kill_all_nitro_processes,\
     connect_console_by_name, terminate_enclave_by_name, SIGNED_EIF, SIGN_CERT, get_pcr
 
+ARCH =  subprocess.run(["uname", "-m"], stdout=PIPE, stderr=PIPE,
+        check=False).stdout.decode('UTF-8').rstrip("\n")
 
 @pytest.fixture(name="init_resources")
 def fixture_init_resources():
@@ -100,8 +105,10 @@ def test_run_invalid_cpu_count(init_resources):
     error = result.stderr.decode('UTF-8')
     assert error.find("[ E29 ]") != -1
 
-    result = run_enclave_err(SAMPLE_EIF, "1028", "1")
-    result = run_enclave_err(SAMPLE_EIF, "1028", "3")
+    if ARCH == "x86_64":
+        result = run_enclave_err(SAMPLE_EIF, "1028", "1")
+        result = run_enclave_err(SAMPLE_EIF, "1028", "3")
+
     result = run_enclave_err(SAMPLE_EIF, "1028", "-3")
     result = run_enclave_err(SAMPLE_EIF, "1028", "zzz")
     result = run_enclave_err(SAMPLE_EIF, "1028", str(get_cpu_count()))
@@ -111,6 +118,11 @@ def test_run_invalid_cpu_count(init_resources):
     result_json = json.loads(result.stdout.decode('UTF-8'))
     init_resources.enclave_id = result_json["EnclaveID"]
 
+    if ARCH == "aarch64":
+        result = terminate_enclave_ok(init_resources.enclave_id)
+        result = run_enclave_ok(SAMPLE_EIF, "1028", "1")
+        result_json = json.loads(result.stdout.decode('UTF-8'))
+        init_resources.enclave_id = result_json["EnclaveID"]
 
 def test_run_invalid_memory(init_resources):
     """Test run with invalid memory numbers."""

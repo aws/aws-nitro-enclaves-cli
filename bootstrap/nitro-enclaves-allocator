@@ -396,6 +396,7 @@ function configure_cpu_pool_by_cpu_count {
     local threads_per_core=""
     local threads_per_core_count=""
     local memory_request="$2"
+    local rc_configure_huge_pages=""
 
     # Ensure the CPU pool file is present.
     [ -f "$CPU_POOL_FILE" ] || fail "The CPU pool file is missing. Please make sure the Nitro Enclaves driver is inserted."
@@ -509,7 +510,10 @@ function configure_cpu_pool_by_cpu_count {
 
                 print "Will try to reserve $memory_request MB of memory on node $numa_node."
                 if configure_huge_pages "$memory_request" "${cpu_pool_array[@]}"; then
+                    rc_configure_huge_pages="$?"
                     break 2
+                else
+                    rc_configure_huge_pages="$?"
                 fi
 
                 break 1
@@ -520,6 +524,9 @@ function configure_cpu_pool_by_cpu_count {
     # Not enough CPUs found to be added in the NE CPU pool.
     [ "${#cpu_pool_array[@]}" -ne "$cpu_pool_count" ] && \
         fail "Failed to find suitable CPUs for the Nitro Enclaves CPU pool after checking all NUMA nodes."
+
+    # Hugepages configuration failed.
+    [ "$rc_configure_huge_pages" != "0" ] && fail "$rc_configure_huge_pages"
 
     for cpu in "${cpu_pool_array[@]}"
     do
@@ -547,7 +554,11 @@ function main() {
         enable_offline_cpus
         cpu_msg="CPU pool: ${CONFIG[cpu_pool]}"
         configure_cpu_pool "${CONFIG[cpu_pool]}"
-        configure_huge_pages "${CONFIG[memory_mib]}"
+        if configure_huge_pages "${CONFIG[memory_mib]}"; then
+            true
+        else
+            fail "$?"
+        fi
     else
         fail "Config error: missing CPU reservation."
     fi

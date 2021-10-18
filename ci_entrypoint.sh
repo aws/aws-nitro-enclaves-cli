@@ -1,6 +1,6 @@
 #!/bin/bash -xe
 #
-# Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Entry point script for the CI running on an EC2 instance.
@@ -18,7 +18,7 @@ cd "${SCRIPTDIR}"
 #   https://developer.github.com/v3/repos/statuses/
 function status_update() {
 	curl -H "Authorization: token ${ACCESS_TOKEN}" \
-		-X POST -d '{"state":"'"${STATE}"'","target_url": "'"${LOGS_URL}"'","description": "Test runner updated","context": "test_runner/ec2-instance"}'\
+		-X POST -d '{"state":"'"${STATE}"'","target_url": "'"${LOGS_URL}"'","description": "Test runner updated","context": "Integration Testing ('"${ARCH}"')"}'\
 		https://api.github.com/repos/aws/aws-nitro-enclaves-cli/statuses/${CODEBUILD_RESOLVED_SOURCE_VERSION}
 }
 
@@ -32,8 +32,9 @@ echo 3 > /proc/sys/vm/drop_caches
 pwd
 source build_env.txt
 
+ARCH=$(uname -m)
 PR_NUMBER=$(echo "$CODEBUILD_SOURCE_VERSION" | cut -d"/" -f2)
-LOGS_PATH="tests_results/${PR_NUMBER}/ci_logs_${CODEBUILD_RESOLVED_SOURCE_VERSION}.txt"
+LOGS_PATH="tests_results/${PR_NUMBER}/ci_logs_${CODEBUILD_RESOLVED_SOURCE_VERSION}_${ARCH}.txt"
 LOGS_URL="https://console.aws.amazon.com/s3/object/aws-nitro-enclaves-cli/${LOGS_PATH}"
 ACCESS_TOKEN=$(aws ssm get-parameter --name GITHUB_TOKEN --region us-east-1 | jq -r .Parameter.Value)
 if [[ $ACCESS_TOKEN == "" ]];

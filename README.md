@@ -143,4 +143,4 @@ This repository contains a collection of tools and commands used for managing th
 
   - 'init.c': The implementation of the default init process used by an enclave's user-space
 
-  - 'run_tests.sh': The continuous integration test suite for the CLI
+  - 'run_tests.sh': The continuous integration test suite for the CLI across all supported platforms

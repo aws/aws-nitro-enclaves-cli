@@ -144,3 +144,10 @@ This repository contains a collection of tools and commands used for managing th
   - 'init.c': The implementation of the default init process used by an enclave's user-space
 
   - 'run_tests.sh': The continuous integration test suite for the CLI across all supported platforms
+
+## Security issue notifications
+
+If you discover a potential security issue in nitro-cli, we ask that you notify AWS
+Security via our
+[vulnerability reporting page](https://aws.amazon.com/security/vulnerability-reporting/).
+Please do **not** create a public GitHub issue.

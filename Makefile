@@ -28,8 +28,10 @@ SHA1    = sha1sum
 
 ifeq ($(HOST_MACHINE),$(ARCH_x86_64))
 TOOLCHAIN_ARCH_TARGET = $(ARCH_x86_64)
+RUST_CRATES_LICENSE_FILE = THIRD_PARTY_LICENSES_RUST_CRATES_X86_64.html
 else ifeq ($(HOST_MACHINE),$(ARCH_aarch64))
 TOOLCHAIN_ARCH_TARGET = $(ARCH_aarch64)
+RUST_CRATES_LICENSE_FILE = THIRD_PARTY_LICENSES_RUST_CRATES_AARCH64.html
 CC = musl-gcc # Required for openssl-sys cross-build
 else
 TOOLCHAIN_ARCH_TARGET =
@@ -260,7 +262,7 @@ nitro-about: build-setup build-container
 			'source /root/.cargo/env && \
 			cargo about --manifest-path=/nitro_src/Cargo.toml \
 			generate /nitro_src/about.hbs | \
-			diff /nitro_src/THIRD_PARTY_LICENSES_RUST_CRATES.html -'
+			diff /nitro_src/$(RUST_CRATES_LICENSE_FILE) -'
 
 .PHONY: update-third-party-licenses-rust-crates-html
 update-third-party-licenses-rust-crates-html: build-setup build-container
@@ -270,7 +272,7 @@ update-third-party-licenses-rust-crates-html: build-setup build-container
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
 			cargo about --manifest-path=/nitro_src/Cargo.toml \
-			generate /nitro_src/about.hbs > /nitro_src/THIRD_PARTY_LICENSES_RUST_CRATES.html'
+			generate /nitro_src/about.hbs > /nitro_src/$(RUST_CRATES_LICENSE_FILE)'
 
 # See .build-container rule for explanation.
 .build-vsock-proxy: $(shell find $(BASE_PATH)/vsock_proxy/src -name "*.rs")

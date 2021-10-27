@@ -95,22 +95,22 @@ mod tests {
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "4e408fd54d73aef49fc02087b282eaba9691c9fa4174b2a9b68d7b1d52132609ec9953df0f87ec384225afe305e9061d"
+            "f095abbb8844ee03c86c32f0f9b5aa4bb5a8778711e7750dd25223f5c9e22d99cc1d537bfc86f8b7aed357abc1f77ec8"
         );
         #[cfg(target_arch = "aarch64")]
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "e11d760e09bddd3f8ef84eb21dfdde1fd1fc0664b3cec852aa26eced5ab6b67b3261a369dc2afdb6bef7fc1595eaa0cf"
+            "d768d677e22f9e8fbeec8c7c8b9fd4e90ffa0289f29ca1543c87a29de62c506c2885df8b7afcb65d69ea7efe5c917492"
         );
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
+            "5c01976a546ec6b740353189afd3bf5fe29df96328887111e7c802cf2ff5ad636deed2ab8254e7a51a45fca01d0ae062"
         );
         #[cfg(target_arch = "aarch64")]
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "1b8ff3c2f3338f04f64d8fc1f19ef7a6b432ed2dbe3157eac7ca6d0de775ff98c12de2f8a4560e2e218d5d8b2a1795c2"
+            "457a4474176f2066cfb963e7f3d2004e94f3c6add53590e7635523e68c50edcb75d8666c99f4a83d5d7982f39a54986e"
         );
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
@@ -241,22 +241,22 @@ mod tests {
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "4e408fd54d73aef49fc02087b282eaba9691c9fa4174b2a9b68d7b1d52132609ec9953df0f87ec384225afe305e9061d"
+            "f095abbb8844ee03c86c32f0f9b5aa4bb5a8778711e7750dd25223f5c9e22d99cc1d537bfc86f8b7aed357abc1f77ec8"
         );
         #[cfg(target_arch = "aarch64")]
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "e11d760e09bddd3f8ef84eb21dfdde1fd1fc0664b3cec852aa26eced5ab6b67b3261a369dc2afdb6bef7fc1595eaa0cf"
+            "d768d677e22f9e8fbeec8c7c8b9fd4e90ffa0289f29ca1543c87a29de62c506c2885df8b7afcb65d69ea7efe5c917492"
         );
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
+            "5c01976a546ec6b740353189afd3bf5fe29df96328887111e7c802cf2ff5ad636deed2ab8254e7a51a45fca01d0ae062"
         );
         #[cfg(target_arch = "aarch64")]
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "1b8ff3c2f3338f04f64d8fc1f19ef7a6b432ed2dbe3157eac7ca6d0de775ff98c12de2f8a4560e2e218d5d8b2a1795c2"
+            "457a4474176f2066cfb963e7f3d2004e94f3c6add53590e7635523e68c50edcb75d8666c99f4a83d5d7982f39a54986e"
         );
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
@@ -670,22 +670,22 @@ mod tests {
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
             build_info.measurements.get(&"PCR0".to_string()).unwrap(),
-            "4e408fd54d73aef49fc02087b282eaba9691c9fa4174b2a9b68d7b1d52132609ec9953df0f87ec384225afe305e9061d"
+            "f095abbb8844ee03c86c32f0f9b5aa4bb5a8778711e7750dd25223f5c9e22d99cc1d537bfc86f8b7aed357abc1f77ec8"
         );
         #[cfg(target_arch = "aarch64")]
         assert_eq!(
             build_info.measurements.get(&"PCR0".to_string()).unwrap(),
-            "e11d760e09bddd3f8ef84eb21dfdde1fd1fc0664b3cec852aa26eced5ab6b67b3261a369dc2afdb6bef7fc1595eaa0cf"
+            "d768d677e22f9e8fbeec8c7c8b9fd4e90ffa0289f29ca1543c87a29de62c506c2885df8b7afcb65d69ea7efe5c917492"
         );
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
             build_info.measurements.get(&"PCR1".to_string()).unwrap(),
-            "c35e620586e91ed40ca5ce360eedf77ba673719135951e293121cb3931220b00f87b5a15e94e25c01fecd08fc9139342"
+            "5c01976a546ec6b740353189afd3bf5fe29df96328887111e7c802cf2ff5ad636deed2ab8254e7a51a45fca01d0ae062"
         );
         #[cfg(target_arch = "aarch64")]
         assert_eq!(
             build_info.measurements.get(&"PCR1".to_string()).unwrap(),
-            "1b8ff3c2f3338f04f64d8fc1f19ef7a6b432ed2dbe3157eac7ca6d0de775ff98c12de2f8a4560e2e218d5d8b2a1795c2"
+            "457a4474176f2066cfb963e7f3d2004e94f3c6add53590e7635523e68c50edcb75d8666c99f4a83d5d7982f39a54986e"
         );
         #[cfg(target_arch = "x86_64")]
         assert_eq!(

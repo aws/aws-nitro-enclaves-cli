@@ -64,15 +64,15 @@ pytest-3 tests/integration/test_installation.py || test_failed
 # Clean up build artefacts
 make clean
 
-# Run cargo fmt
+# Run 'cargo fmt'
 echo "=================== cargo fmt ========================="
 make nitro-format || test_failed
 
-# Run cargo clippy
+# Run 'cargo clippy'
 echo "=================== cargo clippy ==========================="
 make nitro-clippy || test_failed
 
-# Run cargo audit
+# Run 'cargo audit'
 echo "=================== cargo audit ==========================="
 make nitro-audit || test_failed
 

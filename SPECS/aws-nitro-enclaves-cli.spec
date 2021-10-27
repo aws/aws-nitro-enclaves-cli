@@ -1,4 +1,4 @@
-# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 %define ne_name nitro_enclaves
@@ -28,8 +28,8 @@ Source0: aws-nitro-enclaves-cli.tar.gz
 Source1: nitro-cli-dependencies.tar.gz
 
 BuildRequires: openssl-devel
-BuildRequires: rust >= 1.38
-BuildRequires: cargo >= 1.38
+BuildRequires: rust >= 1.47
+BuildRequires: cargo >= 1.47
 BuildRequires: make
 BuildRequires: llvm
 BuildRequires: clang

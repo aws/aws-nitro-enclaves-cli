@@ -17,7 +17,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.0.12
+Version:    1.1.0
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -192,6 +192,30 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Thu Oct 28 2021 Andra Paraschiv <andraprs@amazon.com> - 1.1.0-0
+- Update the enclave image blobs e.g. enclave kernel and NSM driver, to include
+  the hwrng functionality from the NSM driver for entropy seeding.
+- Exit if the hugepages configuration fails in the nitro-enclaves-allocator
+  service.
+- Update the enclave boot timeout logic to consider the enclave image size.
+- Verify the signing certificate of the enclave image and add explicit error
+  handling.
+- Add pcr command in the nitro-cli.
+- Add support for enclave name in the nitro-cli commands.
+- Add describe-eif command in the nitro-cli.
+- Set correct group ownership for /dev/nitro_enclaves in the nitro-cli spec.
+- Add --disconnect-timeout option to console command.
+- Add pylint fixes to the nitro-cli tests.
+- Update cargo-about and cargo-audit in the nitro-cli CI.
+- Update tar and hyper crates in the nitro-cli.
+- Fix remote server's matching against allowlist for vsock proxy.
+- Add refs for Nitro CLI install from sources on a set of Linux distros in the
+  nitro-cli docs.
+- Update references to the AWS Nitro Enclaves COSE crate in the nitro-cli docs.
+- Update vsock proxy configuration file location in the vsock proxy README.
+- Update command executer sample README to reflect current state.
+- Update Nitro CLI README to include information about enclave disk space.
+
 * Thu Jul 15 2021 Alexandru Gheorghe <aggh@amazon.com> - 1.0.12-0
 - Fix build-enclave when docker contains ENTRYPOINT command.
 

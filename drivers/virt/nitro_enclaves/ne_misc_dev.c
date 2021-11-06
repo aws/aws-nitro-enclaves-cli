@@ -139,7 +139,7 @@ static int user_access_ok(void __user *addr, unsigned long size)
 #endif
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 7, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0-1030)
 static int remove_cpu(u32 cpu_id)
 {
 	struct device *cpu_dev = NULL;
@@ -167,7 +167,7 @@ static int remove_cpu(u32 cpu_id)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 7, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0-1030)
 static int add_cpu(u32 cpu_id)
 {
 	struct device *cpu_dev = NULL;

@@ -386,6 +386,9 @@ void init_nsm_driver() {
     die_on(rc < 0, "failed to insert nsm driver");
 
     die_on(close(fd), "close nsm fd");
+    rc = unlink(NSM_PATH);
+    if (rc < 0)
+        warn("Could not unlink " NSM_PATH);
 }
 
 int main() {
@@ -417,6 +420,9 @@ int main() {
 
     fclose(env_file);
     fclose(cmd_file);
+
+    unlink("/env");
+    unlink("/cmd");
 
     die_on(chdir("/rootfs") != 0, "chdir /rootfs");
     die_on(chroot("/rootfs") != 0, "chroot /rootfs");

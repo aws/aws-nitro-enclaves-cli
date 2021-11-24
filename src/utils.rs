@@ -113,22 +113,12 @@ impl Console {
         match result {
             Ok(_) => println!("Connected to the console"),
             Err(error) => match error {
-                nix::Error::Sys(errno) => {
-                    match errno {
-                        // If the connection is not ready, wait until socket_fd is ready for writing.
-                        nix::errno::Errno::EINPROGRESS => {
-                            let poll_fd = PollFd::new(socket_fd, PollFlags::POLLOUT);
-                            let mut poll_fds = [poll_fd];
-                            match poll(&mut poll_fds, POLL_TIMEOUT) {
-                                Ok(1) => println!("Connected to the console"),
-                                _ => {
-                                    return Err(new_nitro_cli_failure!(
-                                        "Failed to connect to the console",
-                                        NitroCliErrorEnum::SocketError
-                                    ))
-                                }
-                            }
-                        }
+                // If the connection is not ready, wait until socket_fd is ready for writing.
+                nix::errno::Errno::EINPROGRESS => {
+                    let poll_fd = PollFd::new(socket_fd, PollFlags::POLLOUT);
+                    let mut poll_fds = [poll_fd];
+                    match poll(&mut poll_fds, POLL_TIMEOUT) {
+                        Ok(1) => println!("Connected to the console"),
                         _ => {
                             return Err(new_nitro_cli_failure!(
                                 "Failed to connect to the console",

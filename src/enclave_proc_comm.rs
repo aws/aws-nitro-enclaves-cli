@@ -47,7 +47,11 @@ pub fn enclave_proc_spawn(logger: &EnclaveProcLogWriter) -> NitroCliResult<UnixS
 
     // Spawn an intermediate child process. This will fork again in order to
     // create the detached enclave process.
-    let fork_status = fork();
+    // Safety: enclave_proc_spawn is called early on and nitro-cli is not that this point
+    // multi-threaded, which should prevent the issues around forking. However,
+    // the safe way to do this would be to use a safe alternative such as Command to
+    // re-execute this same process with another set of parameters.
+    let fork_status = unsafe { fork() };
 
     if let Ok(ForkResult::Child) = fork_status {
         // This is our intermediate child process.
@@ -198,7 +202,7 @@ where
         let num_events = loop {
             match epoll::epoll_wait(epoll_fd, &mut events[..], ENCLAVE_PROC_WAIT_TIMEOUT_MSEC) {
                 Ok(num_events) => break num_events,
-                Err(nix::Error::Sys(nix::errno::Errno::EINTR)) => continue,
+                Err(nix::errno::Errno::EINTR) => continue,
                 // TODO: Handle bad descriptors (closed remote connections).
                 Err(e) => {
                     return Err(new_nitro_cli_failure!(

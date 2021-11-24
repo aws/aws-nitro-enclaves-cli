@@ -193,6 +193,7 @@ mod tests {
              \n  - path: nsm.ko\
              \n    source: path_to_nsm\
              \n    mode: \"0755\"\
+             \n\
              "
         );
 
@@ -230,6 +231,7 @@ mod tests {
              \n  - path: env\
              \n    source: path_to_env\
              \n    mode: \"0644\"\
+             \n\
              "
         );
     }

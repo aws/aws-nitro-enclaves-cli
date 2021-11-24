@@ -9,12 +9,13 @@ use dns_lookup::lookup_host;
 use idna::domain_to_ascii;
 use log::info;
 use nix::sys::select::{select, FdSet};
-use nix::sys::socket::{SockAddr, SockType};
+use nix::sys::socket::SockType;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::os::unix::io::AsRawFd;
 use threadpool::ThreadPool;
+use vsock::SockAddr;
 use vsock::VsockListener;
 use yaml_rust::YamlLoader;
 

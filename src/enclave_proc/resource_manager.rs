@@ -16,7 +16,6 @@ use bindings::*;
 use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
 use libc::c_int;
 use log::{debug, info};
-use nix::sys::socket::SockAddr;
 use std::collections::BTreeMap;
 use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
@@ -27,6 +26,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use vsock::SockAddr;
 use vsock::VsockListener;
 
 use crate::common::json_output::EnclaveBuildInfo;

@@ -260,8 +260,9 @@ nitro-about: build-setup build-container
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			cargo about --manifest-path=/nitro_src/Cargo.toml \
-			generate /nitro_src/about.hbs | \
+			cargo about generate \
+			--manifest-path=/nitro_src/Cargo.toml \
+			/nitro_src/about.hbs | \
 			diff /nitro_src/$(RUST_CRATES_LICENSE_FILE) -'
 
 .PHONY: update-third-party-licenses-rust-crates-html
@@ -271,8 +272,9 @@ update-third-party-licenses-rust-crates-html: build-setup build-container
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			cargo about --manifest-path=/nitro_src/Cargo.toml \
-			generate /nitro_src/about.hbs > /nitro_src/$(RUST_CRATES_LICENSE_FILE)'
+			cargo about generate \
+			--manifest-path=/nitro_src/Cargo.toml \
+			/nitro_src/about.hbs > /nitro_src/$(RUST_CRATES_LICENSE_FILE)'
 
 # See .build-container rule for explanation.
 .build-vsock-proxy: $(shell find $(BASE_PATH)/vsock_proxy/src -name "*.rs")

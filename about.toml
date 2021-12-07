@@ -6,6 +6,9 @@ accepted = [
     "ISC",
 ]
 
-[[nitro-cli.ignore]]
-license = "GPL-2.0-only"
-license-file = "drivers/COPYING"
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl",
+    "aarch64-unknown-linux-gnu",
+]

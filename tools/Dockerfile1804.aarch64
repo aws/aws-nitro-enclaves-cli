@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y clang
 
 # Build static version of Openssl.
 RUN apt-get install -y wget unzip
-ENV OPENSSL_VERSION=OpenSSL_1_1_1d
+ENV OPENSSL_VERSION=OpenSSL_1_1_1l
 RUN mkdir /openssl_src
 RUN wget https://github.com/openssl/openssl/archive/${OPENSSL_VERSION}.zip -P /openssl_src
 RUN unzip /openssl_src/${OPENSSL_VERSION}.zip -d /openssl_src
@@ -36,9 +36,11 @@ RUN  source $HOME/.cargo/env && \
 RUN  source $HOME/.cargo/env && \
     rustup target add --toolchain ${RUST_VERSION} aarch64-unknown-linux-musl
 RUN  source $HOME/.cargo/env && \
-    cargo install cargo-audit --version 0.15.2 --locked
+     rustup toolchain install 1.57-aarch64-unknown-linux-gnu
 RUN  source $HOME/.cargo/env && \
-    cargo install cargo-about --version 0.3.0 --locked
+    cargo +1.57 install cargo-audit --version 0.16.0 --locked
+RUN  source $HOME/.cargo/env && \
+    cargo +1.57 install cargo-about --version 0.4.3 --locked
 RUN apt-get install -y jq
 
 # Install docker for nitro-cli build-enclave runs

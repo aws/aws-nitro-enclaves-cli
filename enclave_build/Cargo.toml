@@ -14,7 +14,7 @@ serde_json = "1.0"
 shiplift = "0.7"
 tempfile = "3.1.0"
 tokio = { version = "1.0", features = ["rt-multi-thread"] }
-base64 = "0.11"
+base64 = "0.13"
 log = "0.4"
 url = "2.1"
 sha2 = "0.9.5"

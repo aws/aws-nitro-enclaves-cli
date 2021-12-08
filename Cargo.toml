@@ -3,6 +3,7 @@ name = "nitro-cli"
 version = "1.1.0"
 authors = ["Alexandru Gheorghe <aggh@amazon.com>"]
 edition = "2018"
+license = "Apache-2.0"
 
 [dependencies]
 serde = { version = ">=1.0", features = ["derive"] }
@@ -10,7 +11,7 @@ chrono = "0.4"
 clap = "2.33"
 inotify = "0.9"
 serde_json = "1.0"
-nix = "0.15"
+nix = "0.22"
 log = "0.4"
 libc = { version = ">=0.2.69" }
 flexi_logger = "0.15"
@@ -22,10 +23,10 @@ eif_defs = { path = "./eif_defs" }
 eif_utils = { path = "./eif_utils" }
 enclave_build = { path = "./enclave_build" }
 openssl = "0.10"
-vsock = "0.1.5"
+vsock = "0.2"
 vmm-sys-util = "0.8.0"
 sha2 = "0.9.5"
-hex = "0.3.2"
+hex = "0.4"
 aws-nitro-enclaves-cose = "0.1"
 
 lazy_static = "1.4.0"

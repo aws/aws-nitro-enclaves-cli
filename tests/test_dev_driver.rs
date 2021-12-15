@@ -555,7 +555,7 @@ mod test_dev_driver {
         let result = enclave.start(enclave_start_info);
         assert_eq!(result.is_err(), true);
 
-        enclave_start_info.enclave_cid = u32::max_value() as u64 + 1234 as u64;
+        enclave_start_info.enclave_cid = u32::max_value() as u64 + 1234_u64;
         let result = enclave.start(enclave_start_info);
         assert_eq!(result.is_err(), true);
 

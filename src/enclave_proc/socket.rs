@@ -63,7 +63,7 @@ impl EnclaveProcSock {
 
     /// Get the path to the managed Unix socket.
     pub fn get_path(&self) -> &Path {
-        &self.socket_path.as_path()
+        self.socket_path.as_path()
     }
 
     /// Set the path of the managed Unix socket.

@@ -47,7 +47,7 @@ pub fn check_allowlist(
             .ok_or("No allowlist field")?;
 
         // Obtain the remote server's IP address.
-        let mut addrs = Proxy::parse_addr(&remote_host, only_4, only_6)
+        let mut addrs = Proxy::parse_addr(remote_host, only_4, only_6)
             .map_err(|err| format!("Could not parse remote address: {}", err))?;
         let remote_addr = *addrs.get(0).ok_or("No IP address found")?;
 
@@ -126,7 +126,7 @@ impl Proxy {
     /// Resolve a DNS name (IDNA format) into an IP address (v4 or v6)
     pub fn parse_addr(addr: &str, only_4: bool, only_6: bool) -> VsockProxyResult<Vec<IpAddr>> {
         // IDNA parsing
-        let addr = domain_to_ascii(&addr).map_err(|_| "Could not parse domain name")?;
+        let addr = domain_to_ascii(addr).map_err(|_| "Could not parse domain name")?;
 
         // DNS lookup
         // It results in a vector of IPs (V4 and V6)

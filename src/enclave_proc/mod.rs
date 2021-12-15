@@ -393,7 +393,7 @@ fn handle_command(
                 *pcr_thread = None;
             }
 
-            describe_enclaves(&enclave_manager, connection, *add_info).map_err(|e| {
+            describe_enclaves(enclave_manager, connection, *add_info).map_err(|e| {
                 e.add_subaction("Failed to describe enclave".to_string())
                     .set_action("Describe Enclaves".to_string())
             })?;

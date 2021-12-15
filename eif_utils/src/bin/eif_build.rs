@@ -117,7 +117,7 @@ fn main() {
     let sign_info = match (signing_certificate, private_key) {
         (None, None) => None,
         (Some(cert_path), Some(key_path)) => {
-            Some(SignEnclaveInfo::new(&cert_path, &key_path).expect("Could not read signing info"))
+            Some(SignEnclaveInfo::new(cert_path, key_path).expect("Could not read signing info"))
         }
         _ => panic!("Both signing-certificate and private-key parameters must be provided"),
     };
@@ -169,7 +169,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
         .expect("Could not create output file");
 
     let mut build = EifBuilder::new(
-        &Path::new(kernel_path),
+        Path::new(kernel_path),
         cmdline.to_string(),
         sign_info,
         hasher.clone(),

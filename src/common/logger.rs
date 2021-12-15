@@ -142,8 +142,7 @@ impl LogWriter for EnclaveProcLogWriter {
         // The log level is either given in RUST_LOG or defaults to a specified value.
         let level = std::env::var("RUST_LOG").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.to_string());
 
-        level.to_lowercase();
-        match level.as_ref() {
+        match level.to_lowercase().as_ref() {
             "info" => log::LevelFilter::Info,
             "debug" => log::LevelFilter::Debug,
             "warn" => log::LevelFilter::Warn,

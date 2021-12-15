@@ -379,10 +379,10 @@ mod tests {
 
     fn run_describe_terminate(args: RunEnclavesArgs) {
         setup_env();
-        let req_enclave_cid = args.enclave_cid.clone();
-        let req_mem_size = args.memory_mib.clone();
+        let req_enclave_cid = args.enclave_cid;
+        let req_mem_size = args.memory_mib;
         let req_nr_cpus: u64 = args.cpu_count.unwrap().try_into().unwrap();
-        let debug_mode = args.debug_mode.clone();
+        let debug_mode = args.debug_mode;
         let mut enclave_manager = run_enclaves(&args, None)
             .expect("Run enclaves failed")
             .enclave_manager;
@@ -632,8 +632,7 @@ mod tests {
             &args.signing_certificate,
             &args.private_key,
         )
-        .expect("Docker build failed")
-        .1;
+        .expect("Docker build failed");
 
         setup_env();
         let run_args = RunEnclavesArgs {
@@ -722,8 +721,7 @@ mod tests {
             &args.signing_certificate,
             &args.private_key,
         )
-        .expect("Docker build failed")
-        .1;
+        .expect("Docker build failed");
 
         setup_env();
         let mut run_args = RunEnclavesArgs {
@@ -780,8 +778,7 @@ mod tests {
         names.push(name);
 
         run_args.enclave_name = Some("enclaveName".to_string());
-        let name =
-            new_enclave_name(run_args.clone(), names.clone()).expect("Failed to set new name.");
+        let name = new_enclave_name(run_args, names.clone()).expect("Failed to set new name.");
         names.push(name);
 
         assert_eq!(

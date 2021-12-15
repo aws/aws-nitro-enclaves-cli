@@ -726,7 +726,7 @@ impl EnclaveHandle {
 
     /// Start an enclave after providing it with its necessary resources.
     fn start(&mut self, connection: Option<&Connection>) -> NitroCliResult<EnclaveStartInfo> {
-        let mut start = EnclaveStartInfo::new(&self);
+        let mut start = EnclaveStartInfo::new(self);
 
         EnclaveHandle::do_ioctl(self.enc_fd, NE_START_ENCLAVE, &mut start)
             .map_err(|e| e.add_subaction("Start enclave ioctl failed".to_string()))?;

@@ -361,7 +361,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             let eif_section = EifSectionHeader {
                 section_type: EifSectionType::EifSectionRamdisk,
                 flags: 0,
-                section_size: self.ramdisk_size(&ramdisk),
+                section_size: self.ramdisk_size(ramdisk),
             };
 
             let eif_buffer = eif_section.to_be_bytes();
@@ -458,7 +458,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             let eif_section = EifSectionHeader {
                 section_type: EifSectionType::EifSectionRamdisk,
                 flags: 0,
-                section_size: self.ramdisk_size(&ramdisk),
+                section_size: self.ramdisk_size(ramdisk),
             };
 
             eif_file

@@ -332,7 +332,7 @@ fn log_backtrace(backtrace: String) -> Result<String, &'static str> {
         return Err("Could not create backtrace log file");
     }
 
-    let write_result = log_file.unwrap().write_all(&backtrace.as_bytes());
+    let write_result = log_file.unwrap().write_all(backtrace.as_bytes());
     if write_result.is_err() {
         return Err("Could not write to backtrace log file");
     }
@@ -355,7 +355,7 @@ pub fn construct_error_message(failure: &NitroCliFailure) -> String {
     let help_link: String = document_errors::construct_help_link(
         (*ERROR_CODES.get(&failure.error_code).unwrap_or(&"E00")).to_string(),
     );
-    let backtrace: String = document_errors::construct_backtrace(&failure);
+    let backtrace: String = document_errors::construct_backtrace(failure);
 
     // Write backtrace to a log file.
     let log_path = log_backtrace(backtrace.clone());

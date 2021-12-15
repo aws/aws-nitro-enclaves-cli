@@ -261,10 +261,10 @@ mod tests {
         hasher.write_all(&data).unwrap();
 
         hasher_alg.write_all(&initial_digest(output_size)).unwrap();
-        hasher_alg.write_all(&data1).unwrap();
+        hasher_alg.write_all(data1).unwrap();
         let result = hasher_alg.finalize_reset();
         hasher_alg.write_all(&result).unwrap();
-        hasher_alg.write_all(&data2).unwrap();
+        hasher_alg.write_all(data2).unwrap();
 
         let mut hasher_clone = hasher.clone();
         let mut hasher_alg_clone = hasher_alg.clone();
@@ -300,7 +300,7 @@ mod tests {
         let data = vec![78u8; block_size * 256];
         let mut hasher_in_one_go = EifHasher::new(block_size, hasher_alg.clone()).unwrap();
         let mut hasher_in_random_chunks = EifHasher::new(block_size, hasher_alg.clone()).unwrap();
-        let mut hasher_one_byte_at_atime = EifHasher::new(block_size, hasher_alg.clone()).unwrap();
+        let mut hasher_one_byte_at_atime = EifHasher::new(block_size, hasher_alg).unwrap();
 
         hasher_in_one_go.write_all(&data).unwrap();
         let mut remaining = &data[..];
@@ -308,7 +308,7 @@ mod tests {
         while !remaining.is_empty() {
             let chunk_size = std::cmp::max(1, (iteration % remaining.len()) % block_size);
             let (to_be_written, unhandled) = remaining.split_at(chunk_size);
-            hasher_in_random_chunks.write_all(&to_be_written).unwrap();
+            hasher_in_random_chunks.write_all(to_be_written).unwrap();
 
             remaining = unhandled;
             iteration += 1987;

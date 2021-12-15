@@ -120,7 +120,7 @@ impl LogWriter for EnclaveProcLogWriter {
 
         if let Ok(record_str) = self.create_msg(now.now(), record) {
             if let Ok(mut out_file) = self.out_file.lock() {
-                out_file.deref_mut().write_all(&record_str.as_bytes())?;
+                out_file.deref_mut().write_all(record_str.as_bytes())?;
 
                 return Ok(());
             }
@@ -257,7 +257,7 @@ mod tests {
         if let Ok(file0) = file0 {
             let test_file_path = file0.path();
 
-            let f = open_log_file(&test_file_path).unwrap();
+            let f = open_log_file(test_file_path).unwrap();
             let metadata = f.metadata();
             assert!(metadata.is_ok());
 

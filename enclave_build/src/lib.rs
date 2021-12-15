@@ -76,7 +76,7 @@ impl<'a> Docker2Eif<'a> {
         let sign_info = match (certificate_path, key_path) {
             (None, None) => None,
             (Some(cert_path), Some(key_path)) => Some(
-                SignEnclaveInfo::new(&cert_path, &key_path)
+                SignEnclaveInfo::new(cert_path, key_path)
                     .map_err(|err| Docker2EifError::SignImageError(format!("{:?}", err)))?,
             ),
             _ => return Err(Docker2EifError::SignArgsError),
@@ -196,7 +196,7 @@ impl<'a> Docker2Eif<'a> {
         };
 
         let mut build = EifBuilder::new(
-            &Path::new(&self.kernel_img_path),
+            Path::new(&self.kernel_img_path),
             self.cmdline.clone(),
             self.sign_info.clone(),
             sha2::Sha384::new(),

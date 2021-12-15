@@ -82,7 +82,7 @@ fn main() {
         .expect("Unable to generate bindings");
 
     let mut path_str = std::env::var("OUT_DIR").unwrap();
-    path_str.push_str(&OUT_FILE);
+    path_str.push_str(OUT_FILE);
     let out_path = PathBuf::from(path_str);
     bindings
         .write_to_file(out_path)

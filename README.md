@@ -75,7 +75,7 @@ This repository contains a collection of tools and commands used for managing th
   The enclaves do not have access to a physical disk, just a RAM filesystem.
   One can configure the disk space by changing memory size or by using kernel command line arguments.
 
-  The `init.c` file keeps the default configuration for each volume. The below example shows
+  The [`init.c`](https://github.com/aws/aws-nitro-enclaves-sdk-bootstrap/tree/main/init/init.c) file keeps the default configuration for each volume. The below example shows
   the default options for `/tmp`.
   ```
   { OpMount, .mount = { "tmpfs", "/tmp", "tmpfs", MS_NODEV | MS_NOSUID | MS_NOEXEC } },
@@ -108,6 +108,7 @@ This repository contains a collection of tools and commands used for managing th
       - 'blobs/x86_64/linuxkit': LinuxKit-based user-space environment
       - 'blobs/x86_64/nsm.ko': The driver which enables the Nitro Secure Module (NSM) component inside the enclave
       - The enclave kernel is based on the v4.14 Amazon Linux kernel - https://github.com/amazonlinux/linux/tree/amazon-4.14.y/master
+      - The source code for the init process and the NSM kernel driver can be found in the following GitHub repository - https://github.com/aws/aws-nitro-enclaves-sdk-bootstrap
 
   - 'build': An automatically-generated directory which stores the build output for various components (the CLI, the command executer etc.)
 
@@ -149,8 +150,6 @@ This repository contains a collection of tools and commands used for managing th
   - 'vsock_proxy': The implementation of the Vsock - TCP proxy application, which is used to allow an enclave to communicate with an external service through the parent instance
 
   - 'ci_entrypoint.sh': The script which launches the CLI continuous integration tests
-
-  - 'init.c': The implementation of the default init process used by an enclave's user-space
 
   - 'run_tests.sh': The continuous integration test suite for the CLI across all supported platforms
 

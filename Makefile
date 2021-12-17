@@ -1,4 +1,4 @@
-# Copyright 2019-2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 ##############################
 #                            #
@@ -93,7 +93,7 @@ aws-nitro-enclaves-cli.tar.gz:
 sources: aws-nitro-enclaves-cli.tar.gz crates-dependencies
 
 .PHONY: all
-all: build-setup init nitro-cli vsock-proxy
+all: build-setup nitro-cli vsock-proxy
 
 .PHONY: driver-deps
 driver-deps:
@@ -131,11 +131,6 @@ nitro_enclaves-clean:
 
 .PHONY: driver-clean
 driver-clean: nitro_enclaves-clean
-
-.PHONY: init
-init: init.c build-setup
-	$(CC) $(C_FLAGS) -o $(OBJ_PATH)/init $< -static -static-libgcc -flto
-	strip --strip-all $(OBJ_PATH)/init
 
 # See .build-container rule for explanation.
 .build-nitro-cli: $(shell find $(BASE_PATH)/src $(BASE_PATH)/enclave_build/src -name "*.rs")

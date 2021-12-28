@@ -28,6 +28,8 @@ pub struct RunEnclavesArgs {
     pub cpu_ids: Option<Vec<u32>>,
     /// A flag indicating if the enclave will be started in debug mode.
     pub debug_mode: Option<bool>,
+    /// Attach to the console immediately if using debug mode.
+    pub attach_console: Option<bool>,
     /// The number of CPUs that the enclave will receive.
     pub cpu_count: Option<u32>,
     /// Enclave name set by the user.
@@ -79,6 +81,7 @@ impl RunEnclavesArgs {
                 cpu_ids: parse_cpu_ids(args)
                     .map_err(|err| err.add_subaction("Parse CPU IDs".to_string()))?,
                 debug_mode: debug_mode(args),
+                attach_console: attach_console(args),
                 enclave_name: parse_enclave_name(args)
                     .map_err(|err| err.add_subaction("Parse enclave name".to_string()))?,
             })
@@ -442,6 +445,16 @@ fn parse_output(args: &ArgMatches) -> Option<String> {
 /// Parse the debug-mode flag from the command-line arguments.
 fn debug_mode(args: &ArgMatches) -> Option<bool> {
     let val = args.is_present("debug-mode");
+    if val {
+        Some(val)
+    } else {
+        None
+    }
+}
+
+/// Parse the debug-mode flag from the command-line arguments.
+fn attach_console(args: &ArgMatches) -> Option<bool> {
+    let val = args.is_present("attach-console");
     if val {
         Some(val)
     } else {

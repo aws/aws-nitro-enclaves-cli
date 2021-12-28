@@ -114,12 +114,20 @@ fn main() {
 
             info!("Sent command: Run");
             replies.push(comm);
-            enclave_process_handle_all_replies::<EnclaveRunInfo>(&mut replies, 0, false, vec![0])
+            let run_info = enclave_process_handle_all_replies::<EnclaveRunInfo>(&mut replies, 0, false, vec![0])
                 .map_err(|e| {
                     e.add_subaction("Failed to handle all enclave process replies".to_string())
                         .set_action(RUN_ENCLAVE_STR.to_string())
                 })
                 .ok_or_exit_with_errno(None);
+            if run_args.attach_console.unwrap_or(false) {
+                console_enclaves(run_info[0].enclave_cid, None)
+                    .map_err(|e| {
+                        e.add_subaction("Failed to connect to enclave console".to_string())
+                            .set_action(ENCLAVE_CONSOLE_STR.to_string())
+                    })
+                    .ok_or_exit_with_errno(None);
+            }
         }
         ("terminate-enclave", Some(args)) => {
             if args.is_present("all") {

@@ -294,7 +294,7 @@ pub fn enclave_process_handle_all_replies<T>(
     prev_failed_conns: usize,
     print_as_vec: bool,
     allowed_return_codes: Vec<i32>,
-) -> NitroCliResult<()>
+) -> NitroCliResult<Vec<T>>
 where
     T: Clone + DeserializeOwned + Serialize,
 {
@@ -352,7 +352,7 @@ where
         ));
     }
 
-    Ok(())
+    Ok(objects.into_iter().map(|(o, _)| o).collect())
 }
 
 /// Obtain an enclave's CID given its full ID.

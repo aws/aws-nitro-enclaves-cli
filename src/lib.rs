@@ -405,6 +405,7 @@ pub fn terminate_all_enclaves() -> NitroCliResult<()> {
         vec![0, libc::EACCES],
     )
     .map_err(|e| e.add_subaction("Failed to handle all enclave processes replies".to_string()))
+    .map(|_| ())
 }
 
 /// Queries all enclaves for their name
@@ -602,6 +603,16 @@ macro_rules! create_app {
                                 sub-command" ,
                             )
                             .conflicts_with("config"),
+                    )
+                    .arg(
+                        Arg::with_name("attach-console")
+                            .long("attach-console")
+                            .takes_value(false)
+                            .help(
+                                "Attach the enclave console immediately after starting the enclave. \
+                                (debug-mode only)"
+                            )
+                            .requires("debug-mode"),
                     )
                     .arg(
                         Arg::with_name("enclave-name")

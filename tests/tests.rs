@@ -299,6 +299,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
+            attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
         run_describe_terminate(args);
@@ -338,6 +339,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 256,
             debug_mode: Some(true),
+            attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
         run_describe_terminate(args);
@@ -372,6 +374,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 2046,
             debug_mode: Some(true),
+            attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
         run_describe_terminate(args);
@@ -470,6 +473,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
+            attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
 
@@ -505,6 +509,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(false),
+            attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
 
@@ -559,6 +564,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
+            attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
 
@@ -642,6 +648,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
+            attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
         let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
@@ -731,6 +738,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
+            attach_console: false,
             enclave_name: None,
         };
         let names = Vec::new();
@@ -760,6 +768,7 @@ mod tests {
             cpu_count: Some(2),
             memory_mib: 128,
             debug_mode: Some(true),
+            attach_console: false,
             enclave_name: Some("enclaveName".to_string()),
         };
         let mut names = Vec::new();

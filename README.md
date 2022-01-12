@@ -17,7 +17,8 @@ This repository contains a collection of tools and commands used for managing th
       - Amazon Linux 2 v5.10+ kernel (e.g. kernel-5.10.29-27.128.amzn2.x86_64)
       - Amazon Linux 2022 v5.10+ kernel (e.g. kernel-5.10.75-82.359.amzn2022.x86_64)
       - CentOS Stream v4.18+ kernel starting with kernel-4.18.0-257.el8.x86_64
-      - Fedora v5.10+ kernel (e.g. 5.10.12-200.fc33.x86_64)
+      - Fedora v5.10+ kernel (e.g. kernel-5.10.12-200.fc33.x86_64)
+      - openSUSE Tumbleweed v5.10+ kernel (e.g. kernel-default-5.10.1-1.1.x86_64)
       - Red Hat Enterprise Linux v4.18+ kernel starting with kernel-4.18.0-305.el8.x86_64
       - Ubuntu v5.4 kernel starting with linux-aws 5.4.0-1030-aws x86_64
       - Ubuntu v5.8 kernel starting with linux-aws 5.8.0-1017-aws x86_64
@@ -33,10 +34,11 @@ This repository contains a collection of tools and commands used for managing th
   The following packages need to be installed or updated to have the Nitro Enclaves kernel driver available in the mentioned distros:
 
   - Amazon Linux 2 - "kernel" (amzn2-core) for the v4.14 kernel, "kernel" (amzn2extra-kernel-5.4) for the v5.4 kernel, "kernel" (amzn2extra-kernel-5.10) for the v5.10 kernel
-  - Ubuntu - "linux-aws" and "linux-modules-extra-aws" for the v5.4, v5.8 and v5.11+ kernels
-  - Fedora - "kernel" for the v5.10+ kernel
   - CentOS Stream - "kernel" for the v4.18+ kernel
+  - Fedora - "kernel" for the v5.10+ kernel
+  - openSUSE Tumbleweed - "kernel-default" for the v5.10+ kernel
   - Red Hat Enterprise Linux - "kernel" for the v4.18+ kernel
+  - Ubuntu - "linux-aws" and "linux-modules-extra-aws" for the v5.4, v5.8 and v5.11+ kernels
 
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
 
@@ -51,7 +53,11 @@ This repository contains a collection of tools and commands used for managing th
   6. [Optional] You could add ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.sh in your local shell configuration.
   7. You are now ready to go.
 
-  A set of steps options to install Nitro CLI from GitHub sources e.g. for [CentOS Stream 8](docs/centos_stream_8_how_to_install_nitro_cli_from_github_sources.md), [Fedora 34](docs/fedora_34_how_to_install_nitro_cli_from_github_sources.md), [RHEL 8.4](docs/rhel_8.4_how_to_install_nitro_cli_from_github_sources.md), [Ubuntu 20.04](docs/ubuntu_20.04_how_to_install_nitro_cli_from_github_sources.md), can be found in the [docs](docs) directory.
+  A set of steps options to install on distros the Nitro CLI from GitHub sources can be found in the [docs](docs) directory:
+  - [CentOS Stream 8](docs/centos_stream_8_how_to_install_nitro_cli_from_github_sources.md)
+  - [Fedora 34](docs/fedora_34_how_to_install_nitro_cli_from_github_sources.md)
+  - [RHEL 8.4](docs/rhel_8.4_how_to_install_nitro_cli_from_github_sources.md)
+  - [Ubuntu 20.04](docs/ubuntu_20.04_how_to_install_nitro_cli_from_github_sources.md)
 
 ### How to install (Amazon Linux repository):
 #### Running enclaves

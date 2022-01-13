@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
-use nix::sys::socket::SockAddr;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::net::{IpAddr, Ipv4Addr};
@@ -10,7 +9,7 @@ use std::str;
 use std::sync::mpsc;
 use std::thread;
 use tempfile::NamedTempFile;
-use vsock::VsockStream;
+use vsock::{SockAddr, VsockStream};
 
 use vsock_proxy::starter::Proxy;
 

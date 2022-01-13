@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(warnings)]
-use aws_nitro_enclaves_cose::{sign::HeaderMap, COSESign1};
+use aws_nitro_enclaves_cose::{header_map::HeaderMap, CoseSign1};
 use crc::{crc32, Hasher32};
 use eif_defs::eif_hasher::EifHasher;
 use eif_defs::{
     EifHeader, EifSectionHeader, EifSectionType, PcrInfo, PcrSignature, EIF_MAGIC, MAX_NUM_SECTIONS,
 };
 use openssl::asn1::Asn1Time;
-use openssl::ec::EcKey;
+use openssl::pkey::PKey;
 use serde::{Deserialize, Serialize};
 use serde_cbor::{from_slice, to_vec};
 use sha2::{Digest, Sha384};
@@ -273,10 +273,10 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         let pcr_info = PcrInfo::new(register_index, register_value);
 
         let payload = to_vec(&pcr_info).expect("Could not serialize PCR info");
-        let private_key = EcKey::private_key_from_pem(&sign_info.private_key)
+        let private_key = PKey::private_key_from_pem(&sign_info.private_key)
             .expect("Could not deserialize the PEM-formatted private key");
 
-        let signature = COSESign1::new(&payload, &HeaderMap::new(), private_key.as_ref())
+        let signature = CoseSign1::new(&payload, &HeaderMap::new(), private_key.as_ref())
             .unwrap()
             .as_bytes(false)
             .unwrap();
@@ -693,15 +693,13 @@ impl PcrSignatureChecker {
 
     /// Verifies the validity of the signing certificate
     pub fn verify(&mut self) -> Result<(), String> {
-        let signature = COSESign1::from_bytes(&self.signature[..])
+        let signature = CoseSign1::from_bytes(&self.signature[..])
             .map_err(|err| format!("Could not deserialize the signature: {:?}", err))?;
         let cert = openssl::x509::X509::from_pem(&self.signing_certificate[..])
             .map_err(|_| "Could not deserialize the signing certificate".to_string())?;
         let public_key = cert
             .public_key()
-            .map_err(|_| "Could not get the public key from the signing certificate".to_string())?
-            .ec_key()
-            .map_err(|err| format!("Could not get the internal elliptic curve key: {:?}", err))?;
+            .map_err(|_| "Could not get the public key from the signing certificate".to_string())?;
 
         // Verify the signature
         let result = signature

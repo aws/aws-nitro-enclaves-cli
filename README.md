@@ -42,7 +42,7 @@ This repository contains a collection of tools and commands used for managing th
 
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
 
-### How to install (Git):
+### How to install (GitHub sources):
   1. Clone the repository.
   2. Set NITRO_CLI_INSTALL_DIR to the desired location, by default everything will be installed in build/install
   3. Run 'make nitro-cli && make vsock-proxy && make install'.
@@ -59,23 +59,17 @@ This repository contains a collection of tools and commands used for managing th
   - [RHEL 8.4](docs/rhel_8.4_how_to_install_nitro_cli_from_github_sources.md)
   - [Ubuntu 20.04](docs/ubuntu_20.04_how_to_install_nitro_cli_from_github_sources.md)
 
-### How to install (Amazon Linux repository):
-#### Running enclaves
-  1. Ensure that your EC2 instance was created with enclave support enabled and that your system (*and container if applicable*) has read/write access to `/dev/nitro_enclaves`.
-  2. Ensure that your system (*and container if applicable*) has Linux hugepages available.
-  3. Install the main Nitro CLI package from the AL2 repository: `sudo amazon-linux-extras install aws-nitro-enclaves-cli`.
-  4. Add yourself to the `ne` group: `sudo usermod -aG ne $USER`. You will have to log out and back in for this change to take effect.
-  5. Reserve resources (memory and CPUs) for future enclaves, by editing `/etc/nitro_enclaves/allocator.yaml` (or use the default configuration - 512MB and 2 CPUs) and then starting the resource reservation service: `sudo systemctl start nitro-enclaves-allocator.service`.
-  6. [Recommended] If you want your resources configuration to persist across reboots, enable the service: `sudo systemctl enable nitro-enclaves-allocator.service`.
-  7. You are now ready to go.
-
-#### Building enclave images (optional)
-  1. In case you want to build EIF images, install additional Nitro Enclaves
-     resources: `sudo yum install -y aws-nitro-enclaves-cli-devel`.
-  2. Add yourself to the `docker` group: `sudo usermod -aG docker $USER`
-
-### How to use nitro-cli
+### How to use Nitro Enclaves CLI
   The user guide for the Nitro Enclaves CLI can be found at https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-cli.html.
+
+  Ensure that your EC2 instance was created with enclave support enabled and that your system (*and container if applicable*) has read/write access to `/dev/nitro_enclaves`.
+
+  Ensure that your Linux system (*and container if applicable*) has Linux hugepages available.
+
+  The AWS Nitro Enclaves CLI package is currently available for:
+  - Amazon Linux 2 - https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-cli-install.html
+  - openSUSE - https://build.opensuse.org/package/show/Cloud:Tools/aws-nitro-enclaves-cli
+  - Windows - https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-cli-install-win.html
 
 #### Enclave disk size
   The enclaves do not have access to a physical disk, just a RAM filesystem.

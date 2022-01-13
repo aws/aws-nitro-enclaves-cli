@@ -27,7 +27,6 @@ vsock = "0.2"
 vmm-sys-util = "0.8.0"
 sha2 = "0.9.5"
 hex = "0.4"
-aws-nitro-enclaves-cose = "0.1"
 
 lazy_static = "1.4.0"
 

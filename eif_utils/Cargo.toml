@@ -10,7 +10,7 @@ sha2 = "0.9.5"
 hex = "0.4"
 crc = "1.8"
 eif_defs = { path = "../eif_defs" }
-aws-nitro-enclaves-cose = "0.1"
+aws-nitro-enclaves-cose = "0.4"
 openssl = "0.10"
 serde_cbor = "0.11"
 serde = { version = ">=1.0", features = ["derive"] }

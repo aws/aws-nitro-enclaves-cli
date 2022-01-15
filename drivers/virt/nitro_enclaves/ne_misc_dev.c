@@ -204,6 +204,13 @@ static inline unsigned long page_size(struct page *page)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+static inline u64 range_len(const struct range *range)
+{
+	return range->end - range->start + 1;
+}
+#endif
+
 /**
  * struct ne_phys_contig_mem_regions - Contiguous physical memory regions.
  * @num:	The number of regions that currently has.

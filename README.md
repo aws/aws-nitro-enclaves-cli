@@ -29,6 +29,7 @@ This repository contains a collection of tools and commands used for managing th
       - Amazon Linux 2 v5.4 kernel starting with kernel-5.4.156-83.273.amzn2.aarch64
       - Amazon Linux 2 v5.10+ kernel starting with kernel-5.10.75-79.358.amzn2.aarch64
       - Amazon Linux 2022 v5.10+ kernel starting with kernel-5.10.75-82.359.amzn2022.aarch64
+      - CentOS Stream v4.18 kernel starting with kernel-4.18.0-358.el8.aarch64
       - CentOS Stream v5.14+ kernel starting with kernel-5.14.0-24.el9.aarch64
 
   The following packages need to be installed or updated to have the Nitro Enclaves kernel driver available in the mentioned distros:

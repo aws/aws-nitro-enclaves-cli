@@ -4,7 +4,7 @@
 use crate::docker::DockerError::CredentialsError;
 use futures::stream::StreamExt;
 use log::{debug, error, info};
-use serde_json::value::Value;
+use serde_json::{json, Value};
 use shiplift::RegistryAuth;
 use shiplift::{BuildOptions, Docker, PullOptions};
 use std::env;
@@ -32,7 +32,7 @@ pub enum DockerError {
 
 /// Struct exposing the Docker functionalities to the EIF builder
 pub struct DockerUtil {
-    pub docker: Docker,
+    docker: Docker,
     docker_image: String,
 }
 
@@ -91,10 +91,8 @@ impl DockerUtil {
         if let Some(registry_domain) = host {
             let config_file = self.get_config_file()?;
 
-            let config_json: serde_json::Value =
-                serde_json::from_reader(&config_file).map_err(|err| {
-                    CredentialsError(format!("JSON was not well-formatted: {}", err.to_string()))
-                })?;
+            let config_json: serde_json::Value = serde_json::from_reader(&config_file)
+                .map_err(|err| CredentialsError(format!("JSON was not well-formatted: {}", err)))?;
 
             let auths = config_json.get("auths").ok_or_else(|| {
                 CredentialsError("Could not find auths key in config JSON".to_string())
@@ -144,7 +142,7 @@ impl DockerUtil {
                 DockerError::CredentialsError(format!(
                     "Could not open file pointed by env\
                      DOCKER_CONFIG: {}",
-                    err.to_string()
+                    err
                 ))
             })?;
             Ok(config_file)
@@ -157,7 +155,7 @@ impl DockerUtil {
                         DockerError::CredentialsError(format!(
                             "Could not open file {:?}: {}",
                             config_path.to_str(),
-                            err.to_string()
+                            err
                         ))
                     })?;
                     return Ok(config_file);
@@ -273,7 +271,23 @@ impl DockerUtil {
         runtime.block_on(act)
     }
 
-    fn inspect_image(&self) -> Result<(Vec<String>, Vec<String>), DockerError> {
+    /// Inspect docker image and return its description as a json String
+    pub fn inspect_image(&self) -> Result<serde_json::Value, DockerError> {
+        let act = async {
+            match self.docker.images().get(&self.docker_image).inspect().await {
+                Ok(image) => Ok(json!(image)),
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(DockerError::InspectError)
+                }
+            }
+        };
+
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+        runtime.block_on(act)
+    }
+
+    fn extract_image(&self) -> Result<(Vec<String>, Vec<String>), DockerError> {
         // First try to find CMD parameters (together with potential ENV bindings)
         let act_cmd = async {
             match self.docker.images().get(&self.docker_image).inspect().await {
@@ -361,7 +375,7 @@ impl DockerUtil {
     /// extract the necessary configuration values from the docker image with
     /// the tag provided in the constructor
     pub fn load(&self) -> Result<(NamedTempFile, NamedTempFile), DockerError> {
-        let (cmd, env) = self.inspect_image()?;
+        let (cmd, env) = self.extract_image()?;
 
         let cmd_file = write_config(cmd)?;
         let env_file = write_config(env)?;

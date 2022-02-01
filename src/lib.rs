@@ -16,8 +16,9 @@ pub mod enclave_proc_comm;
 pub mod utils;
 
 use eif_defs::eif_hasher::EifHasher;
-use eif_utils::{get_pcrs, EifReader};
-use log::debug;
+use eif_utils::eif_reader::EifReader;
+use eif_utils::{generate_build_info, get_pcrs};
+use log::{debug, info};
 use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
@@ -27,17 +28,16 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
 use common::commands_parser::{BuildEnclavesArgs, EmptyArgs, RunEnclavesArgs};
-use common::json_output::{DescribeEifInfo, EnclaveBuildInfo, EnclaveTerminateInfo};
+use common::json_output::{
+    EifDescribeInfo, EnclaveBuildInfo, EnclaveTerminateInfo, MetadataDescribeInfo,
+};
 use common::{enclave_proc_command_send_single, get_sockets_dir_path};
 use common::{EnclaveProcessCommandType, NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use enclave_proc_comm::{
     enclave_proc_command_send_all, enclave_proc_handle_outputs, enclave_process_handle_all_replies,
 };
-use log::info;
 
 use utils::{Console, PcrType};
-
-use crate::common::json_output::DescribeMetadata;
 
 /// Hypervisor CID as defined by <http://man7.org/linux/man-pages/man7/vsock.7.html>.
 pub const VMADDR_CID_HYPERVISOR: u32 = 0;
@@ -75,7 +75,7 @@ pub fn build_from_docker(
     private_key: &Option<String>,
     img_name: &Option<String>,
     img_version: &Option<String>,
-    metadata: &Option<String>,
+    metadata_path: &Option<String>,
 ) -> NitroCliResult<(File, BTreeMap<String, String>)> {
     let blobs_path =
         blobs_path().map_err(|e| e.add_subaction("Failed to retrieve blobs path".to_string()))?;
@@ -117,20 +117,29 @@ pub fn build_from_docker(
         _ => "undefined",
     };
 
+    let kernel_path = format!("{}/{}", blobs_path, kernel_image_name);
+    let build_info = generate_build_info!(&format!("{}.config", kernel_path)).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Could not generate build info: {:?}", e),
+            NitroCliErrorEnum::EifBuildingError
+        )
+    })?;
+
     let mut docker2eif = enclave_build::Docker2Eif::new(
         docker_uri.to_string(),
         format!("{}/init", blobs_path),
         format!("{}/nsm.ko", blobs_path),
-        format!("{}/{}", blobs_path, kernel_image_name),
+        kernel_path,
         cmdline.trim().to_string(),
         format!("{}/linuxkit", blobs_path),
         &mut file_output,
         artifacts_path()?,
         signing_certificate,
         private_key,
-        img_name,
-        img_version,
-        metadata,
+        img_name.clone(),
+        img_version.clone(),
+        metadata_path.clone(),
+        build_info,
     )
     .map_err(|err| {
         new_nitro_cli_failure!(
@@ -209,7 +218,7 @@ pub fn new_enclave_name(run_args: RunEnclavesArgs, names: Vec<String>) -> NitroC
 ///
 /// Calculates PCRs 0, 1, 2, 8 at each call in addition to metadata,
 /// EIF details, identification provided by the user at build.
-pub fn describe_eif(eif_path: String) -> NitroCliResult<DescribeEifInfo> {
+pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
     let mut eif_reader = EifReader::from_eif(eif_path).map_err(|e| {
         new_nitro_cli_failure!(
             &format!("Failed to initialize EIF reader: {:?}", e),
@@ -231,52 +240,27 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<DescribeEifInfo> {
         )
     })?;
 
-    let header = eif_reader.get_header();
+    let mut describe_meta: Option<MetadataDescribeInfo> = None;
+    let mut img_name: Option<String> = None;
+    let mut img_version: Option<String> = None;
 
-    let mut describe_meta = None;
-    if !eif_reader.metadata.is_null() {
-        let generated_metadata = match eif_reader.get_generated_meta() {
-            Some(meta) => meta,
-            None => {
-                return Err(new_nitro_cli_failure!(
-                    &"Missing generated metadata.".to_string(),
-                    NitroCliErrorEnum::SerdeError
-                ))
-            }
-        };
-        let docker_info = match eif_reader.get_docker_info() {
-            Some(meta) => meta,
-            None => {
-                return Err(new_nitro_cli_failure!(
-                    &"Missing docker information.".to_string(),
-                    NitroCliErrorEnum::SerdeError
-                ))
-            }
-        };
-        let custom_metadata = eif_reader.get_custom_meta();
-        describe_meta = Some(
-            DescribeMetadata::new(generated_metadata, docker_info, custom_metadata).map_err(
-                |e| {
-                    new_nitro_cli_failure!(
-                        &format!("Failed construct metadata: {:?}", e),
-                        NitroCliErrorEnum::SerdeError
-                    )
-                },
-            )?,
-        );
+    if let Some(meta) = eif_reader.get_metadata() {
+        img_name = Some(meta.img_name.clone());
+        img_version = Some(meta.img_version.clone());
+        describe_meta = Some(MetadataDescribeInfo::new(meta));
     }
 
-    let mut info = DescribeEifInfo::new(
-        header.version.to_string(),
-        EnclaveBuildInfo::new(measurements.clone()),
-        false,
-        None,
-        eif_reader.check_crc(),
-        None,
-        eif_reader.get_name(),
-        eif_reader.get_version(),
-        describe_meta,
-    );
+    let mut info = EifDescribeInfo {
+        version: eif_reader.get_header().version,
+        build_info: EnclaveBuildInfo::new(measurements.clone()),
+        is_signed: false,
+        cert_info: None,
+        crc_check: eif_reader.check_crc(),
+        sign_check: None,
+        img_name,
+        img_version,
+        metadata: describe_meta,
+    };
 
     // Check if signature section is present
     if measurements.get(&"PCR8".to_string()).is_some() {

@@ -14,8 +14,7 @@ use byteorder::{BigEndian, ByteOrder};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::BTreeMap, mem::size_of};
+use std::mem::size_of;
 
 pub const EIF_MAGIC: [u8; 4] = [46, 101, 105, 102]; // .eif in ascii
 pub const MAX_NUM_SECTIONS: usize = 32;
@@ -253,44 +252,34 @@ impl PcrInfo {
     }
 }
 
-/// Structure used for (de)serializing metadata when
-/// writing or reading the metadata section of the EIF
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Metadata {
-    #[serde(rename = "ImageName")]
-    /// Eif name added at build
-    pub img_name: String,
-    #[serde(rename = "ImageVersion")]
-    /// Eif version added at build
-    pub img_version: String,
-    #[serde(rename = "GeneratedMetadata")]
-    /// Metadata generated at every build automatically
-    pub generated_meta: BTreeMap<String, String>,
-    #[serde(rename = "DockerInfo")]
-    /// Information about the docker image
-    pub docker_info: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "CustomMetadata")]
-    /// Metadata provided by the user
-    pub custom_meta: Option<Value>,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EifBuildInfo {
+    #[serde(rename = "BuildTime")]
+    pub build_time: String,
+    #[serde(rename = "BuildTool")]
+    pub build_tool: String,
+    #[serde(rename = "BuildToolVersion")]
+    pub build_tool_version: String,
+    #[serde(rename = "OperatingSystem")]
+    pub img_os: String,
+    #[serde(rename = "KernelVersion")]
+    pub img_kernel: String,
 }
 
-impl Metadata {
-    pub fn new(
-        img_name: String,
-        img_version: String,
-        generated_meta: BTreeMap<String, String>,
-        docker_info: Value,
-        custom_meta: Option<Value>,
-    ) -> Self {
-        Metadata {
-            img_name,
-            img_version,
-            generated_meta,
-            docker_info,
-            custom_meta,
-        }
-    }
+/// Structure used for (de)serializing metadata when
+/// writing or reading the metadata section of the EIF
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EifIdentityInfo {
+    #[serde(rename = "ImageName")]
+    pub img_name: String,
+    #[serde(rename = "ImageVersion")]
+    pub img_version: String,
+    #[serde(rename = "BuildMetadata")]
+    pub build_info: EifBuildInfo,
+    #[serde(rename = "DockerInfo")]
+    pub docker_info: serde_json::Value,
+    #[serde(rename = "CustomMetadata")]
+    pub custom_info: serde_json::Value,
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@
 use clap::{App, AppSettings, Arg};
 use std::fs::OpenOptions;
 
+use eif_utils::generate_build_info;
 use enclave_build::Docker2Eif;
 
 fn main() {
@@ -39,6 +40,14 @@ fn main() {
                 .short("k")
                 .long("kernel")
                 .help("Path to a bzImage/Image file for x86_64/aarch64 linux kernel")
+                .takes_value(true)
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("kernel_cfg_path")
+                .short("k")
+                .long("kernel_config")
+                .help("Path to a bzImage.config/Image.config file for x86_64/aarch64 linux kernel config")
                 .takes_value(true)
                 .required(true),
         )
@@ -118,6 +127,7 @@ fn main() {
     let init_path = matches.value_of("init_path").unwrap();
     let nsm_path = matches.value_of("nsm_path").unwrap();
     let kernel_img_path = matches.value_of("kernel_img_path").unwrap();
+    let kernel_cfg_path = matches.value_of("kernel_cfg_path").unwrap();
     let cmdline = matches.value_of("cmdline").unwrap();
     let linuxkit_path = matches.value_of("linuxkit_path").unwrap();
     let output = matches.value_of("output").unwrap();
@@ -149,9 +159,10 @@ fn main() {
         ".".to_string(),
         &signing_certificate,
         &private_key,
-        &img_name,
-        &img_version,
-        &metadata,
+        img_name,
+        img_version,
+        metadata,
+        generate_build_info!(kernel_cfg_path).expect("Can not generate build info"),
     )
     .unwrap();
 

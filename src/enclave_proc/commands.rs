@@ -3,9 +3,10 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-use eif_utils::{get_pcrs, EifReader, PcrSignatureChecker};
+use eif_defs::EifIdentityInfo;
+use eif_utils::eif_reader::EifReader;
+use eif_utils::{get_pcrs, PcrSignatureChecker};
 use log::debug;
-use serde_json::Value;
 use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -13,24 +14,32 @@ use std::thread::JoinHandle;
 
 use crate::common::commands_parser::RunEnclavesArgs;
 use crate::common::construct_error_message;
-use crate::common::json_output::{DescribeMetadata, EnclaveBuildInfo, EnclaveTerminateInfo};
+use crate::common::json_output::EnclaveTerminateInfo;
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::enclave_proc::connection::Connection;
 use crate::enclave_proc::connection::{safe_conn_eprintln, safe_conn_println};
 use crate::enclave_proc::cpu_info::CpuInfo;
 use crate::enclave_proc::resource_manager::{EnclaveManager, EnclaveState};
-use crate::enclave_proc::utils::{get_enclave_describe_info, InfoLevel};
+use crate::enclave_proc::utils::get_enclave_describe_info;
 use crate::new_nitro_cli_failure;
 
-/// Thread handle from parallel computing of PCRs
-pub type PcrThread = Option<JoinHandle<NitroCliResult<(BTreeMap<String, String>, Value)>>>;
+/// Result of thread to calculate PCRs and fetch EIF metadata
+pub struct DescribeThreadResult {
+    /// PCR measurements
+    pub measurements: BTreeMap<String, String>,
+    /// EIF metadata
+    pub metadata: Option<EifIdentityInfo>,
+}
+
+/// Thread handle from parallel computing of PCRs and fetching of metadata
+pub type DescribeThread = Option<JoinHandle<NitroCliResult<DescribeThreadResult>>>;
 
 /// Information retuned by run_enclave function.
 pub struct RunEnclaveResult {
     /// Manager structure describing the enclave.
     pub enclave_manager: EnclaveManager,
     /// Handle of the thread that computes PCRs.
-    pub pcr_thread: PcrThread,
+    pub describe_thread: DescribeThread,
 }
 
 /// Launch an enclave with the specified arguments and provide the launch status through the given connection.
@@ -115,7 +124,10 @@ pub fn run_enclaves(
                 NitroCliErrorEnum::EifParsingError
             )
         })?;
-        Ok((measurements, eif_reader.metadata))
+        Ok(DescribeThreadResult {
+            measurements,
+            metadata: eif_reader.get_metadata(),
+        })
     });
     enclave_manager
         .run_enclave(connection)
@@ -126,7 +138,7 @@ pub fn run_enclaves(
 
     Ok(RunEnclaveResult {
         enclave_manager,
-        pcr_thread: Some(handle),
+        describe_thread: Some(handle),
     })
 }
 
@@ -183,69 +195,12 @@ pub fn terminate_enclaves(
 pub fn describe_enclaves(
     enclave_manager: &EnclaveManager,
     connection: &Connection,
-    add_info: InfoLevel,
+    with_metadata: bool,
 ) -> NitroCliResult<()> {
     debug!("describe_enclaves");
 
-    let mut info = get_enclave_describe_info(enclave_manager)
+    let info = get_enclave_describe_info(enclave_manager, with_metadata)
         .map_err(|e| e.add_subaction(String::from("Execute Describe Enclave command")))?;
-    // Check if the run_enclave command version calculated the measurements
-    let mut build_info: Option<EnclaveBuildInfo> = None;
-    let mut name: Option<String> = None;
-    let mut metadata: Option<DescribeMetadata> = None;
-    let mut img_name: Option<Value> = None;
-    let mut img_version: Option<Value> = None;
-
-    match add_info {
-        InfoLevel::Basic => {}
-        InfoLevel::Measured => {
-            build_info = Some(enclave_manager.get_measurements()?);
-            name = Some(enclave_manager.enclave_name.clone());
-        }
-        InfoLevel::Metadata => {
-            build_info = Some(enclave_manager.get_measurements()?);
-            name = Some(enclave_manager.enclave_name.clone());
-            let raw_metadata = enclave_manager.get_metadata()?;
-            if !raw_metadata.is_null() {
-                img_name = raw_metadata.get("ImageName").cloned();
-                img_version = raw_metadata.get("ImageVersion").cloned();
-                let describe_meta = DescribeMetadata::new(
-                    match raw_metadata.get("GeneratedMetadata") {
-                        Some(meta) => meta.clone(),
-                        None => {
-                            return Err(new_nitro_cli_failure!(
-                                &"Missing generated metadata.".to_string(),
-                                NitroCliErrorEnum::SerdeError
-                            ))
-                        }
-                    },
-                    match raw_metadata.get("DockerInfo") {
-                        Some(meta) => meta.clone(),
-                        None => {
-                            return Err(new_nitro_cli_failure!(
-                                &"Missing docker information.".to_string(),
-                                NitroCliErrorEnum::SerdeError
-                            ))
-                        }
-                    },
-                    raw_metadata.get("CustomMetadata").cloned(),
-                )
-                .map_err(|err| {
-                    new_nitro_cli_failure!(
-                        &format!("Failed to construct enclave metadata: {:?}", err),
-                        NitroCliErrorEnum::SerdeError
-                    )
-                })?;
-                metadata = Some(describe_meta);
-            }
-        }
-    }
-
-    info.enclave_name = name;
-    info.img_name = img_name;
-    info.img_version = img_version;
-    info.build_info = build_info;
-    info.metadata = metadata;
 
     connection.println(
         serde_json::to_string_pretty(&info)

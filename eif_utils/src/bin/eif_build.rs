@@ -15,7 +15,9 @@
 use std::path::Path;
 
 use clap::{App, Arg};
-use eif_utils::{get_pcrs, EifBuilder, EifIdentityInfo, SignEnclaveInfo};
+use eif_defs::EifIdentityInfo;
+use eif_utils::identity::parse_custom_metadata;
+use eif_utils::{generate_build_info, get_pcrs, EifBuilder, SignEnclaveInfo};
 use serde_json::json;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fmt::Debug;
@@ -31,6 +33,14 @@ fn main() {
                 .value_name("FILE")
                 .required(true)
                 .help("Sets path to a bzImage/Image file for x86_64/aarch64 architecture")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("kernel_config")
+                .long("kernel_config")
+                .value_name("FILE")
+                .required(true)
+                .help("Sets path to a bzImage.config/Image.config file for x86_64/aarch64 architecture")
                 .takes_value(true),
         )
         .arg(
@@ -113,6 +123,10 @@ fn main() {
         .value_of("kernel")
         .expect("Kernel path is a mandatory option");
 
+    let kernel_config_path = matches
+        .value_of("kernel_config")
+        .expect("Kernel config path is a mandatory option");
+
     let cmdline = matches
         .value_of("cmdline")
         .expect("Cmdline is a mandatory option");
@@ -143,23 +157,28 @@ fn main() {
 
     let img_name = matches.value_of("image_name").map(|val| val.to_string());
     let img_version = matches.value_of("image_name").map(|val| val.to_string());
-    let metadata = matches.value_of("metadata").map(|val| val.to_string());
+    let metadata_path = matches.value_of("metadata").map(|val| val.to_string());
+    let metadata = match metadata_path {
+        Some(ref path) => {
+            parse_custom_metadata(path).expect("Can not parse specified metadata file")
+        }
+        None => json!(null),
+    };
 
-    let arg_data = EifIdentityInfo {
-        img_name: match img_name {
-            Some(name) => name,
-            // Set default value kernel file name
-            None => {
-                let path_split: Vec<&str> = kernel_path.split('/').collect();
-                path_split[path_split.len() - 1].to_string()
-            }
-        },
-        img_version: match img_version {
-            Some(name) => name,
-            None => "1.0".to_string(),
-        },
-        metadata_path: metadata,
-        docker_info: json!({}),
+    let eif_info = EifIdentityInfo {
+        img_name: img_name.unwrap_or_else(|| {
+            // Set default value to kernel file name
+            Path::new(kernel_path)
+                .file_name()
+                .expect("Valid kernel file path should be provided")
+                .to_str()
+                .unwrap()
+                .to_string()
+        }),
+        img_version: img_version.unwrap_or_else(|| "1.0".to_string()),
+        build_info: generate_build_info!(kernel_config_path).expect("Can not generate build info"),
+        docker_info: json!(null),
+        custom_info: metadata,
     };
 
     if sha512 {
@@ -170,7 +189,7 @@ fn main() {
             output_path,
             sign_info,
             Sha512::new(),
-            arg_data,
+            eif_info,
         );
     } else if sha256 {
         build_eif(
@@ -180,7 +199,7 @@ fn main() {
             output_path,
             sign_info,
             Sha256::new(),
-            arg_data,
+            eif_info,
         );
     } else {
         build_eif(
@@ -190,7 +209,7 @@ fn main() {
             output_path,
             sign_info,
             Sha384::new(),
-            arg_data,
+            eif_info,
         );
     }
 }
@@ -202,7 +221,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
     output_path: &str,
     sign_info: Option<SignEnclaveInfo>,
     hasher: T,
-    eif_data: EifIdentityInfo,
+    eif_info: EifIdentityInfo,
 ) {
     let mut output_file = OpenOptions::new()
         .read(true)
@@ -218,7 +237,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
         sign_info,
         hasher.clone(),
         0, // flags
-        eif_data,
+        eif_info,
     );
     for ramdisk in ramdisks {
         build.add_ramdisk(Path::new(ramdisk));

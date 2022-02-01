@@ -106,7 +106,7 @@ pub struct BuildEnclavesArgs {
     pub img_name: Option<String>,
     /// The version of the enclave image.
     pub img_version: Option<String>,
-    /// The path to the private key for signed enclaves.
+    /// The path to custom metadata JSON file
     pub metadata: Option<String>,
 }
 
@@ -222,15 +222,15 @@ pub struct EmptyArgs {}
 
 /// The arguments used by `describe-enclaves` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DescribeArgs {
+pub struct DescribeEnclavesArgs {
     /// True if metadata is requested.
     pub metadata: bool,
 }
 
-impl DescribeArgs {
-    /// Construct a new `DescribeArgs` instance from the given command-line arguments.
+impl DescribeEnclavesArgs {
+    /// Construct a new `DescribeEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> Self {
-        DescribeArgs {
+        DescribeEnclavesArgs {
             metadata: args.is_present("metadata"),
         }
     }

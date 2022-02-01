@@ -1,24 +1,24 @@
 // Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-
 #![deny(warnings)]
+pub mod eif_reader;
+pub mod identity;
+
 use aws_nitro_enclaves_cose::{header_map::HeaderMap, CoseSign1};
 use crc::{crc32, Hasher32};
 use eif_defs::eif_hasher::EifHasher;
 use eif_defs::{
-    EifHeader, EifSectionHeader, EifSectionType, Metadata, PcrInfo, PcrSignature, EIF_MAGIC,
+    EifHeader, EifIdentityInfo, EifSectionHeader, EifSectionType, PcrInfo, PcrSignature, EIF_MAGIC,
     MAX_NUM_SECTIONS,
 };
 use openssl::asn1::Asn1Time;
 use openssl::pkey::PKey;
 use serde::{Deserialize, Serialize};
 use serde_cbor::{from_slice, to_vec};
-use serde_json::{json, Value};
-use sha2::{Digest, Sha384};
+use sha2::Digest;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
 /// Contains code for EifBuilder a simple library used for building an EifFile
 /// from a:
 ///    - kernel_file
@@ -31,20 +31,11 @@ use chrono::{DateTime, Utc};
 use std::ffi::CString;
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
 use std::path::Path;
-use std::time::SystemTime;
 
-pub const MAX_FILE_SIZE: u64 = 4096;
-pub const DEFAULT_SECTIONS_COUNT: u16 = 2;
-pub const UNKNOWN_DEFAULT: &str = "Unknown";
-pub const META_SECTION: u16 = 1;
-#[cfg(target_arch = "x86_64")]
-pub const CONFIG_FILE: &str = "bzImage.config";
-#[cfg(target_arch = "aarch64")]
-pub const CONFIG_FILE: &str = "Image.config";
-const DEFAULT_BLOBS_PATH: &str = "/usr/share/nitro_enclaves/blobs/";
+const DEFAULT_SECTIONS_COUNT: u16 = 3;
 
 #[derive(Clone, Debug)]
 pub struct SignEnclaveInfo {
@@ -123,31 +114,6 @@ pub fn get_pcrs<T: Digest + Debug + Write + Clone>(
     Ok(measurements)
 }
 
-/// Structure that groups together all metadata provided at build-time
-#[derive(Debug)]
-pub struct EifIdentityInfo {
-    pub img_name: String,
-    pub img_version: String,
-    pub metadata_path: Option<String>,
-    pub docker_info: Value,
-}
-
-impl EifIdentityInfo {
-    pub fn new(
-        img_name: String,
-        img_version: String,
-        metadata_path: Option<String>,
-        docker_info: Value,
-    ) -> Self {
-        EifIdentityInfo {
-            img_name,
-            img_version,
-            metadata_path,
-            docker_info,
-        }
-    }
-}
-
 pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     kernel: File,
     cmdline: Vec<u8>,
@@ -169,8 +135,6 @@ pub struct EifBuilder<T: Digest + Debug + Write + Clone> {
     /// Hash the signing certificate
     pub certificate_hasher: EifHasher<T>,
     hasher_template: T,
-    /// Metadata of the EIF
-    eif_data: EifIdentityInfo,
     eif_crc: crc32::Digest,
 }
 
@@ -181,10 +145,11 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         sign_info: Option<SignEnclaveInfo>,
         hasher: T,
         flags: u16,
-        eif_data: EifIdentityInfo,
+        eif_info: EifIdentityInfo,
     ) -> Self {
         let kernel_file = File::open(kernel_path).expect("Invalid kernel path");
         let cmdline = CString::new(cmdline).expect("Invalid cmdline");
+        let metadata = serde_json::to_vec(&eif_info).expect("Could not serialize metadata: {}");
         EifBuilder {
             kernel: kernel_file,
             cmdline: cmdline.into_bytes(),
@@ -192,7 +157,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             sign_info,
             signature: None,
             signature_size: 0,
-            metadata: Vec::new(),
+            metadata,
             eif_hdr_flags: flags,
             default_mem: 1024 * 1024 * 1024,
             default_cpus: 2,
@@ -205,7 +170,6 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             certificate_hasher: EifHasher::new_without_cache(hasher.clone())
                 .expect("Could not create certificate hasher"),
             hasher_template: hasher,
-            eif_data,
             eif_crc: crc32::Digest::new_with_initial(crc32::IEEE, 0),
         }
     }
@@ -221,16 +185,14 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
     /// The first two sections are the kernel and the cmdline and the last is metadata.
     fn num_sections(&self) -> u16 {
-        DEFAULT_SECTIONS_COUNT
-            + self.ramdisks.len() as u16
-            + self.sign_info.iter().count() as u16
-            + META_SECTION
+        DEFAULT_SECTIONS_COUNT + self.ramdisks.len() as u16 + self.sign_info.iter().count() as u16
     }
 
     fn sections_offsets(&self) -> [u64; MAX_NUM_SECTIONS] {
         let mut result = [0; MAX_NUM_SECTIONS];
         result[0] = self.kernel_offset();
         result[1] = self.cmdline_offset();
+        result[2] = self.metadata_offset();
 
         for i in 0..self.ramdisks.len() {
             result[i + DEFAULT_SECTIONS_COUNT as usize] = self.ramdisk_offset(i);
@@ -238,10 +200,6 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
         if self.sign_info.is_some() {
             result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.signature_offset();
-            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len() + 1] =
-                self.metadata_offset();
-        } else {
-            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.metadata_offset();
         }
 
         result
@@ -252,6 +210,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
         result[0] = self.kernel_size();
         result[1] = self.cmdline_size();
+        result[2] = self.metadata_size();
 
         for i in 0..self.ramdisks.len() {
             result[i + DEFAULT_SECTIONS_COUNT as usize] = self.ramdisk_size(&self.ramdisks[i]);
@@ -259,10 +218,6 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
 
         if self.sign_info.is_some() {
             result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.signature_size();
-            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len() + 1] =
-                self.metadata_size();
-        } else {
-            result[DEFAULT_SECTIONS_COUNT as usize + self.ramdisks.len()] = self.metadata_size();
         }
 
         result
@@ -289,8 +244,8 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
     }
 
     fn ramdisk_offset(&self, index: usize) -> u64 {
-        self.cmdline_offset()
-            + self.cmdline_size()
+        self.metadata_offset()
+            + self.metadata_size()
             + EifSectionHeader::size() as u64
             + self.ramdisks[0..index]
                 .iter()
@@ -317,11 +272,7 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
     }
 
     fn metadata_offset(&self) -> u64 {
-        if self.sign_info.is_none() {
-            self.signature_offset()
-        } else {
-            self.signature_offset() + EifSectionHeader::size() as u64 + self.signature_size()
-        }
+        self.cmdline_offset() + EifSectionHeader::size() as u64 + self.cmdline_size()
     }
 
     fn metadata_size(&self) -> u64 {
@@ -383,59 +334,6 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         }
     }
 
-    /// Get metadata parts, add them to the structure and
-    /// serialize all the information as JSON
-    pub fn save_metadata(&mut self) -> Result<(), String> {
-        let generated_meta = self.get_generated_meta();
-
-        let mut custom_meta: Option<serde_json::Value> = None;
-        match &self.eif_data.metadata_path {
-            Some(meta_path) => {
-                // Check file size
-                let file_meta = std::fs::metadata(meta_path)
-                    .map_err(|e| format!("Failed to get file metadata: {}", e))?;
-                if file_meta.len() > MAX_FILE_SIZE {
-                    return Err("Metadata file size exceeded limit of 4KB.".to_string());
-                }
-
-                // Get json Value
-                let custom_file = File::open(meta_path)
-                    .map_err(|e| format!("Failed to open custom metadata file: {}", e))?;
-                let json_value: Value = serde_json::from_reader(custom_file)
-                    .map_err(|e| format!("Failed to deserialize json: {}", e))?;
-
-                // Check json format, all keys and values should be: "String": "String"
-                let json_map = match json_value.as_object() {
-                    Some(map) => map.to_owned(),
-                    None => return Err("JSON does not respect format String:String".to_string()),
-                };
-
-                for (_key, value) in json_map {
-                    if !value.is_string() {
-                        return Err("JSON does not respect format String:String".to_string());
-                    }
-                }
-
-                custom_meta = Some(json_value);
-            }
-            None => {}
-        }
-
-        let metadata = Metadata::new(
-            self.eif_data.img_name.clone(),
-            self.eif_data.img_version.clone(),
-            generated_meta,
-            self.eif_data.docker_info.clone(),
-            custom_meta,
-        );
-
-        let json = json!(metadata);
-        self.metadata = serde_json::to_vec(&json)
-            .map_err(|e| format!("Could not serialize metadata: {}", e))?;
-
-        Ok(())
-    }
-
     /// Compute the crc for the whole enclave image, excluding the
     /// eif_crc32 field from the EIF header.
     pub fn compute_crc(&mut self) {
@@ -476,6 +374,16 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         self.eif_crc.write(&eif_buffer[..]);
         self.eif_crc.write(&self.cmdline[..]);
 
+        let eif_section = EifSectionHeader {
+            section_type: EifSectionType::EifSectionMetadata,
+            flags: 0,
+            section_size: self.metadata_size(),
+        };
+
+        let eif_buffer = eif_section.to_be_bytes();
+        self.eif_crc.write(&eif_buffer[..]);
+        self.eif_crc.write(&self.metadata[..]);
+
         for mut ramdisk in &self.ramdisks {
             let eif_section = EifSectionHeader {
                 section_type: EifSectionType::EifSectionRamdisk,
@@ -507,16 +415,6 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             self.eif_crc.write(&eif_buffer[..]);
             self.eif_crc.write(&signature[..]);
         }
-
-        let eif_section = EifSectionHeader {
-            section_type: EifSectionType::EifSectionMetadata,
-            flags: 0,
-            section_size: self.metadata_size(),
-        };
-
-        let eif_buffer = eif_section.to_be_bytes();
-        self.eif_crc.write(&eif_buffer[..]);
-        self.eif_crc.write(&self.metadata[..]);
     }
 
     pub fn write_header(&mut self, file: &mut File) {
@@ -582,6 +480,27 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             .expect("Failed write cmdline header");
     }
 
+    pub fn write_metadata(&mut self, eif_file: &mut File) {
+        let eif_section = EifSectionHeader {
+            section_type: EifSectionType::EifSectionMetadata,
+            flags: 0,
+            section_size: self.metadata_size(),
+        };
+
+        eif_file
+            .seek(SeekFrom::Start(self.metadata_offset()))
+            .expect("Could not seek while writing metadata section");
+
+        let eif_buffer = eif_section.to_be_bytes();
+        eif_file
+            .write_all(&eif_buffer[..])
+            .expect("Failed to write metadata header");
+
+        eif_file
+            .write_all(&self.metadata)
+            .expect("Failed to write metadata content");
+    }
+
     pub fn write_ramdisks(&mut self, eif_file: &mut File) {
         for (index, mut ramdisk) in (&self.ramdisks).iter().enumerate() {
             let eif_section = EifSectionHeader {
@@ -636,27 +555,6 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         }
     }
 
-    pub fn write_metadata(&mut self, eif_file: &mut File) {
-        let eif_section = EifSectionHeader {
-            section_type: EifSectionType::EifSectionMetadata,
-            flags: 0,
-            section_size: self.metadata_size(),
-        };
-
-        eif_file
-            .seek(SeekFrom::Start(self.metadata_offset()))
-            .expect("Could not seek while writing metadata section");
-
-        let eif_buffer = eif_section.to_be_bytes();
-        eif_file
-            .write_all(&eif_buffer[..])
-            .expect("Failed to write metadata header");
-
-        eif_file
-            .write_all(&self.metadata)
-            .expect("Failed to write metadata content");
-    }
-
     pub fn write_to(&mut self, output_file: &mut File) -> BTreeMap<String, String> {
         self.measure();
         let measurements = get_pcrs(
@@ -671,56 +569,14 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
         if self.sign_info.is_some() {
             self.generate_eif_signature(&measurements);
         }
-        self.save_metadata().expect("Failed to save metadata");
         self.compute_crc();
         self.write_header(output_file);
         self.write_kernel(output_file);
         self.write_cmdline(output_file);
+        self.write_metadata(output_file);
         self.write_ramdisks(output_file);
         self.write_signature(output_file);
-        self.write_metadata(output_file);
         measurements
-    }
-
-    pub fn get_generated_meta(&mut self) -> BTreeMap<String, String> {
-        let mut meta = BTreeMap::new();
-
-        let time = SystemTime::now();
-        let time: DateTime<Utc> = time.into();
-        meta.insert("BuildTime".to_string(), time.to_rfc3339());
-
-        // Get package version and name from CARGO_PKG_VERSION and CARGO_PKG_NAME
-        let tool_name = env!("CARGO_PKG_NAME").to_string();
-        let tool_version = env!("CARGO_PKG_VERSION").to_string();
-
-        meta.insert("BuildTool".to_string(), tool_name);
-        meta.insert("BuildToolVersion".to_string(), tool_version);
-
-        let blobs_path =
-            std::env::var("NITRO_CLI_BLOBS").unwrap_or_else(|_| DEFAULT_BLOBS_PATH.to_string());
-
-        let config_file = File::open(format!("{}/{}", blobs_path, CONFIG_FILE))
-            .expect("Failed to open kernel image config file.");
-        let os_string: String = BufReader::new(config_file)
-            .lines()
-            .nth(2)
-            .unwrap()
-            .expect("Failed to read kernel config file.");
-
-        // Extract OS and version from line format:
-        // ' # Linux/x86_64 4.14.177-104.253.amzn2.x86_64 Kernel Configuration '
-        let sep: Vec<char> = vec![' ', '/', '-'];
-        let os_words: Vec<&str> = os_string.split(&sep[..]).collect();
-        meta.insert(
-            "OperatingSystem".to_string(),
-            os_words.get(1).unwrap_or(&UNKNOWN_DEFAULT).to_string(),
-        );
-        meta.insert(
-            "KernelVersion".to_string(),
-            os_words.get(3).unwrap_or(&UNKNOWN_DEFAULT).to_string(),
-        );
-
-        meta
     }
 
     pub fn measure(&mut self) {
@@ -763,45 +619,6 @@ impl<T: Digest + Debug + Write + Clone> EifBuilder<T> {
             // hash the DER certificate (cert.digest()) and then tpm_extend_finalize_reset
             // will do the extend.
             self.certificate_hasher.write_all(&cert_der).unwrap();
-        }
-    }
-}
-
-/// The information about the signing certificate to be provided for a `describe-eif` request.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SignCertificateInfo {
-    #[serde(rename = "IssuerName")]
-    /// Certificate's subject name.
-    pub issuer_name: BTreeMap<String, String>,
-    #[serde(rename = "Algorithm")]
-    /// Certificate's signature algorithm
-    pub algorithm: String,
-    #[serde(rename = "NotBefore")]
-    /// Not before validity period
-    pub not_before: String,
-    #[serde(rename = "NotAfter")]
-    /// Not after validity period
-    pub not_after: String,
-    #[serde(rename = "Signature")]
-    /// Certificate's signature in hex format: 'XX:XX:XX..'
-    pub signature: String,
-}
-
-impl SignCertificateInfo {
-    /// Create new signing certificate information structure
-    pub fn new(
-        issuer_name: BTreeMap<String, String>,
-        algorithm: String,
-        not_before: String,
-        not_after: String,
-        signature: String,
-    ) -> Self {
-        SignCertificateInfo {
-            issuer_name,
-            algorithm,
-            not_before,
-            not_after,
-            signature,
         }
     }
 }
@@ -917,264 +734,5 @@ impl PcrSignatureChecker {
         }
 
         Ok(())
-    }
-}
-
-/// Used for providing EIF info when requested by
-/// 'describe-eif' or 'describe-enclaves' commands
-pub struct EifReader {
-    /// Deserialized EIF header
-    pub header: EifHeader,
-    /// Serialized signature section
-    pub signature_section: Option<Vec<u8>>,
-    /// Hash of the whole EifImage.
-    pub image_hasher: EifHasher<Sha384>,
-    /// Hash of the EifSections provided by Amazon
-    /// Kernel + cmdline + First Ramdisk
-    pub bootstrap_hasher: EifHasher<Sha384>,
-    /// Hash of the remaining ramdisks.
-    pub app_hasher: EifHasher<Sha384>,
-    /// Hash the signing certificate
-    pub cert_hasher: EifHasher<Sha384>,
-    pub eif_crc: u32,
-    pub sign_check: Option<bool>,
-    /// Generated and custom EIF metadata
-    pub metadata: Value,
-}
-
-impl EifReader {
-    /// Reads EIF and extracts sections to be written in the hashers based
-    /// on section type. Also writes sections in the eif_crc, excluding the
-    /// CRC from the header
-    pub fn from_eif(eif_path: String) -> Result<Self, String> {
-        let mut eif_crc = crc32::Digest::new_with_initial(crc32::IEEE, 0);
-        let mut curr_seek = 0;
-        let mut eif_file =
-            File::open(eif_path).map_err(|e| format!("Failed to open the EIF file: {:?}", e))?;
-
-        // Extract EIF header
-        let mut header_buf = vec![0u8; EifHeader::size()];
-        eif_file
-            .read_exact(&mut header_buf)
-            .map_err(|e| format!("Error while reading EIF header: {:?}", e))?;
-
-        // Exclude last field of header which is CRC
-        let len_without_crc = header_buf.len() - size_of::<u32>();
-        eif_crc.write(&header_buf[..len_without_crc]);
-
-        let header = EifHeader::from_be_bytes(&header_buf)
-            .map_err(|e| format!("Error while parsing EIF header: {:?}", e))?;
-        curr_seek += EifHeader::size();
-        eif_file
-            .seek(SeekFrom::Start(curr_seek as u64))
-            .map_err(|e| format!("Failed to seek file from start: {:?}", e))?;
-
-        let mut section_buf = vec![0u8; EifSectionHeader::size()];
-        let mut image_hasher = EifHasher::new_without_cache(Sha384::new())
-            .map_err(|e| format!("Could not create image_hasher: {:?}", e))?;
-        let mut bootstrap_hasher = EifHasher::new_without_cache(Sha384::new())
-            .map_err(|e| format!("Could not create bootstrap_hasher: {:?}", e))?;
-        let mut app_hasher = EifHasher::new_without_cache(Sha384::new())
-            .map_err(|e| format!("Could not create app_hasher: {:?}", e))?;
-        let mut cert_hasher = EifHasher::new_without_cache(Sha384::new())
-            .map_err(|e| format!("Could not create cert_hasher: {:?}", e))?;
-        let mut ramdisk_idx = 0;
-        let mut signature_section = None;
-        let mut metadata = json!(null);
-
-        // Read all section headers and treat by type
-        while eif_file
-            .read_exact(&mut section_buf)
-            .map_err(|e| format!("Error while reading EIF header: {:?}", e))
-            .is_ok()
-        {
-            let section = EifSectionHeader::from_be_bytes(&section_buf)
-                .map_err(|e| format!("Error extracting EIF section header: {:?}", e))?;
-            eif_crc.write(&section_buf);
-
-            let mut buf = vec![0u8; section.section_size as usize];
-            curr_seek += EifSectionHeader::size();
-            eif_file
-                .seek(SeekFrom::Start(curr_seek as u64))
-                .map_err(|e| format!("Failed to seek after EIF header: {:?}", e))?;
-            eif_file
-                .read_exact(&mut buf)
-                .map_err(|e| format!("Error while reading kernel from EIF: {:?}", e))?;
-            eif_crc.write(&buf);
-
-            curr_seek += section.section_size as usize;
-            eif_file
-                .seek(SeekFrom::Start(curr_seek as u64))
-                .map_err(|e| format!("Failed to seek after EIF section: {:?}", e))?;
-
-            match section.section_type {
-                EifSectionType::EifSectionKernel | EifSectionType::EifSectionCmdline => {
-                    image_hasher.write_all(&buf).map_err(|e| {
-                        format!("Failed to write EIF section to image_hasher: {:?}", e)
-                    })?;
-                    bootstrap_hasher.write_all(&buf).map_err(|e| {
-                        format!("Failed to write EIF section to bootstrap_hasher: {:?}", e)
-                    })?;
-                }
-                EifSectionType::EifSectionRamdisk => {
-                    image_hasher.write_all(&buf).map_err(|e| {
-                        format!("Failed to write ramdisk section to image_hasher: {:?}", e)
-                    })?;
-                    if ramdisk_idx == 0 {
-                        bootstrap_hasher.write_all(&buf).map_err(|e| {
-                            format!(
-                                "Failed to write ramdisk section to bootstrap_hasher: {:?}",
-                                e
-                            )
-                        })?;
-                    } else {
-                        app_hasher.write_all(&buf).map_err(|e| {
-                            format!("Failed to write ramdisk section to app_hasher: {:?}", e)
-                        })?;
-                    }
-                    ramdisk_idx += 1;
-                }
-                EifSectionType::EifSectionSignature => {
-                    signature_section = Some(buf.clone());
-                    // Deserialize PCR0 signature structure and write it to the hasher
-                    let des_sign: Vec<PcrSignature> = from_slice(&buf[..])
-                        .map_err(|e| format!("Error deserializing certificate: {:?}", e))?;
-
-                    let cert = openssl::x509::X509::from_pem(&des_sign[0].signing_certificate)
-                        .map_err(|e| format!("Error while digesting certificate: {:?}", e))?;
-                    let cert_der = cert.to_der().map_err(|e| {
-                        format!("Failed to deserialize signing certificate: {:?}", e)
-                    })?;
-                    cert_hasher.write_all(&cert_der).map_err(|e| {
-                        format!("Failed to write signature section to cert_hasher: {:?}", e)
-                    })?;
-                }
-                EifSectionType::EifSectionMetadata => {
-                    metadata = serde_json::from_slice(&buf[..])
-                        .map_err(|e| format!("Error deserializing metadata: {:?}", e))?;
-                }
-                EifSectionType::EifSectionInvalid => {
-                    return Err("Found invalid EIF section".to_string());
-                }
-            }
-        }
-
-        Ok(EifReader {
-            header,
-            signature_section,
-            image_hasher,
-            bootstrap_hasher,
-            app_hasher,
-            cert_hasher,
-            eif_crc: eif_crc.sum32(),
-            sign_check: None,
-            metadata,
-        })
-    }
-
-    pub fn get_name(&self) -> Option<Value> {
-        self.metadata.get("ImageName").cloned()
-    }
-
-    pub fn get_version(&self) -> Option<Value> {
-        self.metadata.get("ImageVersion").cloned()
-    }
-
-    pub fn get_generated_meta(&self) -> Option<Value> {
-        self.metadata.get("GeneratedMetadata").cloned()
-    }
-
-    pub fn get_docker_info(&self) -> Option<Value> {
-        self.metadata.get("DockerInfo").cloned()
-    }
-
-    pub fn get_custom_meta(&self) -> Option<Value> {
-        self.metadata.get("CustomMetadata").cloned()
-    }
-
-    /// Returns deserialized header section
-    pub fn get_header(&self) -> EifHeader {
-        self.header
-    }
-
-    /// Compare header CRC to the one we computed
-    pub fn check_crc(&self) -> bool {
-        self.header.eif_crc32 == self.eif_crc
-    }
-
-    /// Extract signature section from EIF and parse the signing certificate
-    pub fn get_certificate_info(
-        &mut self,
-        measurements: BTreeMap<String, String>,
-    ) -> Result<SignCertificateInfo, String> {
-        let signature_buf = match &self.signature_section {
-            Some(section) => section,
-            None => {
-                return Err("Signature section missing from EIF.".to_string());
-            }
-        };
-        // Deserialize PCR0 signature structure and write it to the hasher
-        let des_sign: Vec<PcrSignature> = from_slice(&signature_buf[..])
-            .map_err(|e| format!("Error deserializing certificate: {:?}", e))?;
-
-        let cert = openssl::x509::X509::from_pem(&des_sign[0].signing_certificate)
-            .map_err(|e| format!("Error while digesting certificate: {:?}", e))?;
-
-        // Parse issuer into a BTreeMap
-        let mut issuer_name = BTreeMap::new();
-        for (_, e) in cert.issuer_name().entries().enumerate() {
-            issuer_name.insert(
-                e.object().to_string(),
-                format!("{:?}", e.data()).replace(&['\"'][..], ""),
-            );
-        }
-
-        let algorithm = format!("{:#?}", cert.signature_algorithm().object());
-
-        // Get measured PCR0 signature payload
-        let pcr0 = match measurements.get("PCR0") {
-            Some(pcr) => pcr,
-            None => {
-                return Err("Failed to get PCR0.".to_string());
-            }
-        };
-        let pcr_info = PcrInfo::new(
-            0,
-            hex::decode(pcr0).map_err(|e| format!("Error while decoding PCR0: {:?}", e))?,
-        );
-
-        let measured_payload =
-            to_vec(&pcr_info).map_err(|e| format!("Could not serialize PCR info: {:?}", e))?;
-
-        // Extract public key from certificate and convert to PKey
-        let public_key = &cert
-            .public_key()
-            .map_err(|e| format!("Failed to get public key: {:?}", e))?;
-        let coses_key = PKey::public_key_from_pem(
-            &public_key
-                .public_key_to_pem()
-                .map_err(|e| format!("Failed to serialize public key: {:?}", e))?[..],
-        )
-        .map_err(|e| format!("Failed to decode key nit elliptic key structure: {:?}", e))?;
-
-        // Deserialize COSE signature and extract the payload using the public key
-        let pcr_sign = CoseSign1::from_bytes(&des_sign[0].signature[..])
-            .map_err(|e| format!("Failed to deserialize signature: {:?}", e))?;
-        let coses_payload = pcr_sign
-            .get_payload(Some(coses_key.as_ref()))
-            .map_err(|e| format!("Failed to get signature payload: {:?}", e))?;
-
-        self.sign_check = Some(measured_payload == coses_payload);
-
-        return Ok(SignCertificateInfo {
-            issuer_name,
-            algorithm,
-            not_before: format!("{:#?}", cert.not_before()),
-            not_after: format!("{:#?}", cert.not_after()),
-            // Change format from [\  XX, \  X, ..] to XX:XX:XX...
-            signature: format!("{:02X?}", cert.signature().as_slice().to_vec())
-                .replace(&vec!['[', ']'][..], "")
-                .replace(", ", ":"),
-        });
     }
 }

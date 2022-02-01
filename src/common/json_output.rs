@@ -4,9 +4,9 @@
 #![deny(warnings)]
 #![allow(clippy::too_many_arguments)]
 
-use eif_utils::SignCertificateInfo;
+use eif_defs::EifIdentityInfo;
+use eif_utils::eif_reader::SignCertificateInfo;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// The information to be provided for a `describe-enclaves` request.
@@ -47,15 +47,15 @@ pub struct EnclaveDescribeInfo {
     /// Assigned or default EIF name
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ImageName")]
-    pub img_name: Option<Value>,
+    pub img_name: Option<String>,
     #[serde(rename = "ImageVersion")]
     /// Assigned or default EIF version
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub img_version: Option<Value>,
+    pub img_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "Metadata")]
     /// EIF metadata
-    pub metadata: Option<DescribeMetadata>,
+    pub metadata: Option<MetadataDescribeInfo>,
 }
 
 impl EnclaveDescribeInfo {
@@ -70,9 +70,9 @@ impl EnclaveDescribeInfo {
         state: String,
         flags: String,
         build_info: Option<EnclaveBuildInfo>,
-        img_name: Option<Value>,
-        img_version: Option<Value>,
-        metadata: Option<DescribeMetadata>,
+        img_name: Option<String>,
+        img_version: Option<String>,
+        metadata: Option<MetadataDescribeInfo>,
     ) -> Self {
         EnclaveDescribeInfo {
             enclave_name,
@@ -183,10 +183,10 @@ impl EnclaveBuildInfo {
 
 /// The information to be provided for a `describe-eif` request.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct DescribeEifInfo {
+pub struct EifDescribeInfo {
     #[serde(rename = "EifVersion")]
     /// EIF version.
-    pub version: String,
+    pub version: u16,
     #[serde(flatten)]
     /// Contains the PCR values.
     pub build_info: EnclaveBuildInfo,
@@ -207,47 +207,20 @@ pub struct DescribeEifInfo {
     #[serde(rename = "ImageName")]
     /// Assigned or default EIF name
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub img_name: Option<Value>,
+    pub img_name: Option<String>,
     #[serde(rename = "ImageVersion")]
     /// Assigned or default EIF version
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub img_version: Option<Value>,
+    pub img_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "Metadata")]
     /// EIF metadata
-    pub metadata: Option<DescribeMetadata>,
-}
-
-impl DescribeEifInfo {
-    /// Create describe information structure for EIF.
-    pub fn new(
-        version: String,
-        build_info: EnclaveBuildInfo,
-        is_signed: bool,
-        cert_info: Option<SignCertificateInfo>,
-        crc_check: bool,
-        sign_check: Option<bool>,
-        img_name: Option<Value>,
-        img_version: Option<Value>,
-        metadata: Option<DescribeMetadata>,
-    ) -> Self {
-        DescribeEifInfo {
-            version,
-            build_info,
-            is_signed,
-            cert_info,
-            crc_check,
-            sign_check,
-            img_name,
-            img_version,
-            metadata,
-        }
-    }
+    pub metadata: Option<MetadataDescribeInfo>,
 }
 
 /// Metadata to be included in the describe output
 #[derive(Clone, Serialize, Deserialize)]
-pub struct DescribeMetadata {
+pub struct MetadataDescribeInfo {
     #[serde(rename = "BuildTime")]
     /// Time of the build
     pub build_time: String,
@@ -265,51 +238,25 @@ pub struct DescribeMetadata {
     pub kernel_version: String,
     #[serde(rename = "DockerInfo")]
     /// Docker image information
-    pub docker_info: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub docker_info: serde_json::Value,
+    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
     #[serde(rename = "CustomMetadata")]
     #[serde(flatten)]
     /// Metadata added by the user as JSON
-    pub custom_metadata: Option<Value>,
+    pub custom_metadata: serde_json::Value,
 }
 
-impl DescribeMetadata {
+impl MetadataDescribeInfo {
     /// Construct metadata output struct
-    pub fn new(
-        generated_metadata: Value,
-        docker_info: Value,
-        custom_metadata: Option<Value>,
-    ) -> Result<Self, String> {
-        let serde_value: BTreeMap<String, String> = serde_json::from_value(generated_metadata)
-            .map_err(|e| format!("Error deserializing generated metadata: {:?}", e))?;
-        let build_time = match serde_value.get("BuildTime") {
-            Some(val) => val.to_string(),
-            None => return Err("Missing build time field.".to_string()),
-        };
-        let build_tool = match serde_value.get("BuildTool") {
-            Some(val) => val.to_string(),
-            None => return Err("Missing build tool field.".to_string()),
-        };
-        let tool_version = match serde_value.get("BuildToolVersion") {
-            Some(val) => val.to_string(),
-            None => return Err("Missing build tool version field.".to_string()),
-        };
-        let operating_system = match serde_value.get("OperatingSystem") {
-            Some(val) => val.to_string(),
-            None => return Err("Missing operating system field.".to_string()),
-        };
-        let kernel_version = match serde_value.get("KernelVersion") {
-            Some(val) => val.to_string(),
-            None => return Err("Missing kernel version field.".to_string()),
-        };
-        Ok(DescribeMetadata {
-            build_time,
-            build_tool,
-            tool_version,
-            operating_system,
-            kernel_version,
-            docker_info,
-            custom_metadata,
-        })
+    pub fn new(eif_info: EifIdentityInfo) -> Self {
+        MetadataDescribeInfo {
+            build_time: eif_info.build_info.build_time,
+            build_tool: eif_info.build_info.build_tool,
+            tool_version: eif_info.build_info.build_tool_version,
+            operating_system: eif_info.build_info.img_os,
+            kernel_version: eif_info.build_info.img_kernel,
+            docker_info: eif_info.docker_info,
+            custom_metadata: eif_info.custom_info,
+        }
     }
 }

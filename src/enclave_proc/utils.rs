@@ -7,7 +7,7 @@ use std::fs::metadata;
 use std::fs::File;
 use std::io::Read;
 
-use crate::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo};
+use crate::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, MetadataDescribeInfo};
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::enclave_proc::resource_manager::EnclaveManager;
 use crate::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
@@ -25,19 +25,6 @@ pub const MiB: u64 = 1024 * KiB;
 #[allow(non_upper_case_globals)]
 pub const GiB: u64 = 1024 * MiB;
 
-/// The amount of information required at describe-enclaves.
-/// Added for backwards compatibility between NitroCLI versions
-/// that display different describe outputs.
-#[derive(Clone, Copy)]
-pub enum InfoLevel {
-    /// Standard output with minimal information
-    Basic,
-    /// Adds PCR values on top of Basic
-    Measured,
-    /// Adds EIF metadata on top of Measured
-    Metadata,
-}
-
 /// Get a string representation of the bit-mask which holds the enclave launch flags.
 pub fn flags_to_string(flags: u64) -> String {
     if flags & NE_ENCLAVE_DEBUG_MODE == NE_ENCLAVE_DEBUG_MODE {
@@ -51,23 +38,37 @@ pub fn flags_to_string(flags: u64) -> String {
 /// Obtain the enclave information requested by the `describe-enclaves` command.
 pub fn get_enclave_describe_info(
     enclave_manager: &EnclaveManager,
+    with_metadata: bool,
 ) -> NitroCliResult<EnclaveDescribeInfo> {
-    let (slot_uid, enclave_cid, cpus_count, cpu_ids, memory_mib, flags, state) =
+    let (slot_uid, enclave_cid, cpu_count, cpu_ids, memory_mib, flags, state) =
         enclave_manager.get_description_resources()?;
-    let info = EnclaveDescribeInfo::new(
-        None,
-        generate_enclave_id(slot_uid)?,
+    let mut describe_meta: Option<MetadataDescribeInfo> = None;
+    let mut img_name: Option<String> = None;
+    let mut img_version: Option<String> = None;
+
+    if with_metadata {
+        if let Some(meta) = enclave_manager.get_metadata()? {
+            img_name = Some(meta.img_name.clone());
+            img_version = Some(meta.img_version.clone());
+            describe_meta = Some(MetadataDescribeInfo::new(meta));
+        }
+    }
+
+    let info = EnclaveDescribeInfo {
+        enclave_name: Some(enclave_manager.enclave_name.clone()),
+        enclave_id: generate_enclave_id(slot_uid)?,
+        process_id: std::process::id(),
         enclave_cid,
-        cpus_count,
+        cpu_count,
         cpu_ids,
         memory_mib,
-        state.to_string(),
-        flags_to_string(flags),
-        None,
-        None,
-        None,
-        None,
-    );
+        state: state.to_string(),
+        flags: flags_to_string(flags),
+        build_info: Some(enclave_manager.get_measurements()?),
+        img_name,
+        img_version,
+        metadata: describe_meta,
+    };
     Ok(info)
 }
 

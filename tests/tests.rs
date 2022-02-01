@@ -8,7 +8,7 @@ mod tests {
     use nitro_cli::common::commands_parser::{
         BuildEnclavesArgs, RunEnclavesArgs, TerminateEnclavesArgs,
     };
-    use nitro_cli::common::json_output::{DescribeEifInfo, EnclaveDescribeInfo};
+    use nitro_cli::common::json_output::EnclaveDescribeInfo;
     use nitro_cli::enclave_proc::commands::{describe_enclaves, run_enclaves, terminate_enclaves};
     use nitro_cli::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
     use nitro_cli::enclave_proc::utils::{
@@ -466,7 +466,7 @@ mod tests {
 
         assert_eq!(boot, true);
 
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
+        let info = get_enclave_describe_info(&enclave_manager, false).unwrap();
         let replies: Vec<EnclaveDescribeInfo> = vec![info];
         let reply = &replies[0];
         let flags = &reply.flags;
@@ -483,7 +483,7 @@ mod tests {
 
         terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
 
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
+        let info = get_enclave_describe_info(&enclave_manager, false).unwrap();
 
         assert_eq!(info.enclave_cid, 0);
         assert_eq!(info.cpu_count, 0);
@@ -584,7 +584,7 @@ mod tests {
             _ => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0),
         };
 
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
+        let info = get_enclave_describe_info(&enclave_manager, false).unwrap();
         let replies: Vec<EnclaveDescribeInfo> = vec![info];
         let _reply = &replies[0];
 
@@ -645,7 +645,7 @@ mod tests {
             _ => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0),
         };
 
-        let info = get_enclave_describe_info(&enclave_manager).unwrap();
+        let info = get_enclave_describe_info(&enclave_manager, false).unwrap();
         let replies: Vec<EnclaveDescribeInfo> = vec![info];
         let _reply = &replies[0];
 
@@ -723,11 +723,11 @@ mod tests {
         };
         let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let mut enclave_manager = run_result.enclave_manager;
-        let mut pcr_thread = run_result.pcr_thread;
+        let mut describe_thread = run_result.describe_thread;
 
-        assert!(pcr_thread.is_some());
+        assert!(describe_thread.is_some());
 
-        let thread_result = pcr_thread
+        let thread_result = describe_thread
             .take()
             .unwrap()
             .join()
@@ -735,10 +735,10 @@ mod tests {
             .expect("Failed to save PCRs.");
 
         enclave_manager
-            .set_measurements(thread_result.0)
+            .set_measurements(thread_result.measurements)
             .expect("Failed to set measurements inside enclave handle.");
 
-        get_enclave_describe_info(&enclave_manager).unwrap();
+        get_enclave_describe_info(&enclave_manager, false).unwrap();
         let build_info = enclave_manager.get_measurements().unwrap();
         let enclave_name = enclave_manager.enclave_name.clone();
 
@@ -818,8 +818,7 @@ mod tests {
             &args.img_version,
             &args.metadata,
         )
-        .expect("Docker build failed")
-        .1;
+        .expect("Docker build failed");
 
         setup_env();
         let run_args = RunEnclavesArgs {
@@ -834,11 +833,11 @@ mod tests {
         };
         let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let mut enclave_manager = run_result.enclave_manager;
-        let mut pcr_thread = run_result.pcr_thread;
+        let mut describe_thread = run_result.describe_thread;
 
-        assert!(pcr_thread.is_some());
+        assert!(describe_thread.is_some());
 
-        let thread_result = pcr_thread
+        let thread_result = describe_thread
             .take()
             .unwrap()
             .join()
@@ -846,43 +845,23 @@ mod tests {
             .expect("Failed to save PCRs.");
 
         enclave_manager
-            .set_measurements(thread_result.0)
-            .expect("Failed to set measuements inside enclave handle.");
+            .set_measurements(thread_result.measurements)
+            .expect("Failed to set measurements inside enclave handle.");
+        let metadata = thread_result.metadata.expect("Failed to fetch metadata");
         enclave_manager
-            .set_metadata(thread_result.1)
+            .set_metadata(metadata.clone())
             .expect("Failed to set metadata inside enclave handle.");
 
-        let metadata = enclave_manager.get_metadata().unwrap();
-
+        assert_eq!(metadata.build_info.img_os, "Linux");
+        assert_eq!(metadata.build_info.build_tool, env!("CARGO_PKG_NAME"));
         assert_eq!(
-            *metadata
-                .get("GeneratedMetadata")
-                .unwrap()
-                .get("OperatingSystem")
-                .unwrap(),
-            json!("Linux")
-        );
-        assert_eq!(
-            *metadata
-                .get("GeneratedMetadata")
-                .unwrap()
-                .get("BuildTool")
-                .unwrap(),
-            json!(env!("CARGO_PKG_NAME").to_string())
-        );
-        assert_eq!(
-            *metadata
-                .get("GeneratedMetadata")
-                .unwrap()
-                .get("BuildToolVersion")
-                .unwrap(),
-            json!(env!("CARGO_PKG_VERSION").to_string())
+            metadata.build_info.build_tool_version,
+            env!("CARGO_PKG_VERSION")
         );
         #[cfg(target_arch = "x86_64")]
         assert_eq!(
             *metadata
-                .get("DockerInfo")
-                .unwrap()
+                .docker_info
                 .get("RepoTags")
                 .unwrap()
                 .get(0)
@@ -892,8 +871,7 @@ mod tests {
         #[cfg(target_arch = "aarch64")]
         assert_eq!(
             *metadata
-                .get("DockerInfo")
-                .unwrap()
+                .docker_info
                 .get("RepoTags")
                 .unwrap()
                 .get(0)
@@ -901,27 +879,15 @@ mod tests {
             json!("667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64")
         );
         assert_eq!(
-            *metadata
-                .get("CustomMetadata")
-                .unwrap()
-                .get("AppVersion")
-                .unwrap(),
+            *metadata.custom_info.get("AppVersion").unwrap(),
             json!("3.2")
         );
         assert_eq!(
-            *metadata
-                .get("CustomMetadata")
-                .unwrap()
-                .get("TestField")
-                .unwrap(),
+            *metadata.custom_info.get("TestField").unwrap(),
             json!("Some info")
         );
         assert_eq!(
-            *metadata
-                .get("CustomMetadata")
-                .unwrap()
-                .get("CustomField")
-                .unwrap(),
+            *metadata.custom_info.get("CustomField").unwrap(),
             json!("Added by user")
         );
 
@@ -974,7 +940,7 @@ mod tests {
         let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let mut enclave_manager = run_result.enclave_manager;
 
-        get_enclave_describe_info(&enclave_manager).unwrap();
+        get_enclave_describe_info(&enclave_manager, false).unwrap();
         let enclave_name = enclave_manager.enclave_name.clone();
 
         // Assert that EIF name has been set
@@ -1058,7 +1024,7 @@ mod tests {
 
         let eif_info = describe_eif(args.output).unwrap();
 
-        assert_eq!(eif_info.version, "4");
+        assert_eq!(eif_info.version, 4);
         assert_eq!(eif_info.is_signed, false);
         assert!(eif_info.cert_info.is_none());
         assert!(eif_info.crc_check);
@@ -1100,7 +1066,7 @@ mod tests {
 
         let eif_info = describe_eif(args.output).unwrap();
 
-        assert_eq!(eif_info.version, "4");
+        assert_eq!(eif_info.version, 4);
         assert_eq!(eif_info.is_signed, true);
         assert!(eif_info.cert_info.is_some());
         assert!(eif_info.crc_check);

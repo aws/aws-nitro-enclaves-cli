@@ -33,14 +33,13 @@ use super::common::{construct_error_message, enclave_proc_command_send_single, n
 use super::common::{
     EnclaveProcessCommandType, ExitGracefully, NitroCliErrorEnum, NitroCliFailure, NitroCliResult,
 };
-use crate::common::commands_parser::{DescribeArgs, EmptyArgs, RunEnclavesArgs};
+use crate::common::commands_parser::{DescribeEnclavesArgs, EmptyArgs, RunEnclavesArgs};
 use crate::common::logger::EnclaveProcLogWriter;
 use crate::common::signal_handler::SignalHandler;
 use crate::enclave_proc::connection::safe_conn_println;
-use crate::enclave_proc::utils::InfoLevel;
 use crate::new_nitro_cli_failure;
 
-use commands::{describe_enclaves, run_enclaves, terminate_enclaves, PcrThread};
+use commands::{describe_enclaves, run_enclaves, terminate_enclaves, DescribeThread};
 use connection::Connection;
 use connection_listener::ConnectionListener;
 use resource_manager::EnclaveManager;
@@ -216,6 +215,40 @@ fn try_handle_enclave_event(connection: &Connection) -> NitroCliResult<HandledEn
     Ok(HandledEnclaveEvent::None)
 }
 
+/// Fetch result of describe thread which was started during start of enclave
+/// After result is fetched and stored to enclave manager thread is set to None
+/// Thus, actual fetching happens only the first time after enclave is started
+fn fetch_describe_result(
+    describe_thread: &mut DescribeThread,
+    enclave_manager: &mut EnclaveManager,
+) -> NitroCliResult<()> {
+    if let Some(thread) = describe_thread.take() {
+        let result = thread
+            .join()
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Termination thread join failed: {:?}", e),
+                    NitroCliErrorEnum::ThreadJoinFailure
+                )
+            })?
+            .map_err(|e| e.add_subaction("Failed to save PCR values".to_string()))?;
+
+        enclave_manager
+            .set_measurements(result.measurements)
+            .map_err(|e| {
+                e.add_subaction("Failed to set measurements inside enclave handle.".to_string())
+            })?;
+
+        if let Some(metadata) = result.metadata {
+            enclave_manager.set_metadata(metadata).map_err(|e| {
+                e.add_subaction("Failed to set metadata inside enclave handle.".to_string())
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Handle a single command, returning whenever an error occurs.
 fn handle_command(
     cmd: EnclaveProcessCommandType,
@@ -224,8 +257,7 @@ fn handle_command(
     conn_listener: &mut ConnectionListener,
     enclave_manager: &mut EnclaveManager,
     terminate_thread: &mut Option<std::thread::JoinHandle<()>>,
-    pcr_thread: &mut PcrThread,
-    add_info: &mut InfoLevel,
+    describe_thread: &mut DescribeThread,
 ) -> NitroCliResult<(i32, bool)> {
     Ok(match cmd {
         EnclaveProcessCommandType::Run => {
@@ -244,8 +276,7 @@ fn handle_command(
                         .set_action("Run Enclave".to_string())
                 })?;
                 *enclave_manager = run_result.enclave_manager;
-                *pcr_thread = run_result.pcr_thread;
-                *add_info = InfoLevel::Measured;
+                *describe_thread = run_result.describe_thread;
 
                 info!("Enclave ID = {}", enclave_manager.enclave_id);
                 logger
@@ -358,7 +389,7 @@ fn handle_command(
         }
 
         EnclaveProcessCommandType::Describe => {
-            let describe_args = connection.read::<DescribeArgs>().map_err(|e| {
+            let describe_args = connection.read::<DescribeEnclavesArgs>().map_err(|e| {
                 e.add_subaction("Failed to get describe arguments".to_string())
                     .set_action("Describe Enclave".to_string())
             })?;
@@ -367,50 +398,15 @@ fn handle_command(
                     .set_action("Describe Enclaves".to_string())
             })?;
 
-            // Evaluate thread result at first describe, then set thread to None.
-            if pcr_thread.is_some() {
-                let result = match pcr_thread.take() {
-                    Some(thread) => thread
-                        .join()
-                        .map_err(|e| {
-                            new_nitro_cli_failure!(
-                                &format!("Termination thread join failed: {:?}", e),
-                                NitroCliErrorEnum::ThreadJoinFailure
-                            )
-                        })?
-                        .map_err(|e| e.add_subaction("Failed to save PCR values".to_string()))?,
-                    None => {
-                        return Err(new_nitro_cli_failure!(
-                            "Thread handle not found",
-                            NitroCliErrorEnum::ThreadJoinFailure
-                        ));
-                    }
-                };
-                let measurements = result.0;
-                let metadata = result.1;
-                enclave_manager
-                    .set_measurements(measurements)
-                    .map_err(|e| {
-                        e.add_subaction(
-                            "Failed to set measurements inside enclave handle.".to_string(),
-                        )
-                    })?;
-                enclave_manager.set_metadata(metadata).map_err(|e| {
-                    e.add_subaction("Failed to set metadata inside enclave handle.".to_string())
-                })?;
-                *pcr_thread = None;
-            }
+            // Evaluate describe thread result if needed
+            fetch_describe_result(describe_thread, enclave_manager)?;
 
-            if describe_args.metadata {
-                *add_info = InfoLevel::Metadata;
-            } else {
-                *add_info = InfoLevel::Measured;
-            }
-
-            describe_enclaves(enclave_manager, connection, *add_info).map_err(|e| {
-                e.add_subaction("Failed to describe enclave".to_string())
-                    .set_action("Describe Enclaves".to_string())
-            })?;
+            describe_enclaves(enclave_manager, connection, describe_args.metadata).map_err(
+                |e| {
+                    e.add_subaction("Failed to describe enclave".to_string())
+                        .set_action("Describe Enclaves".to_string())
+                },
+            )?;
             (0, false)
         }
 
@@ -428,10 +424,9 @@ fn process_event_loop(
     let mut conn_listener = ConnectionListener::new()?;
     let mut enclave_manager = EnclaveManager::default();
     let mut terminate_thread: Option<std::thread::JoinHandle<()>> = None;
-    let mut pcr_thread: PcrThread = None;
+    let mut describe_thread: DescribeThread = None;
     let mut done = false;
     let mut ret_value = Ok(());
-    let mut add_info = InfoLevel::Basic;
 
     // Start the signal handler before spawning any other threads. This is done since the
     // handler will mask all relevant signals from the current thread and this setting will
@@ -489,8 +484,7 @@ fn process_event_loop(
             &mut conn_listener,
             &mut enclave_manager,
             &mut terminate_thread,
-            &mut pcr_thread,
-            &mut add_info,
+            &mut describe_thread,
         );
 
         // Obtain the status code and whether the event loop must be exited.

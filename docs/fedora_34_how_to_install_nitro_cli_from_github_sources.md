@@ -41,7 +41,7 @@ $ sudo dnf groupinstall "Development Tools"
 $ uname -r
 5.13.13-200.fc34.x86_64
 
-$ grep /boot/config-5.13.13-200.fc34.x86_64 -e NITRO_ENCLAVES
+$ grep /boot/config-$(uname -r) -e NITRO_ENCLAVES
 CONFIG_NITRO_ENCLAVES=m
 
 $ lsmod | grep nitro_enclaves

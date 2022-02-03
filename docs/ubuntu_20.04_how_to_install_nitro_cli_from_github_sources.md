@@ -41,7 +41,7 @@ CONFIG_NITRO_ENCLAVES=m
 
 $ sudo apt-get install linux-modules-extra-aws
 
-$  ls -l /usr/lib/modules/$(uname -r)/kernel/drivers/virt/nitro_enclaves/nitro_enclaves.ko
+$ ls -l /usr/lib/modules/$(uname -r)/kernel/drivers/virt/nitro_enclaves/nitro_enclaves.ko
 -rw-r--r-- 1 root root 63825 Aug 12 04:21 /usr/lib/modules/5.11.0-1016-aws/kernel/drivers/virt/nitro_enclaves/nitro_enclaves.ko
 
 $ sudo insmod /usr/lib/modules/$(uname -r)/kernel/drivers/virt/nitro_enclaves/nitro_enclaves.ko

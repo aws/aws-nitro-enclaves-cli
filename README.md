@@ -31,6 +31,7 @@ This repository contains a collection of tools and commands used for managing th
       - Amazon Linux 2022 v5.10+ kernel starting with kernel-5.10.75-82.359.amzn2022.aarch64
       - CentOS Stream v4.18 kernel starting with kernel-4.18.0-358.el8.aarch64
       - CentOS Stream v5.14+ kernel starting with kernel-5.14.0-24.el9.aarch64
+      - Fedora v5.16+ kernel (e.g. kernel-5.16.5-200.fc35.aarch64)
       - Ubuntu v5.4 kernel starting with linux-aws 5.4.0-1064-aws aarch64
       - Ubuntu v5.13+ kernel starting with linux-aws 5.13.0-1012-aws aarch64
 

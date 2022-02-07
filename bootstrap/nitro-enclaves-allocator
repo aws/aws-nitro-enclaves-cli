@@ -3,7 +3,7 @@
 # This script is executed every time the NE resources configuration service
 # is restarted.
 # Its purpose is to reserve the requested memory and CPUs (specified in
-# /etc/ne_mem and [/etc/ne_cpu_count or /etc/ne_cpu_ids]).
+# /etc/nitro_enclaves/allocator.yaml).
 
 # The file which holds the CPU pool.
 CPU_POOL_FILE="/sys/module/nitro_enclaves/parameters/ne_cpus"

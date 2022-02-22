@@ -1,6 +1,8 @@
 *.o
 enclave
 build/
+crates-dependencies/
+nitro-cli-dependencies.tar.gz
 .build*
 */.*
 **/target

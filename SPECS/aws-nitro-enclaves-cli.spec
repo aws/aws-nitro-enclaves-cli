@@ -17,7 +17,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.1.0
+Version:    1.2.0
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -192,6 +192,19 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Tue Feb 22 2022 Eugene Koira <eugkoira@amazon.com> - 1.2.0-0
+- Add support of building EIF with custom name, version and metadata.
+- Add support of checking EIF metadata within describe-eif and describe-enclave commands.
+- Upgrade EIF to v4 containing metadata section.
+- Update enclave image blobs to latest v4.14 kernel version.
+- Add option to attach the enclave console immediately after starting the enclave.
+- Update dependencies to fix cargo audit warnings.
+- Update README to include references to official documentation.
+- Update init blob based on the latest codebase version.
+- Use latest cargo-about and cargo-audit 
+- Update cargo dependencies.
+- Fix CI tests for ARM.
+
 * Thu Oct 28 2021 Andra Paraschiv <andraprs@amazon.com> - 1.1.0-0
 - Update the enclave image blobs e.g. enclave kernel and NSM driver, to include
   the hwrng functionality from the NSM driver for entropy seeding.

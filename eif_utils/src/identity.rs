@@ -78,17 +78,5 @@ pub fn parse_custom_metadata(path: &str) -> Result<serde_json::Value, String> {
     let json_value: serde_json::Value = serde_json::from_reader(custom_file)
         .map_err(|e| format!("Failed to deserialize json: {}", e))?;
 
-    // Check json format, all keys and values should be: "String": "String"
-    let json_map = match json_value.as_object() {
-        Some(map) => map.to_owned(),
-        None => return Err("JSON does not respect format String:String".to_string()),
-    };
-
-    for (_key, value) in json_map {
-        if !value.is_string() {
-            return Err("JSON does not respect format String:String".to_string());
-        }
-    }
-
     Ok(json_value)
 }

@@ -45,7 +45,7 @@ instance you are about to run an enclave on.
 4. Launch an enclave with the EIF containing command-executer.
 
 ```
-	$ ./nitro-cli run-enclave --cpu-count 4 --memory 2048 --eif-path command_executer.eif --enclave-cid 16
+	$ nitro-cli run-enclave --cpu-count 4 --memory 2048 --eif-path command-executer.eif --enclave-cid 16
 	Start allocating memory...
 	Started enclave with enclave-cid: 16, memory: 2048 MiB, cpu-ids: [1, 5, 2, 6]
 	{

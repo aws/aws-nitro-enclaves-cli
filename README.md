@@ -117,7 +117,7 @@ This repository contains a collection of tools and commands used for managing th
   - 'build': An automatically-generated directory which stores the build output for various components (the CLI, the command executer etc.)
 
   - 'bootstrap': Various useful scripts for CLI environment configuration, namely:
-      - 'allocatior.yaml': Configuration file for enclave memory and CPUs reservation
+      - 'allocator.yaml': Configuration file for enclave memory and CPUs reservation
       - 'env.sh': A script which inserts the pre-built Nitro Enclaves kernel module, adds the CLI binary directory to $PATH and sets the blobs directory
       - 'nitro-cli-config': A script which can build, configure and install the Nitro Enclaves kernel module, as well as configure the memory and CPUs available for enclave launches (depending on the operation, root privileges may be required)
       - 'nitro-enclaves-allocator': Configuration script for enclave memory and CPUs reservation

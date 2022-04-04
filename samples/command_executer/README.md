@@ -12,37 +12,27 @@ and not in a production environment.
 
 ## Building
 
+To build the `command-executer` binary and create an EIF image, use a makefile from a root repository folder:
 ```
-	$ cargo build --release
+	$ make -C ../../ command-executer
 ```
 
 ## Running
 
 1. Build the project (see above).
 
-2. Use the Dockerfile in resources/ either as an example or as is
-and build an EIF.
-
-```
-	$ export NITRO_CLI_BLOBS=$(realpath ../../blobs/x86_64)
-	$ nitro-cli build-enclave --docker-dir "./resources" --docker-uri mytag --output-file command-executer.eif
-```
 ---
 **NOTES**
 
-* In order to build an EIF as a non-root user, that user must be able to manage
-the docker daemon. Please see
-[the official Docker documentation](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
-to learn how to do that.
-* These steps can either be done on your local machine or on the EC2 instance
+This step can either be done on your local machine or on the EC2 instance
 where you are going to launch the enclave.
 
 ---
 
-3. Copy __both__ the EIF __and__ the `command-executer` binary to the EC2
-instance you are about to run an enclave on.
+2. Copy __both__ the EIF __and__ the `command-executer` binary to the EC2
+instance you are about to run an enclave on. Both can be found under `build` folder of a root of the repository.
 
-4. Launch an enclave with the EIF containing command-executer.
+3. Launch an enclave with the EIF containing command-executer.
 
 ```
 	$ nitro-cli run-enclave --cpu-count 4 --memory 2048 --eif-path command-executer.eif --enclave-cid 16
@@ -63,13 +53,13 @@ instance you are about to run an enclave on.
 	}
 ```
 
-5. Use the command-executer to send shell commands to the enclave
+4. Use the command-executer to send shell commands to the enclave
 
 ```
 	$ ./command-executer run --cid 16 --port 5005 --command "whoami"
 ```
 
-6. Use the command-executer to send files to the enclave (e.g. binaries you built in the instance)
+5. Use the command-executer to send files to the enclave (e.g. binaries you built in the instance)
 
 ```
 	$ ./command-executer send-file --cid 16 --localpath "./stress-ng" --port 5005 --remotepath "/usr/bin/stress-ng"

@@ -45,16 +45,7 @@ const FILE_PCR_STR: &str = "File PCR";
 
 /// *Nitro CLI* application entry point.
 fn main() {
-    // Custom version (possibly including build commit).
-    let commit_id = env!("COMMIT_ID");
-    let version_str: String = match commit_id.len() {
-        0 => env!("CARGO_PKG_VERSION").to_string(),
-        _ => format!(
-            "{} (build commit: {})",
-            env!("CARGO_PKG_VERSION"),
-            commit_id
-        ),
-    };
+    let version_str: String = env!("CARGO_PKG_VERSION").to_string();
 
     // Command-line specification for the Nitro CLI.
     let mut app = create_app!();

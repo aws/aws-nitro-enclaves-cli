@@ -352,7 +352,7 @@ pub fn construct_help_link(error_code_str: String) -> String {
 /// Returns a string containing the backtrace recorded during propagating an error message
 pub fn construct_backtrace(failure_info: &NitroCliFailure) -> String {
     let mut ret = String::new();
-    let commit_id = env!("COMMIT_ID");
+    let version = env!("CARGO_PKG_VERSION").to_string();
 
     ret.push_str(&format!("  Action: {}\n  Subactions:", failure_info.action));
     for subaction in failure_info.subactions.iter().rev() {
@@ -361,13 +361,7 @@ pub fn construct_backtrace(failure_info: &NitroCliFailure) -> String {
     ret.push_str(&format!("\n  Root error file: {}", failure_info.file));
     ret.push_str(&format!("\n  Root error line: {}", failure_info.line));
 
-    ret.push_str(&format!(
-        "\n  Build commit: {}",
-        match commit_id.len() {
-            0 => "not available",
-            _ => commit_id,
-        }
-    ));
+    ret.push_str(&format!("\n  Version: {}", version));
 
     ret
 }

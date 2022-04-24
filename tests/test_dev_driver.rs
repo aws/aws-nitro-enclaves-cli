@@ -420,7 +420,7 @@ mod test_dev_driver {
         let mut enclave = driver.create_enclave().unwrap();
 
         // Start enclave without resources.
-        let result = enclave.start(EnclaveStartInfo::new_empty());
+        let result = enclave.start(EnclaveStartInfo::default());
         assert_eq!(result.is_err(), true);
 
         // Allocate memory for the enclave.
@@ -457,7 +457,7 @@ mod test_dev_driver {
         }
 
         // Start the enclave without cpus.
-        let result = enclave.start(EnclaveStartInfo::new_empty());
+        let result = enclave.start(EnclaveStartInfo::default());
         assert_eq!(result.is_err(), true);
 
         let cpu_info = CpuInfo::new().expect("Failed to obtain CpuInfo.");
@@ -478,7 +478,7 @@ mod test_dev_driver {
         }
 
         // Start enclave without memory.
-        let result = enclave.start(EnclaveStartInfo::new_empty());
+        let result = enclave.start(EnclaveStartInfo::default());
         assert_eq!(result.is_err(), true);
 
         drop(enclave);
@@ -503,7 +503,7 @@ mod test_dev_driver {
             .record_current_line()
             .expect("Failed to record current line");
 
-        let result = enclave.start(EnclaveStartInfo::new_empty());
+        let result = enclave.start(EnclaveStartInfo::default());
         #[cfg(target_arch = "x86_64")]
         assert_eq!(result.is_err(), true);
         #[cfg(target_arch = "aarch64")]
@@ -536,13 +536,13 @@ mod test_dev_driver {
         assert_eq!(result.is_err(), false);
 
         // Start with an invalid flag.
-        let mut enclave_start_info = EnclaveStartInfo::new_empty();
+        let mut enclave_start_info = EnclaveStartInfo::default();
         enclave_start_info.flags = 1234;
         let result = enclave.start(enclave_start_info);
         assert_eq!(result.is_err(), true);
 
         // Start with an invalid CID.
-        let mut enclave_start_info = EnclaveStartInfo::new_empty();
+        let mut enclave_start_info = EnclaveStartInfo::default();
         enclave_start_info.enclave_cid = VMADDR_CID_LOCAL as u64;
         let result = enclave.start(enclave_start_info);
         assert_eq!(result.is_err(), true);
@@ -565,13 +565,13 @@ mod test_dev_driver {
             .expect("Failed to record current line");
 
         // Start the enclave.
-        let result = enclave.start(EnclaveStartInfo::new_empty());
+        let result = enclave.start(EnclaveStartInfo::default());
         assert_eq!(result.is_err(), false);
 
         check_dmesg.expect_no_changes().unwrap();
 
         // Try starting an already running enclave.
-        let result = enclave.start(EnclaveStartInfo::new_empty());
+        let result = enclave.start(EnclaveStartInfo::default());
         assert_eq!(result.is_err(), true);
 
         // Try adding an already added memory region
@@ -658,7 +658,7 @@ mod test_dev_driver {
             }
 
             // Start and stop the enclave
-            let result = enclave.start(EnclaveStartInfo::new_empty());
+            let result = enclave.start(EnclaveStartInfo::default());
             assert_eq!(result.is_err(), false);
         }
     }

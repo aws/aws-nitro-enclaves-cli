@@ -5,14 +5,7 @@
 #![allow(unknown_lints)]
 #![allow(deref_nullptr)]
 
-mod bindings {
-    #![allow(missing_docs)]
-    #![allow(non_camel_case_types)]
-
-    include!(concat!(env!("OUT_DIR"), "/driver_structs.rs"));
-}
-
-use bindings::*;
+use driver_bindings::*;
 use eif_defs::EifIdentityInfo;
 use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
 use libc::c_int;
@@ -730,7 +723,10 @@ impl EnclaveHandle {
 
     /// Start an enclave after providing it with its necessary resources.
     fn start(&mut self, connection: Option<&Connection>) -> NitroCliResult<EnclaveStartInfo> {
-        let mut start = EnclaveStartInfo::new(self);
+        let mut start = EnclaveStartInfo {
+            flags: self.flags,
+            enclave_cid: self.enclave_cid.unwrap_or(0),
+        };
 
         EnclaveHandle::do_ioctl(self.enc_fd, NE_START_ENCLAVE, &mut start)
             .map_err(|e| e.add_subaction("Start enclave ioctl failed".to_string()))?;
@@ -888,24 +884,6 @@ impl Drop for EnclaveHandle {
 
         // Terminate the enclave, notifying of any errors.
         self.terminate_enclave_and_notify();
-    }
-}
-
-impl EnclaveStartInfo {
-    /// Create a new `EnclaveStartInfo` instance from the given enclave handle.
-    fn new(enclave_handle: &EnclaveHandle) -> Self {
-        EnclaveStartInfo {
-            flags: enclave_handle.flags,
-            enclave_cid: enclave_handle.enclave_cid.unwrap_or(0),
-        }
-    }
-
-    /// Create an empty `EnclaveStartInfo` instance.
-    pub fn new_empty() -> Self {
-        EnclaveStartInfo {
-            flags: 0,
-            enclave_cid: 0,
-        }
     }
 }
 

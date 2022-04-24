@@ -1,0 +1,6 @@
+[package]
+name = "driver-bindings"
+version = "0.1.0"
+authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
+edition = "2018"
+description = "Rust FFI bindings to Linux Nitro Enclaves driver generated using bindgen."

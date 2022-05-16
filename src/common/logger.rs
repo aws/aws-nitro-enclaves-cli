@@ -3,10 +3,8 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-use chrono::offset::{Local, Utc};
-use chrono::DateTime;
 use flexi_logger::writers::LogWriter;
-use flexi_logger::{DeferredNow, LogTarget, Record};
+use flexi_logger::{DeferredNow, Record};
 use nix::unistd::Uid;
 use std::env;
 use std::fs::{File, OpenOptions, Permissions};
@@ -15,6 +13,8 @@ use std::ops::{Deref, DerefMut};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use crate::new_nitro_cli_failure;
@@ -87,10 +87,16 @@ impl EnclaveProcLogWriter {
     }
 
     /// Generate a single message string.
-    fn create_msg(&self, now: &DateTime<Local>, record: &Record) -> NitroCliResult<String> {
-        // UTC timestamp according to RFC 2822
-        let timestamp = DateTime::<Utc>::from_utc(now.naive_utc(), Utc)
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    fn create_msg(&self, now: &OffsetDateTime, record: &Record) -> NitroCliResult<String> {
+        let timestamp = now.format(&Rfc3339).map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!(
+                    "Datetime '{}' cannot be converted to RFC3339 format: {}",
+                    now, err
+                ),
+                NitroCliErrorEnum::LoggerError
+            )
+        })?;
         let logger_id = self.logger_id.lock().map_err(|e| {
             new_nitro_cli_failure!(
                 &format!("Failed to acquire logger ID lock: {:?}", e),
@@ -225,8 +231,14 @@ pub fn init_logger() -> NitroCliResult<EnclaveProcLogWriter> {
     let log_writer = EnclaveProcLogWriter::new()?;
 
     // Initialize logging with the new log writer.
-    flexi_logger::Logger::with_env_or_str(DEFAULT_LOG_LEVEL)
-        .log_target(LogTarget::Writer(Box::new(log_writer.clone())))
+    flexi_logger::Logger::try_with_env_or_str(DEFAULT_LOG_LEVEL)
+        .map_err(|_| {
+            new_nitro_cli_failure!(
+                &format!("DEFAULT_LOG_LEVEL is malformed: {}", DEFAULT_LOG_LEVEL),
+                NitroCliErrorEnum::LoggerError
+            )
+        })?
+        .log_to_writer(Box::new(log_writer.clone()))
         .start()
         .map_err(|e| {
             new_nitro_cli_failure!(

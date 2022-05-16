@@ -14,12 +14,13 @@ pub mod logger;
 /// The module which provides signal handling.
 pub mod signal_handler;
 
-use chrono::offset::Utc;
 use log::error;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::io::{Read, Write};
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 #[cfg(test)]
 use std::os::raw::c_char;
@@ -324,7 +325,11 @@ fn log_backtrace(backtrace: String) -> Result<String, &'static str> {
         }
     }
 
-    let utc_time_now = Utc::now().to_rfc3339();
+    let utc_time_now = OffsetDateTime::now_utc();
+    let utc_time_now = match utc_time_now.format(&Rfc3339) {
+        Ok(s) => s,
+        Err(_) => return Err("Could not convert datetime to RFC3339 format"),
+    };
     let log_path_str = format!("{}/err{}.log", &log_path_base, utc_time_now);
     let log_path = Path::new(&log_path_str);
     let log_file = std::fs::File::create(log_path);

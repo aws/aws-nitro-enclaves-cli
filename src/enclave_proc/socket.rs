@@ -191,7 +191,6 @@ fn socket_removal_listener(
                     // At this point, the socket is shutting itself down and has notified the
                     // monitoring thread, so we just exit the loop gracefully.
                     debug!("The enclave process socket has deleted itself.");
-                    done = true;
                 } else {
                     // At this point, the socket has been deleted by an external action, so
                     // we exit forcefully, since there is no longer any way for a CLI instance
@@ -200,8 +199,8 @@ fn socket_removal_listener(
                     if exit_on_delete {
                         std::process::exit(1);
                     }
-                    done = true;
                 }
+                done = true;
             }
         }
     }

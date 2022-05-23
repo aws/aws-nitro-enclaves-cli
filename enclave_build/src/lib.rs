@@ -240,6 +240,7 @@ impl<'a> Docker2Eif<'a> {
         let output = Command::new(&self.linuxkit_path)
             .args(&[
                 "build",
+                "-docker",
                 "-name",
                 &customer_ramfs,
                 "-format",

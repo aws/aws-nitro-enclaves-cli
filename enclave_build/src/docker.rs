@@ -7,7 +7,6 @@ use log::{debug, error, info};
 use serde_json::{json, Value};
 use shiplift::RegistryAuth;
 use shiplift::{BuildOptions, Docker, PullOptions};
-use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -39,22 +38,6 @@ pub struct DockerUtil {
 impl DockerUtil {
     /// Constructor that takes as argument a tag for the docker image to be used
     pub fn new(docker_image: String) -> Self {
-        // Try to parse the DOCKER_HOST environment variable.
-        let host = match env::var("DOCKER_HOST") {
-            Ok(docker_host) => match docker_host.parse() {
-                Ok(host) => Some(host),
-                Err(_) => None,
-            },
-            Err(_) => None,
-        };
-
-        // If DOCKER_HOST could not be parsed, default to
-        // using 'unix:///var/run/docker.sock'.
-        let docker = match host {
-            Some(host) => Docker::host(host),
-            None => Docker::unix("/var/run/docker.sock"),
-        };
-
         let mut docker_image = docker_image;
 
         if !docker_image.contains(':') {
@@ -62,7 +45,10 @@ impl DockerUtil {
         }
 
         DockerUtil {
-            docker,
+            // DOCKER_HOST environment variable is parsed inside
+            // if docker daemon address needs to be substituted.
+            // By default it tries to connect to 'unix:///var/run/docker.sock'
+            docker: Docker::new(),
             docker_image,
         }
     }

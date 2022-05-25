@@ -9,6 +9,7 @@ use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
 use nix::unistd::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::borrow::BorrowMut;
 use std::fs;
 use std::io::ErrorKind;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
@@ -157,32 +158,25 @@ where
         .map_err(|e| {
             e.add_subaction("Failed to send command to all enclave processes".to_string())
         })?
-        .iter_mut()
-        .map(|socket| {
-            // Add each valid connection to epoll.
-            let socket_clone = socket.try_clone().map_err(|e| {
-                new_nitro_cli_failure!(
-                    &format!("Failed to clone socket: {:?}", e),
-                    NitroCliErrorEnum::SocketError
-                )
-            })?;
-            let mut process_evt =
-                EpollEvent::new(EpollFlags::EPOLLIN, socket_clone.into_raw_fd() as u64);
-            epoll::epoll_ctl(
-                epoll_fd,
-                EpollOp::EpollCtlAdd,
-                socket.as_raw_fd(),
-                &mut process_evt,
-            )
-            .map_err(|e| {
-                new_nitro_cli_failure!(
-                    &format!("Failed to register socket with epoll: {:?}", e),
-                    NitroCliErrorEnum::EpollError
-                )
-            })?;
-
+        .into_iter()
+        .map(|mut socket| {
             // Send the command.
-            enclave_proc_command_send_single(cmd, args, socket)
+            enclave_proc_command_send_single(cmd, args, socket.borrow_mut())?;
+
+            let raw_fd = socket.into_raw_fd();
+            let mut process_evt = EpollEvent::new(EpollFlags::EPOLLIN, raw_fd as u64);
+
+            // Add each valid connection to epoll.
+            epoll::epoll_ctl(epoll_fd, EpollOp::EpollCtlAdd, raw_fd, &mut process_evt).map_err(
+                |e| {
+                    new_nitro_cli_failure!(
+                        &format!("Failed to register socket with epoll: {:?}", e),
+                        NitroCliErrorEnum::EpollError
+                    )
+                },
+            )?;
+
+            Ok(())
         })
         .collect();
 
@@ -221,14 +215,29 @@ where
             continue;
         }
 
+        let input_stream_raw_fd = events[0].data() as RawFd;
+        let mut input_stream = unsafe { UnixStream::from_raw_fd(input_stream_raw_fd) };
+
         // Handle the reply we received.
-        let mut input_stream = unsafe { UnixStream::from_raw_fd(events[0].data() as RawFd) };
         if let Ok(reply) = read_u64_le(&mut input_stream) {
             if reply == MSG_ENCLAVE_CONFIRM {
                 debug!("Got confirmation from {:?}", input_stream);
                 replies.push(input_stream);
             }
         }
+
+        epoll::epoll_ctl(
+            epoll_fd,
+            EpollOp::EpollCtlDel,
+            input_stream_raw_fd,
+            Option::None,
+        )
+        .map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to remove socket from epoll: {:?}", e),
+                NitroCliErrorEnum::EpollError
+            )
+        })?;
     }
 
     // Update the number of connections that have yielded errors.

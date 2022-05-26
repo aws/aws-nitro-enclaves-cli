@@ -12,7 +12,7 @@ CPU_POOL_FILE="/sys/module/nitro_enclaves/parameters/ne_cpus"
 VERBOSE="1"
 
 # Path to the allocator config file.
-CONFIG_FILE_PATH="/etc/nitro_enclaves/allocator.yaml"
+CONFIG_FILE_PATH="$NITRO_CLI_INSTALL_DIR/etc/nitro_enclaves/allocator.yaml"
 
 # Config variables to be populated when parsing the config file.
 declare -A CONFIG

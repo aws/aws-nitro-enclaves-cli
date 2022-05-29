@@ -15,9 +15,9 @@ pub mod enclave_proc_comm;
 /// The CLI-specific utilities module.
 pub mod utils;
 
-use eif_defs::eif_hasher::EifHasher;
-use eif_utils::eif_reader::EifReader;
-use eif_utils::{generate_build_info, get_pcrs};
+use aws_nitro_enclaves_image_format::defs::eif_hasher::EifHasher;
+use aws_nitro_enclaves_image_format::utils::eif_reader::EifReader;
+use aws_nitro_enclaves_image_format::{generate_build_info, utils::get_pcrs};
 use log::{debug, info};
 use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;

@@ -55,7 +55,7 @@ and more details can be found in the following crate:
 1. Get the signature section from the enclave image. The `EifHeader`
 contains an array with section offsets and each `EifSectionHeader`
 contains an `EifSectionType`. You can find more details about these
-headers in the [eif-defs](../eif_defs) crate.
+headers in the [eif-defs](https://github.com/aws/aws-nitro-enclaves-image-format/) crate.
 
 2. For each PCR Signature use the public key from the signing
 certificate to decrypt the payload from the `COSESign1` object

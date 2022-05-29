@@ -20,5 +20,4 @@ url = "2.1"
 sha2 = "0.9.5"
 futures = "0.3.13"
 
-eif_defs = { path = "../eif_defs" }
-eif_utils = { path = "../eif_utils" }
+aws-nitro-enclaves-image-format = "0.1"

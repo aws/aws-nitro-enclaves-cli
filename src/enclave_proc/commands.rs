@@ -3,9 +3,9 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-use eif_defs::EifIdentityInfo;
-use eif_utils::eif_reader::EifReader;
-use eif_utils::{get_pcrs, PcrSignatureChecker};
+use aws_nitro_enclaves_image_format::defs::EifIdentityInfo;
+use aws_nitro_enclaves_image_format::utils::eif_reader::EifReader;
+use aws_nitro_enclaves_image_format::utils::{get_pcrs, PcrSignatureChecker};
 use log::debug;
 use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;

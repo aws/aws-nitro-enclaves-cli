@@ -5,8 +5,8 @@
 #![allow(unknown_lints)]
 #![allow(deref_nullptr)]
 
+use aws_nitro_enclaves_image_format::defs::EifIdentityInfo;
 use driver_bindings::*;
-use eif_defs::EifIdentityInfo;
 use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
 use libc::c_int;
 use log::{debug, info};

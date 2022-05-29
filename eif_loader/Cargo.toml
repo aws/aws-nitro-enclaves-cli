@@ -7,13 +7,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eif_defs = { path = "../eif_defs"}
+aws-nitro-enclaves-image-format = "0.1"
 nix = "0.23"
 libc = "0.2"
 vsock = "0.2"
 
 [dev-dependencies]
-eif_utils = { path = "../eif_utils"}
 sha2 = "0.9.5"
 tempfile = "3.1"
 

@@ -4,7 +4,7 @@
 use clap::{App, AppSettings, Arg};
 use std::fs::OpenOptions;
 
-use eif_utils::generate_build_info;
+use aws_nitro_enclaves_image_format::generate_build_info;
 use enclave_build::Docker2Eif;
 
 fn main() {

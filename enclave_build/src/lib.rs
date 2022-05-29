@@ -9,10 +9,10 @@ use std::process::Command;
 mod docker;
 mod yaml_generator;
 
+use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
+use aws_nitro_enclaves_image_format::utils::identity::parse_custom_metadata;
+use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignEnclaveInfo};
 use docker::DockerUtil;
-use eif_defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
-use eif_utils::identity::parse_custom_metadata;
-use eif_utils::{EifBuilder, SignEnclaveInfo};
 use serde_json::json;
 use sha2::Digest;
 use std::collections::BTreeMap;

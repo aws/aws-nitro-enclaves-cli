@@ -19,9 +19,8 @@ page_size = "0.4"
 signal-hook = "0.3"
 serde_cbor = "0.11"
 driver-bindings = { path = "./driver-bindings" }
+aws-nitro-enclaves-image-format = "0.1"
 eif_loader = { path = "./eif_loader" }
-eif_defs = { path = "./eif_defs" }
-eif_utils = { path = "./eif_utils" }
 enclave_build = { path = "./enclave_build" }
 openssl = "0.10"
 vsock = "0.2"
@@ -41,7 +40,7 @@ num-traits = "0.2"
 tempfile = "3.1"
 
 [workspace]
-members = [".", "driver-bindings", "eif_defs", "eif_loader", "eif_utils", "enclave_build", "vsock_proxy"]
+members = [".", "driver-bindings", "eif_loader", "enclave_build", "vsock_proxy"]
 
 [features]
 default = []

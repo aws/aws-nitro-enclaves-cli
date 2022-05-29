@@ -58,6 +58,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-nitro-enclaves-image-format"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae4ad15a7bad78c69c0df3e1fa4e71b2f3958c24c3ed6831316a383da425b782"
+dependencies = [
+ "aws-nitro-enclaves-cose",
+ "byteorder",
+ "chrono",
+ "clap",
+ "crc",
+ "hex",
+ "num-derive",
+ "num-traits",
+ "openssl",
+ "serde",
+ "serde_cbor",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -239,45 +260,15 @@ name = "driver-bindings"
 version = "0.1.0"
 
 [[package]]
-name = "eif_defs"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "num-derive",
- "num-traits",
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
 name = "eif_loader"
 version = "0.1.0"
 dependencies = [
- "eif_defs",
- "eif_utils",
+ "aws-nitro-enclaves-image-format",
  "libc",
  "nix",
  "sha2",
  "tempfile",
  "vsock",
-]
-
-[[package]]
-name = "eif_utils"
-version = "0.1.0"
-dependencies = [
- "aws-nitro-enclaves-cose",
- "chrono",
- "clap",
- "crc",
- "eif_defs",
- "hex",
- "openssl",
- "serde",
- "serde_cbor",
- "serde_json",
- "sha2",
 ]
 
 [[package]]
@@ -290,10 +281,9 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 name = "enclave_build"
 version = "0.1.0"
 dependencies = [
+ "aws-nitro-enclaves-image-format",
  "base64",
  "clap",
- "eif_defs",
- "eif_utils",
  "futures",
  "log",
  "serde",
@@ -859,13 +849,12 @@ dependencies = [
 name = "nitro-cli"
 version = "1.2.0"
 dependencies = [
+ "aws-nitro-enclaves-image-format",
  "bindgen",
  "chrono",
  "clap",
  "driver-bindings",
- "eif_defs",
  "eif_loader",
- "eif_utils",
  "enclave_build",
  "flexi_logger",
  "hex",

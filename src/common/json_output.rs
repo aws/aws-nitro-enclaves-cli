@@ -4,8 +4,8 @@
 #![deny(warnings)]
 #![allow(clippy::too_many_arguments)]
 
-use eif_defs::EifIdentityInfo;
-use eif_utils::eif_reader::SignCertificateInfo;
+use aws_nitro_enclaves_image_format::defs::EifIdentityInfo;
+use aws_nitro_enclaves_image_format::utils::eif_reader::SignCertificateInfo;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

@@ -129,11 +129,7 @@ This repository contains a collection of tools and commands used for managing th
   - 'drivers': The source code of the kernel modules used by the CLI in order to control enclave behavior, containing:
       - 'drivers/virt/nitro_enclaves': The Nitro Enclaves driver used by the Nitro CLI
 
-  - 'eif_defs': The definition of the enclave image format (EIF) file
-
   - 'eif_loader': The source code for the EIF loader, a module which ensures that an enclave has booted successfully
-
-  - 'eif_utils': Utilities for the EIF files, focused mostly on building EIFs
 
   - 'enclave_build': A tool which builds EIF files starting from a Docker image and pre-existing binary blobs (such as those from 'blobs')
 

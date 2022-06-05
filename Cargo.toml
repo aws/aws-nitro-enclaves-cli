@@ -41,6 +41,7 @@ tempfile = "3.1"
 
 [workspace]
 members = [".", "driver-bindings", "eif_loader", "enclave_build", "vsock_proxy"]
+exclude = ["samples/command_executer"]
 
 [features]
 default = []

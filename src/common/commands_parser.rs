@@ -29,6 +29,7 @@ pub struct RunEnclavesArgs {
     /// A flag indicating if the enclave will be started in debug mode.
     pub debug_mode: Option<bool>,
     /// Attach to the console immediately if using debug mode.
+    #[serde(default)]
     pub attach_console: bool,
     /// The number of CPUs that the enclave will receive.
     pub cpu_count: Option<u32>,

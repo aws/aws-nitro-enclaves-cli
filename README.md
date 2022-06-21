@@ -20,6 +20,7 @@ This repository contains a collection of tools and commands used for managing th
       - Fedora v5.10+ kernel (e.g. kernel-5.10.12-200.fc33.x86_64)
       - openSUSE Tumbleweed v5.10+ kernel (e.g. kernel-default-5.10.1-1.1.x86_64)
       - Red Hat Enterprise Linux v4.18+ kernel starting with kernel-4.18.0-305.el8.x86_64
+      - SUSE Linux Enterprise Server v5.14+ kernel starting with kernel-default-5.14.21-150400.22.1.x86_64
       - Ubuntu v5.4 kernel starting with linux-aws 5.4.0-1030-aws x86_64
       - Ubuntu v5.8 kernel starting with linux-aws 5.8.0-1017-aws x86_64
       - Ubuntu v5.11+ kernel (e.g. linux-aws 5.11.0-1006-aws x86_64)
@@ -43,6 +44,7 @@ This repository contains a collection of tools and commands used for managing th
   - Fedora - "kernel" for the v5.10+ kernel
   - openSUSE Tumbleweed - "kernel-default" for the v5.10+ kernel
   - Red Hat Enterprise Linux - "kernel" for the v4.18+ kernel
+  - SUSE Linux Enterprise Server - "kernel-default" for the v5.14+ kernel
   - Ubuntu - "linux-aws" and "linux-modules-extra-aws" for the v5.4, v5.8 and v5.11+ kernels
 
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.

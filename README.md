@@ -14,37 +14,38 @@ This repository contains a collection of tools and commands used for managing th
   - x86_64
       - Amazon Linux 2 v4.14 kernel starting with kernel-4.14.198-152.320.amzn2.x86_64
       - Amazon Linux 2 v5.4 kernel starting with kernel-5.4.68-34.125.amzn2.x86_64
-      - Amazon Linux 2 v5.10+ kernel (e.g. kernel-5.10.29-27.128.amzn2.x86_64)
-      - Amazon Linux 2022 v5.10+ kernel (e.g. kernel-5.10.75-82.359.amzn2022.x86_64)
-      - CentOS Stream v4.18+ kernel starting with kernel-4.18.0-257.el8.x86_64
-      - Fedora v5.10+ kernel (e.g. kernel-5.10.12-200.fc33.x86_64)
-      - openSUSE Tumbleweed v5.10+ kernel (e.g. kernel-default-5.10.1-1.1.x86_64)
-      - Red Hat Enterprise Linux v4.18+ kernel starting with kernel-4.18.0-305.el8.x86_64
-      - SUSE Linux Enterprise Server v5.14+ kernel starting with kernel-default-5.14.21-150400.22.1.x86_64
+      - Amazon Linux 2 v5.10+ kernels (e.g. kernel-5.10.29-27.128.amzn2.x86_64)
+      - Amazon Linux 2022 v5.10+ kernels (e.g. kernel-5.10.75-82.359.amzn2022.x86_64)
+      - CentOS Stream v4.18+ kernels starting with kernel-4.18.0-257.el8.x86_64
+      - Fedora v5.10+ kernels (e.g. kernel-5.10.12-200.fc33.x86_64)
+      - openSUSE Tumbleweed v5.10+ kernels (e.g. kernel-default-5.10.1-1.1.x86_64)
+      - Red Hat Enterprise Linux v4.18+ kernels starting with kernel-4.18.0-305.el8.x86_64
+      - SUSE Linux Enterprise Server v5.14+ kernels starting with kernel-default-5.14.21-150400.22.1.x86_64
       - Ubuntu v5.4 kernel starting with linux-aws 5.4.0-1030-aws x86_64
       - Ubuntu v5.8 kernel starting with linux-aws 5.8.0-1017-aws x86_64
-      - Ubuntu v5.11+ kernel (e.g. linux-aws 5.11.0-1006-aws x86_64)
+      - Ubuntu v5.11+ kernels (e.g. linux-aws 5.11.0-1006-aws x86_64)
 
   - aarch64
       - Amazon Linux 2 v4.14 kernel starting with kernel-4.14.252-195.483.amzn2.aarch64
       - Amazon Linux 2 v5.4 kernel starting with kernel-5.4.156-83.273.amzn2.aarch64
-      - Amazon Linux 2 v5.10+ kernel starting with kernel-5.10.75-79.358.amzn2.aarch64
-      - Amazon Linux 2022 v5.10+ kernel starting with kernel-5.10.75-82.359.amzn2022.aarch64
+      - Amazon Linux 2 v5.10+ kernels starting with kernel-5.10.75-79.358.amzn2.aarch64
+      - Amazon Linux 2022 v5.10+ kernels starting with kernel-5.10.75-82.359.amzn2022.aarch64
       - CentOS Stream v4.18 kernel starting with kernel-4.18.0-358.el8.aarch64
-      - CentOS Stream v5.14+ kernel starting with kernel-5.14.0-24.el9.aarch64
-      - Fedora v5.16+ kernel (e.g. kernel-5.16.5-200.fc35.aarch64)
-      - Red Hat Enterprise Linux v4.18+ kernel starting with kernel-4.18.0-372.9.1.el8.aarch64
+      - CentOS Stream v5.14+ kernels starting with kernel-5.14.0-24.el9.aarch64
+      - Fedora v5.16+ kernels (e.g. kernel-5.16.5-200.fc35.aarch64)
+      - Red Hat Enterprise Linux v4.18+ kernels starting with kernel-4.18.0-372.9.1.el8.aarch64
       - Ubuntu v5.4 kernel starting with linux-aws 5.4.0-1064-aws aarch64
-      - Ubuntu v5.13+ kernel starting with linux-aws 5.13.0-1012-aws aarch64
+      - Ubuntu v5.13+ kernels starting with linux-aws 5.13.0-1012-aws aarch64
 
   The following packages need to be installed or updated to have the Nitro Enclaves kernel driver available in the mentioned distros:
 
   - Amazon Linux 2 - "kernel" (amzn2-core) for the v4.14 kernel, "kernel" (amzn2extra-kernel-5.4) for the v5.4 kernel, "kernel" (amzn2extra-kernel-5.10) for the v5.10 kernel
-  - CentOS Stream - "kernel" for the v4.18+ kernel
-  - Fedora - "kernel" for the v5.10+ kernel
-  - openSUSE Tumbleweed - "kernel-default" for the v5.10+ kernel
-  - Red Hat Enterprise Linux - "kernel" for the v4.18+ kernel
-  - SUSE Linux Enterprise Server - "kernel-default" for the v5.14+ kernel
+  - Amazon Linux 2022 - "kernel" for the v5.10+ kernels
+  - CentOS Stream - "kernel" for the v4.18+ kernels
+  - Fedora - "kernel" for the v5.10+ kernels
+  - openSUSE Tumbleweed - "kernel-default" for the v5.10+ kernels
+  - Red Hat Enterprise Linux - "kernel" for the v4.18+ kernels
+  - SUSE Linux Enterprise Server - "kernel-default" for the v5.14+ kernels
   - Ubuntu - "linux-aws" and "linux-modules-extra-aws" for the v5.4, v5.8 and v5.11+ kernels
 
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
@@ -75,7 +76,7 @@ This repository contains a collection of tools and commands used for managing th
 
   The AWS Nitro Enclaves CLI package is currently available for:
   - Amazon Linux 2 - https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-cli-install.html
-  - openSUSE - https://build.opensuse.org/package/show/Cloud:Tools/aws-nitro-enclaves-cli
+  - openSUSE and SUSE Linux Enterprise Server - https://build.opensuse.org/package/show/Cloud:Tools/aws-nitro-enclaves-cli
   - Windows - https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-cli-install-win.html
 
 #### Enclave disk size

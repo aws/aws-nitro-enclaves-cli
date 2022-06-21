@@ -332,7 +332,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 128,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
@@ -378,7 +378,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 256,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
@@ -419,7 +419,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 2046,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
@@ -443,10 +443,11 @@ mod tests {
             assert_eq!(req_enclave_cid, enclave_cid);
         }
 
-        match debug_mode {
-            Some(true) => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE),
-            _ => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0),
-        };
+        if debug_mode {
+            assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE);
+        } else {
+            assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0);
+        }
 
         let cid_copy = enclave_cid;
 
@@ -475,10 +476,11 @@ mod tests {
         assert_eq!(reply.memory_mib, req_mem_size);
         assert_eq!({ reply.cpu_count }, req_nr_cpus);
         assert_eq!(reply.state, "RUNNING");
-        match debug_mode {
-            Some(true) => assert_eq!(flags, "DEBUG_MODE"),
-            _ => assert_eq!(flags, "NONE"),
-        };
+        if debug_mode {
+            assert_eq!(flags, "DEBUG_MODE");
+        } else {
+            assert_eq!(flags, "NONE");
+        }
         let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");
 
         terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
@@ -524,7 +526,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 128,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
@@ -566,7 +568,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 128,
-            debug_mode: Some(false),
+            debug_mode: false,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
@@ -579,9 +581,10 @@ mod tests {
             .get_console_resources_enclave_flags()
             .unwrap();
 
-        match run_args.debug_mode {
-            Some(true) => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE),
-            _ => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0),
+        if run_args.debug_mode {
+            assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE);
+        } else {
+            assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0);
         };
 
         let info = get_enclave_describe_info(&enclave_manager, false).unwrap();
@@ -627,7 +630,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 128,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
@@ -640,10 +643,11 @@ mod tests {
             .get_console_resources_enclave_flags()
             .unwrap();
 
-        match run_args.debug_mode {
-            Some(true) => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE),
-            _ => assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0),
-        };
+        if run_args.debug_mode {
+            assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, NE_ENCLAVE_DEBUG_MODE);
+        } else {
+            assert_eq!(enclave_flags & NE_ENCLAVE_DEBUG_MODE, 0);
+        }
 
         let info = get_enclave_describe_info(&enclave_manager, false).unwrap();
         let replies: Vec<EnclaveDescribeInfo> = vec![info];
@@ -717,7 +721,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 128,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
@@ -827,7 +831,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 128,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
         };
@@ -930,7 +934,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 128,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: None,
         };
@@ -960,7 +964,7 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             memory_mib: 128,
-            debug_mode: Some(true),
+            debug_mode: true,
             attach_console: false,
             enclave_name: Some("enclaveName".to_string()),
         };

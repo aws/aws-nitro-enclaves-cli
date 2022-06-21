@@ -27,7 +27,8 @@ pub struct RunEnclavesArgs {
     /// An optional list of CPU IDs that will be given to the enclave.
     pub cpu_ids: Option<Vec<u32>>,
     /// A flag indicating if the enclave will be started in debug mode.
-    pub debug_mode: Option<bool>,
+    #[serde(default)]
+    pub debug_mode: bool,
     /// Attach to the console immediately if using debug mode.
     #[serde(default)]
     pub attach_console: bool,
@@ -49,7 +50,7 @@ impl RunEnclavesArgs {
                 .add_info(vec![config_file, "Open"])
             })?;
 
-            let json: RunEnclavesArgs = serde_json::from_reader(file).map_err(|err| {
+            let mut json: RunEnclavesArgs = serde_json::from_reader(file).map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Invalid JSON format for config file: {:?}", err),
                     NitroCliErrorEnum::SerdeError
@@ -67,6 +68,9 @@ impl RunEnclavesArgs {
                     NitroCliErrorEnum::ConflictingArgument
                 ));
             }
+
+            // attach_console implies debug_mode
+            json.debug_mode = json.debug_mode || json.attach_console;
 
             Ok(json)
         } else {
@@ -469,13 +473,8 @@ fn parse_output(args: &ArgMatches) -> Option<String> {
 }
 
 /// Parse the debug-mode flag from the command-line arguments.
-fn debug_mode(args: &ArgMatches) -> Option<bool> {
-    let val = args.is_present("debug-mode");
-    if val {
-        Some(val)
-    } else {
-        None
-    }
+fn debug_mode(args: &ArgMatches) -> bool {
+    args.is_present("debug-mode") || args.is_present("attach-console")
 }
 
 /// Parse the attach-console flag from the command-line arguments.
@@ -1096,8 +1095,7 @@ mod tests {
                 .subcommand_matches("run-enclave")
                 .unwrap(),
         );
-        assert!(result.is_some());
-        assert!(result.unwrap());
+        assert!(result);
     }
 
     #[test]
@@ -1123,7 +1121,35 @@ mod tests {
                 .subcommand_matches("run-enclave")
                 .unwrap(),
         );
-        assert!(result.is_none());
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_attach_console_supplied() {
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--attach-console",
+            "--memory",
+            "64",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+        ];
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let matches = matches
+            .as_ref()
+            .unwrap()
+            .subcommand_matches("run-enclave")
+            .unwrap();
+        let attach_console = attach_console(matches);
+        let debug_mode = debug_mode(matches);
+        assert!(attach_console);
+        assert!(debug_mode);
     }
 
     #[test]

@@ -77,7 +77,7 @@ pub fn run_enclaves(
         args.memory_mib,
         cpu_ids,
         eif_file,
-        args.debug_mode.unwrap_or(false),
+        args.debug_mode,
         enclave_name.to_string(),
     )
     .map_err(|e| {

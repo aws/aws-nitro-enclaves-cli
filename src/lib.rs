@@ -647,9 +647,8 @@ macro_rules! create_app {
                             .takes_value(false)
                             .help(
                                 "Attach the enclave console immediately after starting the enclave. \
-                                (debug-mode only)"
+                                (implies debug-mode)"
                             )
-                            .requires("debug-mode"),
                     )
                     .arg(
                         Arg::with_name("enclave-name")

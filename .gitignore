@@ -23,4 +23,5 @@ nitro-cli-dependencies.tar.gz
 .idea
 */debug
 */release
+
 */x86_64-unknown-linux-musl

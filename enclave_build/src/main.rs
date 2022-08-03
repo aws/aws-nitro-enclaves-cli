@@ -11,7 +11,6 @@ mod utils;
 mod image_cache;
 mod docker;
 mod constants;
-mod image_inspect;
 mod cache_manager;
 
 fn main() {

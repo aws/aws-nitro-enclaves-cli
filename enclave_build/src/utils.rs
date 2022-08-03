@@ -1,3 +1,5 @@
+// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 use oci_distribution::{Client, Reference};
 use oci_distribution::client::{ImageLayer};
@@ -14,6 +16,7 @@ pub enum ExtractError {
     LayerExtractError(String),
     ConfigExtractError(String),
     EnvCmdExtractError(String),
+    ImageHashExtractError(String),
 }
 
 /// Builds a client which uses the protocol given as parameter
@@ -51,7 +54,7 @@ impl ExtractLogic {
             .expect("No data found.");
 
         match image_bytes.len() {
-            0 => Err(ExtractError::ImageExtractError("No image data found".to_string())),
+            0 => Err(ExtractError::ImageExtractError("Failed to extract the image file.".to_string())),
             _ => Ok(image_bytes)
         }
     }
@@ -59,7 +62,7 @@ impl ExtractLogic {
     /// Extract the layers as an array of ImageLayer structs
     pub fn extract_layers(image_data: &ImageData) -> Result<Vec<ImageLayer>, ExtractError> {
         match image_data.layers.len() {
-            0 => Err(ExtractError::LayerExtractError("Layers not found.".to_string())),
+            0 => Err(ExtractError::LayerExtractError("Failed to extract the layers of the image.".to_string())),
             _ => Ok(image_data.layers.clone())
         }
     }
@@ -68,7 +71,7 @@ impl ExtractLogic {
     pub fn extract_manifest_json(image_data: &ImageData) -> Result<String, ExtractError> {
         match &image_data.manifest {
             Some(image_manifest) => Ok(serde_json::to_string(&image_manifest).unwrap()),
-            None => Err(ExtractError::ManifestExtractError("No manifest found.".to_string()))
+            None => Err(ExtractError::ManifestExtractError("Failed to extract the manifest from the image data.".to_string()))
         }
     }
 
@@ -76,7 +79,8 @@ impl ExtractLogic {
     pub fn extract_config_json(image_data: &ImageData) -> Result<String, ExtractError> {
         match String::from_utf8(image_data.config.data.clone()) {
             Ok(config_json) => Ok(config_json),
-            Err(err) => Err(ExtractError::ConfigExtractError(format!("Cannot extract manifest: {}", err)))
+            Err(err) => Err(ExtractError::ConfigExtractError(format!("Failed to extract the config JSON
+                from the image data: {}", err)))
         }
     }
 
@@ -106,15 +110,59 @@ impl ExtractLogic {
 
         // Try to parse the JSON
         let json_object: Value = serde_json::from_str(config_string.as_str()).unwrap();
-        let config_obj = json_object.get("container_config").expect("'container_config' field is missing");
-        let cmd_obj = config_obj.get("Cmd").expect("'Cmd' field is missing");
+        let config_obj = json_object.get("container_config").expect("'container_config' field is missing.");
+        let cmd_obj = config_obj.get("Cmd").expect("'Cmd' field is missing.");
 
         match cmd_obj.as_array() {
-            None => Err(ExtractError::EnvCmdExtractError("Failed to extract CMD expressions from image".to_string())),
+            None => Err(ExtractError::EnvCmdExtractError("Failed to extract CMD expressions from image.".to_string())),
             Some(cmd_array) => {
                 let cmd_strings: Vec<String> = cmd_array.into_iter().map(|json_value| json_value.to_string()).collect();
                 Ok(cmd_strings)
             }
         }
+    }
+
+    /// Extract the image hash (digest)
+    pub fn extract_image_hash(image_data: &ImageData) -> Result<String, ExtractError> {
+        // Extract the config JSON from the image
+        let config_json = match ExtractLogic::extract_config_json(image_data) {
+            Ok(aux) => aux,
+            Err(err) => {
+                return Err(ExtractError::ImageHashExtractError(format!("{:?}", err)));
+            }
+        };
+
+        // Try to parse the JSON for the image hash
+        let json_object: Value = serde_json::from_str(config_json.as_str()).unwrap();
+        let image_digest = json_object.get("config").expect("'config' field is missing.")
+                                            .get("Image").expect("'Image' field is missing.");
+
+       Ok(image_digest.to_string())
+    }
+}
+
+/// Wrapper struct which represents an image
+/// 
+/// reference: The image URI
+/// data: The image data (layers, config etc.)
+pub struct Image {
+    reference: Reference,
+    data: ImageData
+}
+
+impl Image {
+    pub fn new(reference: Reference, data: ImageData) -> Image {
+        Self {
+            reference: reference,
+            data: data
+        }
+    }
+
+    pub fn reference(&self) -> &Reference {
+        &self.reference
+    }
+
+    pub fn data(&self) -> &ImageData {
+        &self.data
     }
 }

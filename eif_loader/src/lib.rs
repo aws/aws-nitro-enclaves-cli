@@ -18,7 +18,7 @@ pub const TIMEOUT_MINUTE_MS: i32 = 90 * TIMEOUT_SECOND_MS;
 
 const HEART_BEAT: u8 = 0xB7;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// Internal errors while sending an Eif file
 pub enum EifLoaderError {
     SocketPollingError,

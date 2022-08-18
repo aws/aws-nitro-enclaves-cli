@@ -1,4 +1,4 @@
-// Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2020-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -189,7 +189,7 @@ impl Default for NitroCliErrorEnum {
 impl Eq for NitroCliErrorEnum {}
 
 /// The type of commands that can be sent to an enclave process.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EnclaveProcessCommandType {
     /// Launch (run) an enclave (sent by the CLI).
     Run = 0,

@@ -97,7 +97,7 @@ impl DockerUtil {
                         })?
                         .to_string();
 
-                    let auth = auth.replace(r#"""#, "");
+                    let auth = auth.replace('"', "");
                     let decoded = base64::decode(&auth).map_err(|err| {
                         CredentialsError(format!("Invalid Base64 encoding for auth: {}", err))
                     })?;

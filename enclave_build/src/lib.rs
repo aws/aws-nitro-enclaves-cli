@@ -1,4 +1,4 @@
-// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::too_many_arguments)]
 
@@ -37,7 +37,7 @@ pub struct Docker2Eif<'a> {
     build_info: EifBuildInfo,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Docker2EifError {
     DockerError,
     DockerfilePathError,

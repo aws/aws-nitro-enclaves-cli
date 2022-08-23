@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -15,7 +15,7 @@ use crate::new_nitro_cli_failure;
 const POOL_FILENAME: &str = "/sys/module/nitro_enclaves/parameters/ne_cpus";
 
 /// The CPU configuration requested by the user.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum EnclaveCpuConfig {
     /// A list with the desired CPU IDs.
     List(Vec<u32>),

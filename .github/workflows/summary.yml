@@ -1,0 +1,36 @@
+name: Notify owners with a summary about open issues and PRs
+
+on:
+  schedule:
+  - cron: "0 7 * * 1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: create summary
+        run: |
+          # Get list of open PRs through GH CLI formatting by columns
+          # and store the output to PRS_CONTENT environment variable
+          echo 'PRS_CONTENT<<EOF' >> $GITHUB_ENV
+          gh pr list --json title,updatedAt,labels,assignees,url --template \
+            '{{ printf "URL\tTitle\tLast updated\n"}}{{range .}}{{printf "%s\t%s\t%s\n" .url .title (timeago .updatedAt)}}{{end}}' | column -ts $'\t' >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+          
+          # Get list of open issues through GH CLI formatting by columns
+          # and store the output to ISSUES_CONTENT environment variable
+          echo 'ISSUES_CONTENT<<EOF' >> $GITHUB_ENV
+          gh issue list --json title,updatedAt,labels,assignees,url --template \
+            '{{ printf "URL\tTitle\tLast updated\n"}}{{range .}}{{printf "%s\t%s\t%s\n" .url .title (timeago .updatedAt)}}{{end}}' | column -ts $'\t' >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+
+          # Fetch repository name and store it to
+          # REPOSITORY_NAME environment variable
+          echo "REPOSITORY_NAME=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: notify
+        run: |
+          # Send open PRs and issues lists from corresponding environment variables to a dedicated webhook URL
+          curl -d '{ "repo": "${{ env.REPOSITORY_NAME }}", "prs": "${{ env.PRS_CONTENT }}", "issues": "${{ env.ISSUES_CONTENT }}" }' ${{ secrets.SUMMARY_WEBHOOK_URL }}

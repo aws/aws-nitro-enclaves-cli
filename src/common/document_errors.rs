@@ -351,19 +351,16 @@ pub fn construct_help_link(error_code_str: String) -> String {
 
 /// Returns a string containing the backtrace recorded during propagating an error message
 pub fn construct_backtrace(failure_info: &NitroCliFailure) -> String {
-    let mut ret = String::new();
     let version = env!("CARGO_PKG_VERSION").to_string();
 
-    ret.push_str(&format!("  Action: {}\n  Subactions:", failure_info.action));
-    for subaction in failure_info.subactions.iter().rev() {
-        ret.push_str(&format!("\n    {}", subaction));
-    }
-    ret.push_str(&format!("\n  Root error file: {}", failure_info.file));
-    ret.push_str(&format!("\n  Root error line: {}", failure_info.line));
-
-    ret.push_str(&format!("\n  Version: {}", version));
-
-    ret
+    format!("  Action: {}\n  Subactions:{}\n  Root error file: {}\n  Root error line: {}\n  Version: {}",
+        failure_info.action,
+        failure_info.subactions.iter().rev().fold("".to_string(), |acc, x| {
+            format!("{}\n    {}", acc, x)
+        }),
+        failure_info.file,
+        failure_info.line,
+        version)
 }
 
 /// Detailed information based on user-provided error code.
@@ -549,5 +546,30 @@ pub fn explain_error(error_code_str: String) {
         _ => {
             eprintln!("No such error code {}", error_code_str);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NitroCliFailure;
+    use crate::common::document_errors::construct_backtrace;
+
+    #[test]
+    fn test_construct_backtrace() {
+        let failure = NitroCliFailure::new()
+            .set_action(String::from("ABCD"))
+            .add_subaction(String::from("EFGH"))
+            .add_subaction(String::from("IJKL"))
+            .set_file_and_line("/path/file.txt", 1234);
+        // "  Action: ABCD
+        //    Subactions:
+        //      IJKL
+        //      EFGH
+        //    Root error file: /path/file.txt
+        //    Root error line: 1234
+        //    Version: X.Y.Z"
+        let expected = format!("  Action: ABCD\n  Subactions:\n    IJKL\n    EFGH\n  Root error file: /path/file.txt\n  Root error line: 1234\n  Version: {}",
+            env!("CARGO_PKG_VERSION"));
+        assert_eq!(expected, construct_backtrace(&failure));
     }
 }

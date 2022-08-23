@@ -1,4 +1,4 @@
-// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::docker::DockerError::CredentialsError;
@@ -18,7 +18,7 @@ use url::Url;
 pub const DOCKER_ARCH_ARM64: &str = "arm64";
 pub const DOCKER_ARCH_AMD64: &str = "amd64";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum DockerError {
     BuildError,
     InspectError,
@@ -97,7 +97,7 @@ impl DockerUtil {
                         })?
                         .to_string();
 
-                    let auth = auth.replace(r#"""#, "");
+                    let auth = auth.replace('"', "");
                     let decoded = base64::decode(&auth).map_err(|err| {
                         CredentialsError(format!("Invalid Base64 encoding for auth: {}", err))
                     })?;

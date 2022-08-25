@@ -17,6 +17,7 @@ pub mod utils;
 
 use aws_nitro_enclaves_image_format::defs::eif_hasher::EifHasher;
 use aws_nitro_enclaves_image_format::utils::eif_reader::EifReader;
+use aws_nitro_enclaves_image_format::utils::eif_signer::EifSigner;
 use aws_nitro_enclaves_image_format::{generate_build_info, utils::get_pcrs};
 use log::{debug, info};
 use sha2::{Digest, Sha384};
@@ -27,7 +28,9 @@ use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use common::commands_parser::{BuildEnclavesArgs, EmptyArgs, RunEnclavesArgs};
+use common::commands_parser::{
+    BuildEnclavesArgs, DescribeArgs, EmptyArgs, RunEnclavesArgs, SignArgs,
+};
 use common::json_output::{
     EifDescribeInfo, EnclaveBuildInfo, EnclaveTerminateInfo, MetadataDescribeInfo,
 };
@@ -63,6 +66,28 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
         &args.metadata,
     )
     .map_err(|e| e.add_subaction("Failed to build EIF from docker".to_string()))?;
+    Ok(())
+}
+
+/// Sign an existing EIF file
+pub fn sign_eif_file(args: SignArgs) -> NitroCliResult<()> {
+    debug!("sign_eif_file");
+    eprintln!("Start signing the Enclave Image...");
+    let mut signer = EifSigner::new(
+        args.eif_path,
+        args.signing_method,
+        args.signing_certificate,
+        args.private_key,
+        args.region,
+        args.key_id,
+    )
+    .map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to initialize EIF signer: {:?}", e),
+            NitroCliErrorEnum::EifParsingError
+        )
+    })?;
+    signer.sign_image().expect("Failed signing");
     Ok(())
 }
 
@@ -218,8 +243,8 @@ pub fn new_enclave_name(run_args: RunEnclavesArgs, names: Vec<String>) -> NitroC
 ///
 /// Calculates PCRs 0, 1, 2, 8 at each call in addition to metadata,
 /// EIF details, identification provided by the user at build.
-pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
-    let mut eif_reader = EifReader::from_eif(eif_path).map_err(|e| {
+pub fn describe_eif(desc_args: DescribeArgs) -> NitroCliResult<EifDescribeInfo> {
+    let mut eif_reader = EifReader::from_eif(desc_args.eif_path).map_err(|e| {
         new_nitro_cli_failure!(
             &format!("Failed to initialize EIF reader: {:?}", e),
             NitroCliErrorEnum::EifParsingError
@@ -265,7 +290,7 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
     // Check if signature section is present
     if measurements.get(&"PCR8".to_string()).is_some() {
         let cert_info = eif_reader
-            .get_certificate_info(measurements)
+            .get_certificate_info(measurements, desc_args.region, desc_args.key_id)
             .map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Failed to get certificate sigining info: {:?}", err),
@@ -662,6 +687,22 @@ macro_rules! create_app {
                             .conflicts_with("config"),
                     )
                     .arg(
+                        Arg::with_name("region")
+                            .long("region")
+                            .takes_value(true)
+                            .help("The region in which the KMS key resides.")
+                            .required(false)
+                            .conflicts_with("config"),
+                    )
+                    .arg(
+                        Arg::with_name("key-id")
+                            .long("key-id")
+                            .takes_value(true)
+                            .help("The KMS key id.")
+                            .required(false)
+                            .conflicts_with("config"),
+                    )
+                    .arg(
                         Arg::with_name("config")
                             .long("config")
                             .takes_value(true)
@@ -770,6 +811,18 @@ macro_rules! create_app {
                             .help("Path to the EIF to describe.")
                             .required(true)
                             .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("region")
+                            .long("region")
+                            .help("The region in which the KMS key resides.")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("key-id")
+                            .long("key-id")
+                            .help("The KMS key id.")
+                            .takes_value(true),
                     ),
             )
             .subcommand(
@@ -837,6 +890,50 @@ macro_rules! create_app {
                             .takes_value(true)
                             .help("Error code, as returned by the misbehaving Nitro CLI command")
                             .required(true),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("sign-eif")
+                    .about("Sign an existing enclave image")
+                    .arg(
+                        Arg::with_name("signing-method")
+                            .long("signing-method")
+                            .takes_value(true)
+                            .help("Specify the method that will be used to sign the image: PrivateKey or KMS.")
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("eif-path")
+                            .long("eif-path")
+                            .takes_value(true)
+                            .help("Path to the enclave image file.")
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("signing-certificate")
+                            .long("signing-certificate")
+                            .takes_value(true)
+                            .takes_value(true)
+                            .help("Local path to developer's X509 signing certificate.")
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("private-key")
+                            .long("private-key")
+                            .help("Local path to developer's Eliptic Curve private key.")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("region")
+                            .long("region")
+                            .help("The region in which the KMS key resides.")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("key-id")
+                            .long("key-id")
+                            .help("The KMS key id")
+                            .takes_value(true),
                     ),
             )
     };

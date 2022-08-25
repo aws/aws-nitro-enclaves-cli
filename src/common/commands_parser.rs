@@ -36,6 +36,10 @@ pub struct RunEnclavesArgs {
     pub cpu_count: Option<u32>,
     /// Enclave name set by the user.
     pub enclave_name: Option<String>,
+    /// The region in which the KMS key resides.
+    pub region: Option<String>,
+    /// The KMS key id.
+    pub key_id: Option<String>,
 }
 
 impl RunEnclavesArgs {
@@ -89,6 +93,8 @@ impl RunEnclavesArgs {
                 attach_console: attach_console(args),
                 enclave_name: parse_enclave_name(args)
                     .map_err(|err| err.add_subaction("Parse enclave name".to_string()))?,
+                region: parse_region(args),
+                key_id: parse_key_id(args),
             })
         }
     }
@@ -276,6 +282,137 @@ impl PcrArgs {
         let path = parse_file_path(args, val_name)
             .map_err(|e| e.add_subaction("Parse PCR file".to_string()))?;
         Ok(Self { path, pcr_type })
+    }
+}
+
+/// The arguments used by `sign-eif` command
+#[derive(Debug, Clone)]
+pub struct SignArgs {
+    /// The method used for signing the EIF
+    pub signing_method: String,
+    /// The path to the enclave image file.
+    pub eif_path: String,
+    /// The path to the signing certificate.
+    pub signing_certificate: String,
+    /// The path to the private key.
+    pub private_key: Option<String>,
+    /// The region in which the KMS key resides.
+    pub region: Option<String>,
+    /// The KMS key id.
+    pub key_id: Option<String>,
+}
+
+impl SignArgs {
+    /// Construct a new `SignArg` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        let signing_method = parse_signing_method(args)
+            .map_err(|err| err.add_subaction("Parse signing method".to_string()))?;
+        let private_key = parse_private_key(args);
+        let region = parse_region(args);
+        let key_id = parse_key_id(args);
+
+        match signing_method.as_str() {
+            "PrivateKey" => {
+                if private_key.is_none() {
+                    return Err(new_nitro_cli_failure!(
+                        "`private-key` argument not found",
+                        NitroCliErrorEnum::MissingArgument
+                    )
+                    .add_info(vec!["private-key"]));
+                }
+            }
+            "KMS" => match (&region, &key_id) {
+                (Some(_), None) => {
+                    return Err(new_nitro_cli_failure!(
+                        "`key-id` argument not found",
+                        NitroCliErrorEnum::MissingArgument
+                    )
+                    .add_info(vec!["key-id"]))
+                }
+                (None, Some(_)) => {
+                    return Err(new_nitro_cli_failure!(
+                        "`region` argument not found",
+                        NitroCliErrorEnum::MissingArgument
+                    )
+                    .add_info(vec!["region"]))
+                }
+                (None, None) => {
+                    return Err(new_nitro_cli_failure!(
+                        "`region` and `key-id` arguments not found",
+                        NitroCliErrorEnum::MissingArgument
+                    )
+                    .add_info(vec!["region and key-id"]))
+                }
+                _ => (),
+            },
+            _ => {
+                return Err(new_nitro_cli_failure!(
+                    "`signing-method` value is not valid",
+                    NitroCliErrorEnum::InvalidArgument
+                )
+                .add_info(vec!["signing-method"]))
+            }
+        };
+
+        Ok(SignArgs {
+            signing_method,
+            eif_path: parse_eif_path(args)
+                .map_err(|err| err.add_subaction("Parse EIF path".to_string()))?,
+            signing_certificate: parse_signing_certificate(args).ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`signing_certificate` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["signing_certificate"])
+            })?,
+            private_key,
+            region,
+            key_id,
+        })
+    }
+}
+
+/// The arguments used by `describe-eif` command
+#[derive(Debug, Clone)]
+pub struct DescribeArgs {
+    /// The path to the enclave image file.
+    pub eif_path: String,
+    /// The region in which the KMS key resides.
+    pub region: Option<String>,
+    /// The KMS key id.
+    pub key_id: Option<String>,
+}
+
+impl DescribeArgs {
+    /// Construct a new `DescribeArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        let region = parse_region(args);
+        let key_id = parse_key_id(args);
+
+        match (&region, &key_id) {
+            (Some(_), None) => {
+                return Err(new_nitro_cli_failure!(
+                    "`key-id` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["key-id"]))
+            }
+            (None, Some(_)) => {
+                return Err(new_nitro_cli_failure!(
+                    "`region` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["region"]))
+            }
+            _ => (),
+        };
+
+        Ok(DescribeArgs {
+            eif_path: parse_eif_path(args)
+                .map_err(|err| err.add_subaction("Parse EIF path".to_string()))?,
+            region,
+            key_id,
+        })
     }
 }
 
@@ -516,6 +653,24 @@ fn parse_error_code_str(args: &ArgMatches) -> NitroCliResult<String> {
         )
     })?;
     Ok(error_code_str.to_string())
+}
+
+fn parse_signing_method(args: &ArgMatches) -> NitroCliResult<String> {
+    let signing_method = args.value_of("signing-method").ok_or_else(|| {
+        new_nitro_cli_failure!(
+            "`signing-method` argument not found",
+            NitroCliErrorEnum::MissingArgument
+        )
+    })?;
+    Ok(signing_method.to_string())
+}
+
+fn parse_region(args: &ArgMatches) -> Option<String> {
+    args.value_of("region").map(|val| val.to_string())
+}
+
+fn parse_key_id(args: &ArgMatches) -> Option<String> {
+    args.value_of("key-id").map(|val| val.to_string())
 }
 
 #[cfg(test)]

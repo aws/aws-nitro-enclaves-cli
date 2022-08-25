@@ -93,12 +93,14 @@ pub fn run_enclaves(
 
     // Verify the certificate only if signature section exists
     if !signature_checker.is_empty() {
-        signature_checker.verify().map_err(|e| {
-            new_nitro_cli_failure!(
-                &format!("Invalid signing certificate: {:?}", e),
-                NitroCliErrorEnum::EIFSignatureCheckerError
-            )
-        })?;
+        signature_checker
+            .verify(args.region.as_ref(), args.key_id.as_ref())
+            .map_err(|e| {
+                new_nitro_cli_failure!(
+                    &format!("Invalid signing certificate: {:?}", e),
+                    NitroCliErrorEnum::EIFSignatureCheckerError
+                )
+            })?;
     }
 
     // Launch parallel computing of PCRs

@@ -3,6 +3,7 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+use aws_nitro_enclaves_image_format::utils::eif_signer::SigningKey;
 use clap::ArgMatches;
 use libc::VMADDR_CID_HOST;
 #[cfg(test)]
@@ -294,12 +295,8 @@ pub struct SignArgs {
     pub eif_path: String,
     /// The path to the signing certificate.
     pub signing_certificate: String,
-    /// The path to the private key.
-    pub private_key: Option<String>,
-    /// The region in which the KMS key resides.
-    pub region: Option<String>,
-    /// The KMS key id.
-    pub key_id: Option<String>,
+    /// The key used for signing the EIF
+    pub signing_key: SigningKey,
 }
 
 impl SignArgs {
@@ -310,6 +307,7 @@ impl SignArgs {
         let private_key = parse_private_key(args);
         let region = parse_region(args);
         let key_id = parse_key_id(args);
+        let signing_key;
 
         match signing_method.as_str() {
             "PrivateKey" => {
@@ -320,31 +318,41 @@ impl SignArgs {
                     )
                     .add_info(vec!["private-key"]));
                 }
+                signing_key = SigningKey::LocalKey {
+                    path: private_key.unwrap(),
+                };
             }
-            "KMS" => match (&region, &key_id) {
-                (Some(_), None) => {
-                    return Err(new_nitro_cli_failure!(
-                        "`key-id` argument not found",
-                        NitroCliErrorEnum::MissingArgument
-                    )
-                    .add_info(vec!["key-id"]))
-                }
-                (None, Some(_)) => {
-                    return Err(new_nitro_cli_failure!(
-                        "`region` argument not found",
-                        NitroCliErrorEnum::MissingArgument
-                    )
-                    .add_info(vec!["region"]))
-                }
-                (None, None) => {
-                    return Err(new_nitro_cli_failure!(
-                        "`region` and `key-id` arguments not found",
-                        NitroCliErrorEnum::MissingArgument
-                    )
-                    .add_info(vec!["region and key-id"]))
-                }
-                _ => (),
-            },
+            "KMS" => {
+                match (&region, &key_id) {
+                    (Some(_), None) => {
+                        return Err(new_nitro_cli_failure!(
+                            "`key-id` argument not found",
+                            NitroCliErrorEnum::MissingArgument
+                        )
+                        .add_info(vec!["key-id"]))
+                    }
+                    (None, Some(_)) => {
+                        return Err(new_nitro_cli_failure!(
+                            "`region` argument not found",
+                            NitroCliErrorEnum::MissingArgument
+                        )
+                        .add_info(vec!["region"]))
+                    }
+                    (None, None) => {
+                        return Err(new_nitro_cli_failure!(
+                            "`region` and `key-id` arguments not found",
+                            NitroCliErrorEnum::MissingArgument
+                        )
+                        .add_info(vec!["region and key-id"]))
+                    }
+                    _ => (),
+                };
+
+                signing_key = SigningKey::KmsKey {
+                    key_id: key_id.unwrap(),
+                    region: region.unwrap(),
+                };
+            }
             _ => {
                 return Err(new_nitro_cli_failure!(
                     "`signing-method` value is not valid",
@@ -365,9 +373,7 @@ impl SignArgs {
                 )
                 .add_info(vec!["signing_certificate"])
             })?,
-            private_key,
-            region,
-            key_id,
+            signing_key,
         })
     }
 }

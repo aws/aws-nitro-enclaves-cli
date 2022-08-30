@@ -73,20 +73,13 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
 pub fn sign_eif_file(args: SignArgs) -> NitroCliResult<()> {
     debug!("sign_eif_file");
     eprintln!("Start signing the Enclave Image...");
-    let mut signer = EifSigner::new(
-        args.eif_path,
-        args.signing_method,
-        args.signing_certificate,
-        args.private_key,
-        args.region,
-        args.key_id,
-    )
-    .map_err(|e| {
-        new_nitro_cli_failure!(
-            &format!("Failed to initialize EIF signer: {:?}", e),
-            NitroCliErrorEnum::EifParsingError
-        )
-    })?;
+    let mut signer = EifSigner::new(args.eif_path, args.signing_certificate, args.signing_key)
+        .map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to initialize EIF signer: {:?}", e),
+                NitroCliErrorEnum::EifParsingError
+            )
+        })?;
     signer.sign_image().expect("Failed signing");
     Ok(())
 }

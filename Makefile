@@ -105,16 +105,8 @@ driver-deps:
 	echo "Warning: kernel-header were not installed") \
 	&& echo "Successfully installed the driver deps"
 
-# In order to avoid executing the same rule everytime,
-# the build rules are prefixed by dot and are generating
-# a file with the same name via the touch command. This
-# change is required in order to capture the timestamp
-# of the rule.
-.build-container: tools/Dockerfile1804.${HOST_MACHINE}
-	docker image build -t $(CONTAINER_TAG) -f tools/Dockerfile1804.${HOST_MACHINE} tools/
-	touch $@
-
-build-container: .build-container
+build-container:
+	@docker image build --pull --quiet -t $(CONTAINER_TAG) -f tools/Dockerfile1804.${HOST_MACHINE} tools/
 
 $(OBJ_PATH):
 	$(MKDIR) -p $(OBJ_PATH)

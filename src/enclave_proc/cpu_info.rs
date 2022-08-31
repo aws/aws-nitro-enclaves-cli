@@ -39,8 +39,22 @@ impl Default for EnclaveCpuConfig {
 impl CpuInfo {
     /// Create a new `CpuInfo` instance from the current system configuration.
     pub fn new() -> NitroCliResult<Self> {
+        let pool_file = File::open(POOL_FILENAME).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to open CPU pool file: {}", e),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+            .add_info(vec![POOL_FILENAME, "Open"])
+        })?;
+        let file_reader = BufReader::new(pool_file);
+
+        CpuInfo::from_reader(file_reader)
+    }
+
+    /// Create a new `CpuInfo` instance from a buffered reader
+    pub(crate) fn from_reader<B: BufRead>(reader: B) -> NitroCliResult<Self> {
         Ok(CpuInfo {
-            cpu_ids: CpuInfo::get_cpu_info()?,
+            cpu_ids: CpuInfo::get_cpu_info(reader)?,
         })
     }
 
@@ -159,18 +173,10 @@ impl CpuInfo {
     }
 
     /// Parse the CPU pool and build the list of off-line CPUs.
-    fn get_cpu_info() -> NitroCliResult<Vec<u32>> {
-        let pool_file = File::open(POOL_FILENAME).map_err(|e| {
-            new_nitro_cli_failure!(
-                &format!("Failed to open CPU pool file: {}", e),
-                NitroCliErrorEnum::FileOperationFailure
-            )
-            .add_info(vec![POOL_FILENAME, "Open"])
-        })?;
-        let file_reader = BufReader::new(pool_file);
+    fn get_cpu_info<B: BufRead>(reader: B) -> NitroCliResult<Vec<u32>> {
         let mut result: Vec<u32> = Vec::new();
 
-        for line in file_reader.lines() {
+        for line in reader.lines() {
             let line_str = line.map_err(|e| {
                 new_nitro_cli_failure!(
                     &format!("Failed to read line from CPU pool file: {}", e),
@@ -269,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_get_cpu_config_invalid_input() {
-        let cpu_info = CpuInfo::new().unwrap();
+        let cpu_info = CpuInfo::from_reader("1".as_bytes()).unwrap();
         let mut run_args = RunEnclavesArgs {
             eif_path: String::new(),
             enclave_cid: None,
@@ -302,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_get_cpu_config_valid_input() {
-        let cpu_info = CpuInfo::new().unwrap();
+        let cpu_info = CpuInfo::from_reader("1,3".as_bytes()).unwrap();
         let mut run_args = RunEnclavesArgs {
             eif_path: String::new(),
             enclave_cid: None,
@@ -328,7 +334,7 @@ mod tests {
 
     #[test]
     fn test_get_cpu_candidates() {
-        let cpu_info = CpuInfo::new().unwrap();
+        let cpu_info = CpuInfo::from_reader("1".as_bytes()).unwrap();
         let candidate_cpus = cpu_info.get_cpu_candidates();
 
         assert!(!candidate_cpus.is_empty());
@@ -336,7 +342,7 @@ mod tests {
 
     #[test]
     fn test_check_cpu_ids() {
-        let cpu_info = CpuInfo::new().unwrap();
+        let cpu_info = CpuInfo::from_reader("1,3".as_bytes()).unwrap();
         let mut cpu_ids: Vec<u32> = vec![1];
 
         let mut result = cpu_info.check_cpu_ids(&cpu_ids);

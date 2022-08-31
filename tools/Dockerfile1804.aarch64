@@ -36,11 +36,9 @@ RUN  source $HOME/.cargo/env && \
 RUN  source $HOME/.cargo/env && \
     rustup target add --toolchain ${RUST_VERSION} aarch64-unknown-linux-musl
 RUN  source $HOME/.cargo/env && \
-     rustup toolchain install 1.57-aarch64-unknown-linux-gnu
+    cargo install cargo-audit --version 0.16.0 --locked
 RUN  source $HOME/.cargo/env && \
-    cargo +1.57 install cargo-audit --version 0.16.0 --locked
-RUN  source $HOME/.cargo/env && \
-    cargo +1.57 install cargo-about --version 0.4.3 --locked
+    cargo install cargo-about --version 0.5.1 --locked
 RUN apt-get install -y jq
 
 # Install docker for nitro-cli build-enclave runs

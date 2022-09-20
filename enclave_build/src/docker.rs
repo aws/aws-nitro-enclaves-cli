@@ -387,7 +387,7 @@ impl DockerUtil {
     }
 }
 
-fn write_config(config: Vec<String>) -> Result<NamedTempFile, DockerError> {
+pub fn write_config(config: Vec<String>) -> Result<NamedTempFile, DockerError> {
     let mut file = NamedTempFile::new().map_err(|_| DockerError::TempfileError)?;
 
     for line in config {

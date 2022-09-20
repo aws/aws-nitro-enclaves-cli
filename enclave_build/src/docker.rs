@@ -4,8 +4,9 @@
 use crate::{EnclaveBuildError, Result};
 use base64::{engine::general_purpose, Engine as _};
 use futures::stream::StreamExt;
-use log::{debug, info};
+use log::{debug, error, info};
 use serde_json::{json, Value};
+
 use shiplift::RegistryAuth;
 use shiplift::{BuildOptions, Docker, PullOptions};
 use std::{fs::File, io::Write, path::Path};
@@ -17,28 +18,218 @@ use url::Url;
 pub const DOCKER_ARCH_ARM64: &str = "arm64";
 pub const DOCKER_ARCH_AMD64: &str = "amd64";
 
+use crate::image_manager::ImageManager;
+
 /// Struct exposing the Docker functionalities to the EIF builder
-pub struct DockerUtil {
+pub struct DockerImageManager {
     docker: Docker,
     docker_image: String,
 }
 
-impl DockerUtil {
-    /// Constructor that takes as argument a tag for the docker image to be used
-    pub fn new(docker_image: String) -> Self {
-        let mut docker_image = docker_image;
+impl ImageManager for DockerImageManager {
+    fn image_name(&self) -> &str {
+        &self.docker_image
+    }
 
-        if !docker_image.contains(':') {
-            docker_image.push_str(":latest");
-        }
+    /// Inspects the  docker image and returns its description as a JSON String.
+    fn inspect_image(&self) -> Result<serde_json::Value> {
+        let act = async {
+            match self.docker.images().get(&self.docker_image).inspect().await {
+                Ok(image) => Ok(json!(image)),
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(EnclaveBuildError::ImageInspectError)
+                }
+            }
+        };
 
-        DockerUtil {
+        let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
+        runtime
+            .block_on(act)
+            .map_err(|_| EnclaveBuildError::RuntimeError)
+    }
+
+    /// Fetches architecture information from a docker image.
+    fn architecture(&self) -> Result<String> {
+        let arch = async {
+            match self.docker.images().get(&self.docker_image).inspect().await {
+                Ok(image) => Ok(image.architecture),
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(EnclaveBuildError::ImageInspectError)
+                }
+            }
+        };
+
+        let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
+
+        runtime
+            .block_on(arch)
+            .map_err(|_| EnclaveBuildError::RuntimeError)
+    }
+
+    /// The main function of this struct. This needs to be called in order to
+    /// extract the necessary configuration values from the docker image with
+    /// the tag provided in the constructor.
+    fn extract_expressions(&self) -> Result<(NamedTempFile, NamedTempFile)> {
+        let (cmd, env) = self.extract_image()?;
+
+        let cmd_file = write_config(cmd)?;
+        let env_file = write_config(env)?;
+
+        Ok((cmd_file, env_file))
+    }
+}
+
+impl DockerImageManager {
+    /// Constructor that takes as argument a tag for the docker image to be used.
+    pub fn new<S: AsRef<str>>(docker_image: S) -> Result<Self> {
+        let docker_image = Self::tag_image(docker_image);
+
+        let mut docker_manager = DockerImageManager {
             // DOCKER_HOST environment variable is parsed inside
             // if docker daemon address needs to be substituted.
             // By default it tries to connect to 'unix:///var/run/docker.sock'
             docker: Docker::new(),
             docker_image,
+        };
+
+        docker_manager.pull_image()?;
+
+        Ok(docker_manager)
+    }
+
+    /// Builds an image locally, with the tag provided in constructor, using a
+    /// directory that contains a Dockerfile. Returns a manager for this image.
+    pub fn from_dockerfile(docker_image: &str, dockerfile_dir: &str) -> Result<Self> {
+        if !Path::new(&dockerfile_dir).is_dir() {
+            return Err(EnclaveBuildError::PathError(dockerfile_dir.to_string()));
         }
+
+        let docker_image = Self::tag_image(docker_image);
+
+        let docker_manager = DockerImageManager {
+            docker: Docker::new(),
+            docker_image,
+        };
+
+        let act = async {
+            let mut stream = docker_manager.docker.images().build(
+                &BuildOptions::builder(dockerfile_dir)
+                    .tag(docker_manager.docker_image.clone())
+                    .build(),
+            );
+
+            loop {
+                if let Some(item) = stream.next().await {
+                    match item {
+                        Ok(output) => {
+                            let msg = &output;
+
+                            if let Some(err_msg) = msg.get("error") {
+                                error!("{:?}", err_msg.clone());
+                                break Err(EnclaveBuildError::DockerError(
+                                    "Failed to build docker image".into(),
+                                ));
+                            } else {
+                                info!("{}", msg);
+                            }
+                        }
+                        Err(e) => {
+                            error!("{:?}", e);
+                            break Err(EnclaveBuildError::DockerError(
+                                "Failed to build docker image".into(),
+                            ));
+                        }
+                    }
+                } else {
+                    break Ok(());
+                }
+            }
+        };
+
+        Runtime::new()
+            .map_err(|_| EnclaveBuildError::RuntimeError)?
+            .block_on(act)?;
+
+        Ok(docker_manager)
+    }
+
+    pub fn tag_image<S: AsRef<str>>(docker_image: S) -> String {
+        let mut docker_image = docker_image.as_ref().to_string();
+
+        if !docker_image.contains(':') {
+            docker_image.push_str(":latest");
+        }
+
+        docker_image
+    }
+
+    /// Pull the image, with the tag provided in constructor, from the Docker registry.
+    fn pull_image(&mut self) -> Result<()> {
+        let act = async {
+            // Check if the Docker image is locally available.
+            // If available, early exit.
+            if self
+                .docker
+                .images()
+                .get(&self.docker_image)
+                .inspect()
+                .await
+                .is_ok()
+            {
+                eprintln!("Using the locally available Docker image...");
+                return Ok(());
+            }
+
+            let mut pull_options_builder = PullOptions::builder();
+            pull_options_builder.image(&self.docker_image);
+
+            match self.get_credentials() {
+                Ok(auth) => {
+                    pull_options_builder.auth(auth);
+                }
+                // It is not mandatory to have the credentials set, but this is
+                // the most likely reason for failure when pulling, so log the
+                // error.
+                Err(err) => {
+                    debug!("WARNING!! Credential could not be set {:?}", err);
+                }
+            };
+
+            let mut stream = self.docker.images().pull(&pull_options_builder.build());
+
+            loop {
+                if let Some(item) = stream.next().await {
+                    match item {
+                        Ok(output) => {
+                            let msg = &output;
+
+                            if let Some(err_msg) = msg.get("error") {
+                                error!("{:?}", err_msg.clone());
+                                break Err(EnclaveBuildError::DockerError(
+                                    "Failed to pull docker image".into(),
+                                ));
+                            } else {
+                                info!("{}", msg);
+                            }
+                        }
+                        Err(e) => {
+                            error!("{:?}", e);
+                            break Err(EnclaveBuildError::DockerError(
+                                "Failed to pull docker image".into(),
+                            ));
+                        }
+                    }
+                } else {
+                    break Ok(());
+                }
+            }
+        };
+
+        let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
+
+        runtime.block_on(act)
     }
 
     /// Returns the credentials by reading ${HOME}/.docker/config.json or ${DOCKER_CONFIG}
@@ -154,117 +345,6 @@ impl DockerUtil {
         }
     }
 
-    /// Pull the image, with the tag provided in constructor, from the Docker registry
-    pub fn pull_image(&self) -> Result<()> {
-        let act = async {
-            // Check if the Docker image is locally available.
-            // If available, early exit.
-            if self
-                .docker
-                .images()
-                .get(&self.docker_image)
-                .inspect()
-                .await
-                .is_ok()
-            {
-                eprintln!("Using the locally available Docker image...");
-                return Ok(());
-            }
-
-            let mut pull_options_builder = PullOptions::builder();
-            pull_options_builder.image(&self.docker_image);
-
-            match self.get_credentials() {
-                Ok(auth) => {
-                    pull_options_builder.auth(auth);
-                }
-                // It is not mandatory to have the credentials set, but this is
-                // the most likely reason for failure when pulling, so log the
-                // error.
-                Err(err) => {
-                    debug!("WARNING!! Credential could not be set {:?}", err);
-                }
-            };
-
-            let mut stream = self.docker.images().pull(&pull_options_builder.build());
-
-            loop {
-                if let Some(item) = stream.next().await {
-                    match item {
-                        Ok(output) => {
-                            let msg = &output;
-
-                            if let Some(err_msg) = msg.get("error") {
-                                break Err(EnclaveBuildError::ImagePullError(err_msg.to_string()));
-                            } else {
-                                info!("{}", msg);
-                            }
-                        }
-                        Err(e) => {
-                            break Err(EnclaveBuildError::ImagePullError(e.to_string()));
-                        }
-                    }
-                } else {
-                    break Ok(());
-                }
-            }
-        };
-
-        let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
-
-        runtime.block_on(act)
-    }
-
-    /// Build an image locally, with the tag provided in constructor, using a
-    /// directory that contains a Dockerfile
-    pub fn build_image(&self, dockerfile_dir: String) -> Result<()> {
-        let act = async {
-            let mut stream = self.docker.images().build(
-                &BuildOptions::builder(dockerfile_dir)
-                    .tag(self.docker_image.clone())
-                    .build(),
-            );
-
-            loop {
-                if let Some(item) = stream.next().await {
-                    match item {
-                        Ok(output) => {
-                            let msg = &output;
-
-                            if let Some(err_msg) = msg.get("error") {
-                                break Err(EnclaveBuildError::ImageBuildError(err_msg.to_string()));
-                            } else {
-                                info!("{}", msg);
-                            }
-                        }
-                        Err(e) => {
-                            break Err(EnclaveBuildError::ImageBuildError(e.to_string()));
-                        }
-                    }
-                } else {
-                    break Ok(());
-                }
-            }
-        };
-
-        let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
-
-        runtime.block_on(act)
-    }
-
-    /// Inspect docker image and return its description as a json String
-    pub fn inspect_image(&self) -> Result<serde_json::Value> {
-        let act = async {
-            match self.docker.images().get(&self.docker_image).inspect().await {
-                Ok(image) => Ok(json!(image)),
-                Err(e) => Err(EnclaveBuildError::ImageInspectError(e)),
-            }
-        };
-
-        let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
-        runtime.block_on(act)
-    }
-
     fn extract_image(&self) -> Result<(Vec<String>, Vec<String>)> {
         // First try to find CMD parameters (together with potential ENV bindings)
         let act_cmd = async {
@@ -333,40 +413,14 @@ impl DockerUtil {
 
         runtime.block_on(act)
     }
-
-    /// The main function of this struct. This needs to be called in order to
-    /// extract the necessary configuration values from the docker image with
-    /// the tag provided in the constructor
-    pub fn load(&self) -> Result<(NamedTempFile, NamedTempFile)> {
-        let (cmd, env) = self.extract_image()?;
-
-        let cmd_file = write_config(cmd)?;
-        let env_file = write_config(env)?;
-
-        Ok((cmd_file, env_file))
-    }
-
-    /// Fetch architecture information from an image
-    pub fn architecture(&self) -> Result<String> {
-        let arch = async {
-            match self.docker.images().get(&self.docker_image).inspect().await {
-                Ok(image) => Ok(image.architecture),
-                Err(e) => Err(EnclaveBuildError::ImageInspectError(e)),
-            }
-        };
-
-        let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
-
-        runtime.block_on(arch)
-    }
 }
 
 pub fn write_config(config: Vec<String>) -> Result<NamedTempFile> {
     let mut file = NamedTempFile::new().map_err(|_| EnclaveBuildError::ConfigError)?;
 
     for line in config {
-        file.write_fmt(format_args!("{line}\n"))
-            .map_err(|_| EnclaveBuildError::ConfigError)?;
+        file.write_fmt(format_args!("{}\n", line))
+            .map_err(EnclaveBuildError::FileError)?;
     }
 
     Ok(file)
@@ -381,15 +435,15 @@ mod tests {
     #[test]
     fn test_config() {
         #[cfg(target_arch = "x86_64")]
-        let docker = DockerUtil::new(String::from(
+        let docker = DockerImageManager::new(String::from(
             "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-x86_64",
         ));
         #[cfg(target_arch = "aarch64")]
-        let docker = DockerUtil::new(String::from(
+        let mut docker = DockerImageManager::new(String::from(
             "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64",
         ));
 
-        let (cmd_file, env_file) = docker.load().unwrap();
+        let (cmd_file, env_file) = docker.unwrap().extract_expressions().unwrap();
         let mut cmd_file = File::open(cmd_file.path()).unwrap();
         let mut env_file = File::open(env_file.path()).unwrap();
 

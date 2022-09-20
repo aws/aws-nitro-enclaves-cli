@@ -7,6 +7,7 @@ use std::convert::TryFrom;
 use log::warn;
 use oci_distribution::Reference;
 use tempfile::NamedTempFile;
+use tokio::runtime::Runtime;
 
 use crate::image::ImageDetails;
 use crate::storage::OciStorage;
@@ -33,7 +34,7 @@ pub struct OciImageManager {
 impl OciImageManager {
     /// When calling this constructor, it also tries to initialize the storage at the default path.
     /// If this fails, the ImageManager is still created, but the 'storage' field is set to 'None'.
-    pub async fn new(image_name: &str) -> Result<Self> {
+    pub fn new(image_name: &str) -> Result<Self> {
         // Add the default ":latest" tag if the image tag is missing
         let image_name = normalize_tag(image_name)?;
 
@@ -48,7 +49,12 @@ impl OciImageManager {
             Err(_) => None,
         };
 
-        let image_details = Self::fetch_image_details(&image_name, storage).await?;
+        let act = Self::fetch_image_details(&image_name, storage);
+
+        let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
+        let image_details = runtime
+            .block_on(act)
+            .map_err(|_| EnclaveBuildError::RuntimeError)?;
 
         Ok(Self {
             image_name,
@@ -201,7 +207,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_manager() {
-        let image_manager = OciImageManager::new(SAMPLE_IMAGE).await.unwrap();
+        let image_manager = OciImageManager::new(SAMPLE_IMAGE).unwrap();
 
         assert_eq!(image_manager.image_name, SAMPLE_IMAGE);
 
@@ -220,7 +226,7 @@ mod tests {
         #[cfg(target_arch = "x86_64")]
         let image_manager = OciImageManager::new(
             "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-x86_64",
-        ).await.unwrap();
+        ).unwrap();
         #[cfg(target_arch = "aarch64")]
         let mut image_manager = OciImageManager::new(
             "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64",

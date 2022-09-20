@@ -126,7 +126,8 @@ pub fn build_from_docker(
     })?;
 
     let mut docker2eif = enclave_build::Docker2Eif::new(
-        docker_uri.to_string(),
+        Some(docker_uri.to_string()),
+        docker_dir.clone(),
         format!("{}/init", blobs_path),
         format!("{}/nsm.ko", blobs_path),
         kernel_path,
@@ -148,23 +149,6 @@ pub fn build_from_docker(
         )
     })?;
 
-    if let Some(docker_dir) = docker_dir {
-        docker2eif
-            .build_docker_image(docker_dir.clone())
-            .map_err(|err| {
-                new_nitro_cli_failure!(
-                    &format!("Failed to build docker image: {:?}", err),
-                    NitroCliErrorEnum::DockerImageBuildError
-                )
-            })?;
-    } else {
-        docker2eif.pull_docker_image().map_err(|err| {
-            new_nitro_cli_failure!(
-                &format!("Failed to pull docker image: {:?}", err),
-                NitroCliErrorEnum::DockerImagePullError
-            )
-        })?;
-    }
     let measurements = docker2eif.create().map_err(|err| {
         new_nitro_cli_failure!(
             &format!("Failed to create EIF image: {:?}", err),

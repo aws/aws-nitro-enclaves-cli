@@ -1,6 +1,6 @@
 // Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-
+#![allow(dead_code)]
 use crate::{EnclaveBuildError, Result};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::io::Read;
@@ -41,7 +41,7 @@ impl ImageDetails {
         // https://github.com/opencontainers/image-spec/blob/main/config.md
         let image_hash = format!("sha256:{:x}", sha2::Sha256::digest(&image_data.config.data));
 
-        let image_ref = build_image_reference(&image_name)?;
+        let image_ref = build_image_reference(image_name)?;
 
         Ok(Self {
             uri: image_ref.whole(),
@@ -223,7 +223,6 @@ mod tests {
 
     #[test]
     fn test_from_image_data() {
-        // Use the mock image data from the cache.rs module
         let mock_image_data = build_image_data();
 
         let image_hash = format!(

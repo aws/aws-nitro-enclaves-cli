@@ -485,6 +485,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
+ "vmm-sys-util 0.8.0",
 ]
 
 [[package]]
@@ -1248,7 +1249,7 @@ dependencies = [
  "sha2 0.9.9",
  "signal-hook",
  "tempfile",
- "vmm-sys-util",
+ "vmm-sys-util 0.11.1",
  "vsock",
 ]
 
@@ -2300,6 +2301,16 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "vmm-sys-util"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01cf11afbc4ebc0d5c7a7748a77d19e2042677fc15faa2f4ccccb27c18a60605"
+dependencies = [
+ "bitflags",
+ "libc",
+]
 
 [[package]]
 name = "vmm-sys-util"

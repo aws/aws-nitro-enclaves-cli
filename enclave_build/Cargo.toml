@@ -9,6 +9,7 @@ rust-version = "1.59"
 
 [dependencies]
 clap = "3.2"
+vmm-sys-util = "0.8.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 serde_json = "1.0"

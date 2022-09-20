@@ -27,11 +27,11 @@ pub enum EnclaveBuildError {
     DockerError(DockerError),
     #[error("Invalid path: `{0}`")]
     PathError(String),
-    #[error("Image pull error")]
-    ImagePullError,
+    #[error("Image pull error: `{0}`")]
+    ImagePullError(String),
     #[error("Linuxkit error: `{0}`")]
     LinuxKitError(String),
-    #[error("File operation error")]
+    #[error("File operation error: `{0:?}`")]
     FileError(std::io::Error),
     #[error("Ramfs error: `{0:?}`")]
     RamfsError(YamlGeneratorError),
@@ -51,8 +51,8 @@ pub enum EnclaveBuildError {
     HashingError(String),
     #[error("Serde error: `{0:?}`")]
     SerdeError(serde_json::Error),
-    #[error("Credentials error")]
-    CredentialsError,
+    #[error("Error while parsing credentials: `{0}`")]
+    CredentialsError(String),
     #[error("Image cache initialization error")]
     CacheInitError,
     #[error("Cache store operation failed: `{0}`")]

@@ -3,7 +3,7 @@ name = "enclave_build"
 version = "0.1.0"
 authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
 edition = "2018"
-rust-version = "1.58"
+rust-version = "1.59"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,5 +21,6 @@ url = "2.1"
 sha2 = "0.9.5"
 futures = "0.3.13"
 thiserror = "1.0"
-
 aws-nitro-enclaves-image-format = "0.2"
+oci-distribution = "0.9.2"
+oci-spec = "0.5.8"

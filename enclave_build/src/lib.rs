@@ -53,16 +53,20 @@ pub enum EnclaveBuildError {
     SerdeError(serde_json::Error),
     #[error("Error while parsing credentials: `{0}`")]
     CredentialsError(String),
-    #[error("Image cache initialization error")]
-    CacheInitError,
-    #[error("Cache store operation failed: `{0}`")]
-    CacheStoreError(String),
-    #[error("Config error")]
+    #[error("Image cache initialization error: `{0:?}`")]
+    CacheInitError(std::io::Error),
+    #[error("Cache store operation failed: `{0:?}`")]
+    CacheStoreError(std::io::Error),
+    #[error("Cache entry not found or has wrong: `{0:?}`")]
+    CacheMissError(String),
+    #[error("Manifest missing or wrong format")]
     ConfigError,
-    #[error("Manifest error")]
+    #[error("Manifest missing or wrong format")]
     ManifestError,
     #[error("Failed to extract expressions from image: `{0}`")]
     ExtractError(String),
+    #[error("Runtime creation failed")]
+    RuntimeError,
     #[error("EIF build error: `{0}`")]
     OtherError(String),
 }

@@ -17,7 +17,18 @@ fn main() {
                 .long("tag")
                 .help("Docker image tag")
                 .takes_value(true)
-                .required(true),
+        )
+        .arg(
+            Arg::with_name("docker_dir")
+                .long("dir")
+                .help("Path to directory containing a Dockerfile")
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name("oci_image")
+                .long("oci")
+                .help("OCI image tag")
+                .takes_value(true)
         )
         .arg(
             Arg::with_name("init_path")
@@ -122,7 +133,9 @@ fn main() {
         )
         .get_matches();
 
-    let docker_image = matches.value_of("docker_image").unwrap();
+    let docker_image = matches.value_of("docker_image").map(|val| val.to_string());
+    let docker_dir = matches.value_of("docker_dir").map(|val| val.to_string());
+    let oci_image = matches.value_of("oci_image").map(|val| val.to_string());
     let init_path = matches.value_of("init_path").unwrap();
     let nsm_path = matches.value_of("nsm_path").unwrap();
     let kernel_img_path = matches.value_of("kernel_img_path").unwrap();
@@ -148,7 +161,9 @@ fn main() {
         .expect("Failed to create output file");
 
     let mut img = Docker2Eif::new(
-        docker_image.to_string(),
+        docker_image,
+        docker_dir,
+        oci_image,
         init_path.to_string(),
         nsm_path.to_string(),
         kernel_img_path.to_string(),
@@ -169,7 +184,7 @@ fn main() {
         let dockerfile_dir = matches.value_of("build").unwrap();
         img.build_docker_image(dockerfile_dir.to_string()).unwrap();
     } else if matches.is_present("pull") {
-        img.pull_docker_image().unwrap();
+        img.pull_image().unwrap();
     }
 
     img.create().unwrap();

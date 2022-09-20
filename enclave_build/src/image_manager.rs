@@ -22,6 +22,8 @@ pub trait ImageManager {
     /// Returns two temp files containing the CMD and ENV expressions extracted from the image,
     /// in this order.
     fn load(&mut self) -> Result<(NamedTempFile, NamedTempFile)>;
+    /// Returns true if the image manager uses the Docker daemon
+    fn use_docker(&self) -> bool;
 }
 
 pub struct OciImageManager {
@@ -93,6 +95,11 @@ impl ImageManager for OciImageManager {
 
         let runtime = Runtime::new().map_err(|_| EnclaveBuildError::RuntimeError)?;
         runtime.block_on(act_get_image)
+    }
+
+    /// The OCI image manager does not use the Docker daemon
+    fn use_docker(&self) -> bool {
+        false
     }
 }
 

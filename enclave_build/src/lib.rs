@@ -6,13 +6,16 @@ use std::fs::File;
 use std::path::Path;
 use std::process::Command;
 
+mod cache;
 mod docker;
+mod image;
+mod image_manager;
+mod pull;
 mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
 use aws_nitro_enclaves_image_format::utils::identity::parse_custom_metadata;
 use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignEnclaveInfo};
-use docker::{DockerError, DockerUtil};
 use serde_json::json;
 use sha2::Digest;
 use std::collections::BTreeMap;
@@ -24,11 +27,13 @@ pub const DEFAULT_TAG: &str = "1.0";
 #[derive(Debug, Error)]
 pub enum EnclaveBuildError {
     #[error("Docker error: `{0:?}`")]
-    DockerError(DockerError),
+    DockerError(String),
     #[error("Invalid path: `{0}`")]
     PathError(String),
     #[error("Image pull error: `{0}`")]
     ImagePullError(String),
+    #[error("Image inspect failed")]
+    ImageInspectError,
     #[error("Linuxkit error: `{0}`")]
     LinuxKitError(String),
     #[error("File operation error: `{0:?}`")]
@@ -65,6 +70,8 @@ pub enum EnclaveBuildError {
     ManifestError,
     #[error("Failed to extract expressions from image: `{0}`")]
     ExtractError(String),
+    #[error("Image entrypoint missing or unsupported")]
+    EntrypointError,
     #[error("Runtime creation failed")]
     RuntimeError,
     #[error("EIF build error: `{0}`")]
@@ -74,8 +81,8 @@ pub enum EnclaveBuildError {
 pub type Result<T> = std::result::Result<T, EnclaveBuildError>;
 
 pub struct Docker2Eif<'a> {
-    docker_image: String,
-    docker: DockerUtil,
+    /// This field can be any struct that implements the 'ImageManager' trait.
+    image_manager: Box<dyn image_manager::ImageManager>,
     init_path: String,
     nsm_path: String,
     kernel_img_path: String,
@@ -91,8 +98,15 @@ pub struct Docker2Eif<'a> {
 }
 
 impl<'a> Docker2Eif<'a> {
+    /// If the 'docker_dir' argument is Some (i.e. --docker-dir flag is used), the docker daemon will
+    /// always be used to build the image locally and store it in the docker cache.
+    ///
+    /// If the 'oci_image' argument is Some (i.e. the --image-uri flag is used) and the '--docker-dir'
+    /// flag is not used, pull and cache the image without using the docker daemon.
     pub fn new(
-        docker_image: String,
+        docker_image: Option<String>,
+        docker_dir: Option<String>,
+        oci_image: Option<String>,
         init_path: String,
         nsm_path: String,
         kernel_img_path: String,
@@ -107,7 +121,25 @@ impl<'a> Docker2Eif<'a> {
         metadata_path: Option<String>,
         build_info: EifBuildInfo,
     ) -> Result<Self> {
-        let docker = DockerUtil::new(docker_image.clone());
+        // The flags usage was already validated by the commands parser, so now just check if the docker daemon
+        // should be used or not
+        let image_manager: Box<dyn image_manager::ImageManager> =
+            match (&docker_image, &docker_dir, &oci_image) {
+                // If the --docker-uri flag is used then the docker client is required either for pulling the image or
+                // for building it locally from the supplied Dockerfile in case --docker-dir is used too
+                (Some(docker_image), _, _) => {
+                    Box::new(crate::docker::DockerImageManager::new(docker_image))
+                }
+                // In all other valid cases, do not use docker
+                (_, _, Some(oci_image)) => {
+                    Box::new(crate::image_manager::OciImageManager::new(oci_image))
+                }
+                (_, _, _) => {
+                    return Err(EnclaveBuildError::ImageDetailError(
+                        "Image directory or URI missing".to_string(),
+                    ))
+                }
+            };
 
         if !Path::new(&init_path).is_file() {
             return Err(EnclaveBuildError::PathError("init path".to_string()));
@@ -140,8 +172,7 @@ impl<'a> Docker2Eif<'a> {
         };
 
         Ok(Docker2Eif {
-            docker_image,
-            docker,
+            image_manager,
             init_path,
             nsm_path,
             kernel_img_path,
@@ -157,11 +188,8 @@ impl<'a> Docker2Eif<'a> {
         })
     }
 
-    pub fn pull_docker_image(&self) -> Result<()> {
-        self.docker.pull_image().map_err(|e| {
-            eprintln!("Docker error: {:?}", e);
-            EnclaveBuildError::DockerError(e)
-        })?;
+    pub fn pull_image(&mut self) -> Result<()> {
+        self.image_manager.pull_image()?;
 
         Ok(())
     }
@@ -170,21 +198,15 @@ impl<'a> Docker2Eif<'a> {
         if !Path::new(&dockerfile_dir).is_dir() {
             return Err(EnclaveBuildError::PathError("Dockerfile path".to_string()));
         }
-        self.docker.build_image(dockerfile_dir).map_err(|e| {
-            eprintln!("Docker error: {:?}", e);
-            EnclaveBuildError::DockerError(e)
-        })?;
+        self.image_manager.build_image(dockerfile_dir)?;
 
         Ok(())
     }
 
-    fn generate_identity_info(&self) -> Result<EifIdentityInfo> {
-        let docker_info = self
-            .docker
-            .inspect_image()
-            .map_err(EnclaveBuildError::DockerError)?;
+    fn generate_identity_info(&mut self) -> Result<EifIdentityInfo> {
+        let docker_info = self.image_manager.inspect_image()?;
 
-        let uri_split: Vec<&str> = self.docker_image.split(':').collect();
+        let uri_split: Vec<&str> = self.image_manager.image_name().split(':').collect();
         if uri_split.is_empty() {
             return Err(EnclaveBuildError::ImageDetailError(
                 "Wrong image name specified".to_string(),
@@ -229,13 +251,10 @@ impl<'a> Docker2Eif<'a> {
     }
 
     pub fn create(&mut self) -> Result<BTreeMap<String, String>> {
-        let (cmd_file, env_file) = self.docker.load().map_err(|e| {
-            eprintln!("Docker error: {:?}", e);
-            EnclaveBuildError::DockerError(e)
-        })?;
+        let (cmd_file, env_file) = self.image_manager.load()?;
 
         let yaml_generator = YamlGenerator::new(
-            self.docker_image.clone(),
+            self.image_manager.image_name().clone(),
             self.init_path.clone(),
             self.nsm_path.clone(),
             cmd_file.path().to_str().unwrap().to_string(),
@@ -266,46 +285,62 @@ impl<'a> Docker2Eif<'a> {
             .output()
             .map_err(|e| EnclaveBuildError::LinuxKitError(format!("{:?}", e)))?;
         if !output.status.success() {
-            eprintln!(
+            return Err(EnclaveBuildError::LinuxKitError(format!(
                 "Linuxkit reported an error while creating the bootstrap ramfs: {:?}",
                 String::from_utf8_lossy(&output.stderr)
-            );
-            return Err(EnclaveBuildError::LinuxKitError(format!(
-                "{:?}",
-                String::from_utf8_lossy(&output.stderr)
             )));
         }
 
-        // Prefix the docker image filesystem, as expected by init
-        let output = Command::new(&self.linuxkit_path)
-            .args(&[
-                "build",
-                "-docker",
-                "-name",
-                &customer_ramfs,
-                "-format",
-                "kernel+initrd",
-                "-prefix",
-                "rootfs/",
-                ramfs_with_rootfs_config_file.path().to_str().unwrap(),
-            ])
-            .output()
-            .map_err(|e| EnclaveBuildError::LinuxKitError(format!("{:?}", e)))?;
-        if !output.status.success() {
-            eprintln!(
-                "Linuxkit reported an error while creating the customer ramfs: {:?}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            return Err(EnclaveBuildError::LinuxKitError(format!(
-                "{:?}",
-                String::from_utf8_lossy(&output.stderr)
-            )));
+        // If the docker daemon should be used, then call linuxkit with the '-docker' flag, which
+        // makes linuxkit search the image in the docker cache first.
+        // Otherwise, do not add the flag and let it pull the images itself, without docker.
+        if self.image_manager.use_docker() {
+            // Prefix the docker image filesystem, as expected by init
+            let output = Command::new(&self.linuxkit_path)
+                .args(&[
+                    "build",
+                    // Use the docker daemon to first check if the image is in the docker cache
+                    "-docker",
+                    "-name",
+                    &customer_ramfs,
+                    "-format",
+                    "kernel+initrd",
+                    "-prefix",
+                    "rootfs/",
+                    ramfs_with_rootfs_config_file.path().to_str().unwrap(),
+                ])
+                .output()
+                .map_err(|e| EnclaveBuildError::LinuxKitError(format!("{:?}", e)))?;
+            if !output.status.success() {
+                return Err(EnclaveBuildError::LinuxKitError(format!(
+                    "Linuxkit reported an error while creating the customer ramfs: {:?}",
+                    String::from_utf8_lossy(&output.stderr)
+                )));
+            }
+        } else {
+            // In this case, linuxkit pulls the image itself
+            let output = Command::new(&self.linuxkit_path)
+                .args(&[
+                    "build",
+                    "-name",
+                    &customer_ramfs,
+                    "-format",
+                    "kernel+initrd",
+                    "-prefix",
+                    "rootfs/",
+                    ramfs_with_rootfs_config_file.path().to_str().unwrap(),
+                ])
+                .output()
+                .map_err(|e| EnclaveBuildError::LinuxKitError(format!("{:?}", e)))?;
+            if !output.status.success() {
+                return Err(EnclaveBuildError::LinuxKitError(format!(
+                    "Linuxkit reported an error while creating the customer ramfs: {:?}",
+                    String::from_utf8_lossy(&output.stderr)
+                )));
+            }
         }
 
-        let arch = self.docker.architecture().map_err(|e| {
-            eprintln!("Docker error: {:?}", e);
-            EnclaveBuildError::DockerError(e)
-        })?;
+        let arch = self.image_manager.architecture()?;
 
         let flags = match arch.as_str() {
             docker::DOCKER_ARCH_ARM64 => EIF_HDR_ARCH_ARM64,
@@ -315,13 +350,15 @@ impl<'a> Docker2Eif<'a> {
             }
         };
 
+        let eif_info = self.generate_identity_info()?;
+
         let mut build = EifBuilder::new(
             Path::new(&self.kernel_img_path),
             self.cmdline.clone(),
             self.sign_info.clone(),
             sha2::Sha384::new(),
             flags,
-            self.generate_identity_info()?,
+            eif_info,
         );
 
         // Linuxkit adds -initrd.img sufix to the file names.

@@ -21,4 +21,4 @@ url = "2.1"
 sha2 = "0.9.5"
 futures = "0.3.13"
 
-aws-nitro-enclaves-image-format = "0.1"
+aws-nitro-enclaves-image-format = "0.2"

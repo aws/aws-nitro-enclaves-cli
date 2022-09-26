@@ -283,7 +283,7 @@ pub fn describe_eif(desc_args: DescribeArgs) -> NitroCliResult<EifDescribeInfo> 
     // Check if signature section is present
     if measurements.get(&"PCR8".to_string()).is_some() {
         let cert_info = eif_reader
-            .get_certificate_info(measurements, desc_args.region, desc_args.key_id)
+            .get_certificate_info(measurements, desc_args.kms_key_region, desc_args.kms_key_arn)
             .map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Failed to get certificate sigining info: {:?}", err),
@@ -889,13 +889,6 @@ macro_rules! create_app {
                 SubCommand::with_name("sign-eif")
                     .about("Sign an existing enclave image")
                     .arg(
-                        Arg::with_name("signing-method")
-                            .long("signing-method")
-                            .takes_value(true)
-                            .help("Specify the method that will be used to sign the image: PrivateKey or KMS.")
-                            .required(true),
-                    )
-                    .arg(
                         Arg::with_name("eif-path")
                             .long("eif-path")
                             .takes_value(true)
@@ -906,7 +899,6 @@ macro_rules! create_app {
                         Arg::with_name("signing-certificate")
                             .long("signing-certificate")
                             .takes_value(true)
-                            .takes_value(true)
                             .help("Local path to developer's X509 signing certificate.")
                             .required(true),
                     )
@@ -914,19 +906,23 @@ macro_rules! create_app {
                         Arg::with_name("private-key")
                             .long("private-key")
                             .help("Local path to developer's Eliptic Curve private key.")
-                            .takes_value(true),
+                            .takes_value(true)
+                            .conflicts_with("kms-key-arn")
+                            .conflicts_with("kms-key-region"),
                     )
                     .arg(
-                        Arg::with_name("region")
-                            .long("region")
+                        Arg::with_name("kms-key-region")
+                            .long("kms-key-region")
                             .help("The region in which the KMS key resides.")
-                            .takes_value(true),
+                            .takes_value(true)
+                            .conflicts_with("private-key"),
                     )
                     .arg(
-                        Arg::with_name("key-id")
-                            .long("key-id")
-                            .help("The KMS key id")
-                            .takes_value(true),
+                        Arg::with_name("kms-key-arn")
+                            .long("kms-key-arn")
+                            .help("The KMS key ARN")
+                            .takes_value(true)
+                            .conflicts_with("private-key"),
                     ),
             )
     };

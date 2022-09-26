@@ -63,7 +63,7 @@ fn main() {
     info!("Start Nitro CLI");
 
     match args.subcommand() {
-        ("run-enclave", Some(args)) => {
+        Some(("run-enclave", args)) => {
             let mut run_args = RunEnclavesArgs::new_with(args)
                 .map_err(|err| {
                     err.add_subaction("Failed to construct RunEnclave arguments".to_string())
@@ -135,7 +135,7 @@ fn main() {
                     .ok_or_exit_with_errno(None);
             }
         }
-        ("terminate-enclave", Some(args)) => {
+        Some(("terminate-enclave", args)) => {
             if args.is_present("all") {
                 terminate_all_enclaves()
                     .map_err(|e| {
@@ -185,7 +185,7 @@ fn main() {
                 .ok_or_exit_with_errno(None);
             }
         }
-        ("describe-enclaves", Some(args)) => {
+        Some(("describe-enclaves", args)) => {
             let describe_args = DescribeEnclavesArgs::new_with(args);
             let (comms, comm_errors) = enclave_proc_command_send_all::<DescribeEnclavesArgs>(
                 EnclaveProcessCommandType::Describe,
@@ -213,7 +213,7 @@ fn main() {
             })
             .ok_or_exit_with_errno(None);
         }
-        ("build-enclave", Some(args)) => {
+        Some(("build-enclave", args)) => {
             let build_args = BuildEnclavesArgs::new_with(args)
                 .map_err(|e| {
                     e.add_subaction("Failed to construct BuildEnclave arguments".to_string())
@@ -227,7 +227,7 @@ fn main() {
                 })
                 .ok_or_exit_with_errno(None);
         }
-        ("describe-eif", Some(args)) => {
+        Some(("describe-eif", args)) => {
             let eif_path = args
                 .value_of("eif-path")
                 .map(|val| val.to_string())
@@ -239,7 +239,7 @@ fn main() {
                 })
                 .ok_or_exit_with_errno(None);
         }
-        ("console", Some(args)) => {
+        Some(("console", args)) => {
             let console_args = ConsoleArgs::new_with(args)
                 .map_err(|e| {
                     e.add_subaction("Failed to construct Console arguments".to_string())
@@ -277,7 +277,7 @@ fn main() {
                 })
                 .ok_or_exit_with_errno(None);
         }
-        ("pcr", Some(args)) => {
+        Some(("pcr", args)) => {
             let pcr_args = PcrArgs::new_with(args)
                 .map_err(|e| {
                     e.add_subaction("Failed to construct PCR arguments".to_string())
@@ -292,7 +292,7 @@ fn main() {
                 })
                 .ok_or_exit_with_errno(None);
         }
-        ("explain", Some(args)) => {
+        Some(("explain", args)) => {
             let explain_args = ExplainArgs::new_with(args)
                 .map_err(|e| {
                     e.add_subaction("Failed to construct Explain arguments".to_string())
@@ -301,6 +301,6 @@ fn main() {
                 .ok_or_exit_with_errno(None);
             explain_error(explain_args.error_code_str);
         }
-        (&_, _) => {}
+        Some((&_, _)) | None => (),
     }
 }

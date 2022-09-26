@@ -307,7 +307,7 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64",
- "clap 2.34.0",
+ "clap 3.2.22",
  "futures",
  "log",
  "serde",
@@ -876,7 +876,7 @@ dependencies = [
  "aws-nitro-enclaves-image-format",
  "bindgen",
  "chrono",
- "clap 2.34.0",
+ "clap 3.2.22",
  "driver-bindings",
  "eif_loader",
  "enclave_build",
@@ -1699,7 +1699,7 @@ dependencies = [
 name = "vsock-proxy"
 version = "0.1.0"
 dependencies = [
- "clap 2.34.0",
+ "clap 3.2.22",
  "dns-lookup",
  "env_logger 0.7.1",
  "idna",

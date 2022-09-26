@@ -13,7 +13,7 @@ fn main() {
         .setting(AppSettings::DisableVersion)
         .arg(
             Arg::with_name("docker_image")
-                .short("t")
+                .short('t')
                 .long("tag")
                 .help("Docker image tag")
                 .takes_value(true)
@@ -21,7 +21,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("init_path")
-                .short("i")
+                .short('i')
                 .long("init")
                 .help("Path to a binary representing the init process for the enclave")
                 .takes_value(true)
@@ -29,7 +29,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("nsm_path")
-                .short("n")
+                .short('n')
                 .long("nsm")
                 .help("Path to the NitroSecureModule Kernel Driver")
                 .takes_value(true)
@@ -37,7 +37,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("kernel_img_path")
-                .short("k")
+                .short('k')
                 .long("kernel")
                 .help("Path to a bzImage/Image file for x86_64/aarch64 linux kernel")
                 .takes_value(true)
@@ -45,7 +45,6 @@ fn main() {
         )
         .arg(
             Arg::with_name("kernel_cfg_path")
-                .short("k")
                 .long("kernel_config")
                 .help("Path to a bzImage.config/Image.config file for x86_64/aarch64 linux kernel config")
                 .takes_value(true)
@@ -53,7 +52,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("cmdline")
-                .short("c")
+                .short('c')
                 .long("cmdline")
                 .help("Cmdline for kernel")
                 .takes_value(true)
@@ -61,7 +60,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("linuxkit_path")
-                .short("l")
+                .short('l')
                 .long("linuxkit")
                 .help("Linuxkit executable path")
                 .takes_value(true)
@@ -69,7 +68,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("output")
-                .short("o")
+                .short('o')
                 .long("output")
                 .help("Output file for EIF image")
                 .takes_value(true)
@@ -89,7 +88,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("build")
-                .short("b")
+                .short('b')
                 .long("build")
                 .help("Build image from Dockerfile")
                 .takes_value(true)
@@ -97,7 +96,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("pull")
-                .short("p")
+                .short('p')
                 .long("pull")
                 .help("Pull the Docker image before generating EIF")
                 .required(false)

@@ -1200,10 +1200,12 @@ pub fn between_packets_delay() -> Option<Duration> {
 /// # Examples
 ///
 /// ```
+/// use nitro_cli::enclave_proc::resource_manager::calculate_necessary_timeout;
+/// use nitro_cli::enclave_proc::utils::GiB;
 /// // Returns the timeout based on the 8GiB EIF size
 /// let timeout = calculate_necessary_timeout(8 * GiB);
 /// ```
-fn calculate_necessary_timeout(eif_size: u64) -> c_int {
+pub fn calculate_necessary_timeout(eif_size: u64) -> c_int {
     // in case we have a valid eif_size give TIMEOUT_MINUTE_MS ms for each 6GiB
     let poll_timeout: c_int =
         ((1 + (eif_size - 1) / (6 * GiB)) as i32).saturating_mul(TIMEOUT_MINUTE_MS);

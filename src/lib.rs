@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -18,6 +18,7 @@ pub mod utils;
 use aws_nitro_enclaves_image_format::defs::eif_hasher::EifHasher;
 use aws_nitro_enclaves_image_format::utils::eif_reader::EifReader;
 use aws_nitro_enclaves_image_format::{generate_build_info, utils::get_pcrs};
+use enclave_build::{BlobsArgs, MetadataArgs, SignArgs, SourceArgs};
 use log::{debug, info};
 use sha2::{Digest, Sha384};
 use std::collections::BTreeMap;
@@ -55,6 +56,7 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
     build_from_docker(
         &args.docker_uri,
         &args.docker_dir,
+        &args.oci_uri,
         &args.output,
         &args.signing_certificate,
         &args.private_key,
@@ -68,8 +70,9 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
 
 /// Build an enclave image file from a Docker image.
 pub fn build_from_docker(
-    docker_uri: &str,
+    docker_uri: &Option<String>,
     docker_dir: &Option<String>,
+    oci_uri: &Option<String>,
     output_path: &str,
     signing_certificate: &Option<String>,
     private_key: &Option<String>,
@@ -125,28 +128,38 @@ pub fn build_from_docker(
         )
     })?;
 
-    let mut docker2eif = enclave_build::Docker2Eif::new(
-        docker_uri.to_string(),
-        format!("{}/init", blobs_path),
-        format!("{}/nsm.ko", blobs_path),
-        kernel_path,
-        cmdline.trim().to_string(),
-        format!("{}/linuxkit", blobs_path),
-        &mut file_output,
-        artifacts_path()?,
-        signing_certificate,
-        private_key,
-        img_name.clone(),
-        img_version.clone(),
-        metadata_path.clone(),
+    let sources = SourceArgs {
+        docker_image: docker_uri.clone(),
+        docker_dir: docker_dir.clone(),
+        oci_image: oci_uri.clone(),
+    };
+    let blobs = BlobsArgs {
+        init_path: format!("{}/init", blobs_path),
+        nsm_path: format!("{}/nsm.ko", blobs_path),
+        kernel_img_path: kernel_path,
+        cmdline: cmdline.trim().to_string(),
+        linuxkit_path: format!("{}/linuxkit", blobs_path),
+        artifacts_prefix: artifacts_path()?,
+    };
+    let signature = SignArgs {
+        certificate_path: signing_certificate.clone(),
+        key_path: private_key.clone(),
+    };
+    let metadata = MetadataArgs {
+        img_name: img_name.clone(),
+        img_version: img_version.clone(),
+        metadata_path: metadata_path.clone(),
         build_info,
-    )
-    .map_err(|err| {
-        new_nitro_cli_failure!(
-            &format!("Failed to create EIF image: {:?}", err),
-            NitroCliErrorEnum::EifBuildingError
-        )
-    })?;
+    };
+
+    let mut docker2eif =
+        enclave_build::Docker2Eif::new(sources, blobs, &mut file_output, signature, metadata)
+            .map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to create EIF image: {:?}", err),
+                    NitroCliErrorEnum::EifBuildingError
+                )
+            })?;
 
     if let Some(docker_dir) = docker_dir {
         docker2eif
@@ -158,7 +171,7 @@ pub fn build_from_docker(
                 )
             })?;
     } else {
-        docker2eif.pull_docker_image().map_err(|err| {
+        docker2eif.pull_image().map_err(|err| {
             new_nitro_cli_failure!(
                 &format!("Failed to pull docker image: {:?}", err),
                 NitroCliErrorEnum::DockerImagePullError
@@ -710,13 +723,18 @@ macro_rules! create_app {
                                 "Uri pointing to an existing docker container or to be created  \
                                  locally when docker-dir is present",
                             )
-                            .required(true)
                             .takes_value(true),
                     )
                     .arg(
                         Arg::with_name("docker-dir")
                             .long("docker-dir")
                             .help("Local path to a directory containing a Dockerfile")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("oci-uri")
+                            .long("oci-uri")
+                            .help("URI of an OCI image to pe pulled and cached without using the Docker daemon")
                             .takes_value(true),
                     )
                     .arg(

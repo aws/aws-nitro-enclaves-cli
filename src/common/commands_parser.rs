@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -98,9 +98,11 @@ impl RunEnclavesArgs {
 #[derive(Debug, Clone)]
 pub struct BuildEnclavesArgs {
     /// The URI to the Docker image.
-    pub docker_uri: String,
+    pub docker_uri: Option<String>,
     /// The directory containing the Docker image.
     pub docker_dir: Option<String>,
+    /// The URI of an OCI image.
+    pub oci_uri: Option<String>,
     /// The path where the enclave image file will be written to.
     pub output: String,
     /// The path to the signing certificate for signed enclaves.
@@ -139,15 +141,42 @@ impl BuildEnclavesArgs {
             _ => (),
         };
 
-        Ok(BuildEnclavesArgs {
-            docker_uri: parse_docker_tag(args).ok_or_else(|| {
-                new_nitro_cli_failure!(
-                    "`docker-uri` argument not found",
+        let docker_uri = parse_docker_tag(args);
+        let docker_dir = parse_docker_dir(args);
+        let oci_uri = parse_oci_image_name(args);
+
+        match (&docker_uri, &docker_dir, &oci_uri) {
+            // The --docker-uri and --oci-uri flag can not be both used at the same time
+            (Some(_), _, Some(_)) => {
+                return Err(new_nitro_cli_failure!(
+                    "`docker-uri` argument supplied, `oci-uri` should not be used too",
+                    NitroCliErrorEnum::ConflictingArgument
+                )
+                .add_info(vec!["--docker-uri", "--oci-uri"]));
+            }
+            // The --docker-dir and --oci-uri flag can not be both used at the same time
+            (_, Some(_), Some(_)) => {
+                return Err(new_nitro_cli_failure!(
+                    "`docker-dir` argument supplied, `oci-uri` should not be used too",
+                    NitroCliErrorEnum::ConflictingArgument
+                )
+                .add_info(vec!["--docker-dir", "--oci-uri"]));
+            }
+            // If no flag is provided, return error
+            (None, None, None) => {
+                return Err(new_nitro_cli_failure!(
+                    "`docker-uri`, `docker-dir` or `oci-uri` should be specified",
                     NitroCliErrorEnum::MissingArgument
                 )
-                .add_info(vec!["docker-uri"])
-            })?,
-            docker_dir: parse_docker_dir(args),
+                .add_info(vec!["`docker-uri`, `docker-dir` or `oci-uri`"]));
+            }
+            _ => (),
+        };
+
+        Ok(BuildEnclavesArgs {
+            docker_uri,
+            docker_dir,
+            oci_uri,
             output: parse_output(args).ok_or_else(|| {
                 new_nitro_cli_failure!(
                     "`output` argument not found",
@@ -315,6 +344,11 @@ fn parse_docker_tag(args: &ArgMatches) -> Option<String> {
 /// Parse the Docker directory from the command-line arguments.
 fn parse_docker_dir(args: &ArgMatches) -> Option<String> {
     args.value_of("docker-dir").map(|val| val.to_string())
+}
+
+/// Parse the OCI image URI from the command-line arguments
+fn parse_oci_image_name(args: &ArgMatches) -> Option<String> {
+    args.value_of("oci-uri").map(|val| val.to_string())
 }
 
 /// Parse the enclave's required CID from the command-line arguments.

@@ -5,7 +5,7 @@ use clap::{App, AppSettings, Arg};
 use std::fs::OpenOptions;
 
 use aws_nitro_enclaves_image_format::generate_build_info;
-use enclave_build::Docker2Eif;
+use enclave_build::{BlobsArgs, Docker2Eif, MetadataArgs, SignArgs, SourceArgs};
 
 fn main() {
     let matches = App::new("Docker2Eif builder")
@@ -151,7 +151,7 @@ fn main() {
         .map(|val| val.to_string());
     let img_name = matches.value_of("image_name").map(|val| val.to_string());
     let img_version = matches.value_of("image_version").map(|val| val.to_string());
-    let metadata = matches.value_of("metadata").map(|val| val.to_string());
+    let metadata_path = matches.value_of("metadata").map(|val| val.to_string());
 
     let mut output = OpenOptions::new()
         .read(true)
@@ -160,25 +160,31 @@ fn main() {
         .open(output)
         .expect("Failed to create output file");
 
-    let mut img = Docker2Eif::new(
+    let sources = SourceArgs {
         docker_image,
         docker_dir,
         oci_image,
-        init_path.to_string(),
-        nsm_path.to_string(),
-        kernel_img_path.to_string(),
-        cmdline.to_string(),
-        linuxkit_path.to_string(),
-        &mut output,
-        ".".to_string(),
-        &signing_certificate,
-        &private_key,
+    };
+    let blobs = BlobsArgs {
+        init_path: init_path.to_string(),
+        nsm_path: nsm_path.to_string(),
+        kernel_img_path: kernel_img_path.to_string(),
+        cmdline: cmdline.to_string(),
+        linuxkit_path: linuxkit_path.to_string(),
+        artifacts_prefix: ".".to_string(),
+    };
+    let signature = SignArgs {
+        certificate_path: signing_certificate,
+        key_path: private_key,
+    };
+    let metadata = MetadataArgs {
         img_name,
         img_version,
-        metadata,
-        generate_build_info!(kernel_cfg_path).expect("Can not generate build info"),
-    )
-    .unwrap();
+        metadata_path,
+        build_info: generate_build_info!(kernel_cfg_path).expect("Can not generate build info"),
+    };
+
+    let mut img = Docker2Eif::new(sources, blobs, &mut output, signature, metadata).unwrap();
 
     if matches.is_present("build") {
         let dockerfile_dir = matches.value_of("build").unwrap();

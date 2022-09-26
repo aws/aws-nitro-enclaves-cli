@@ -1,11 +1,11 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
 #[cfg(test)]
 mod test_nitro_cli_args {
     use clap::{App, AppSettings, Arg, SubCommand};
-    use nitro_cli::create_app;
+    use nitro_cli::{common::commands_parser::BuildEnclavesArgs, create_app};
 
     #[test]
     fn terminate_enclave_enclave_id_arg_is_required() {
@@ -224,11 +224,18 @@ mod test_nitro_cli_args {
     }
 
     #[test]
-    fn build_enclave_docker_uri_arg_is_required() {
+    fn build_enclave_docker_uri_arg_is_not_required() {
         let app = create_app!();
-        let args = vec!["nitro cli", "build-enclave", "--output-file", "image.eif"];
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--oci-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--output-file",
+            "image.eif",
+        ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
     }
 
     #[test]
@@ -244,6 +251,134 @@ mod test_nitro_cli_args {
         ];
 
         assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn build_enclave_oci_uri_arg_is_not_required() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--output-file",
+            "image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn build_enclave_no_flags_specified() {
+        let app = create_app!();
+        let args = vec!["nitro cli", "build-enclave", "--output-file", "image.eif"];
+
+        let all_args = app.get_matches_from_safe(args).unwrap();
+
+        match all_args.subcommand() {
+            Some(("build-enclave", build_args)) => {
+                assert_eq!(BuildEnclavesArgs::new_with(build_args).is_err(), true);
+            }
+            _ => (),
+        }
+    }
+
+    #[test]
+    fn build_enclave_docker_uri_and_oci_uri_flags_used() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--oci-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--output-file",
+            "image.eif",
+        ];
+
+        let all_args = app.get_matches_from_safe(args).unwrap();
+
+        match all_args.subcommand() {
+            Some(("build-enclave", build_args)) => {
+                assert_eq!(BuildEnclavesArgs::new_with(build_args).is_err(), true);
+            }
+            _ => (),
+        }
+    }
+
+    #[test]
+    fn build_enclave_docker_dir_and_oci_uri_flags_used() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-dir",
+            "/home/user/Dockerfile",
+            "--oci-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--output-file",
+            "image.eif",
+        ];
+
+        let all_args = app.get_matches_from_safe(args).unwrap();
+
+        match all_args.subcommand() {
+            Some(("build-enclave", build_args)) => {
+                assert_eq!(BuildEnclavesArgs::new_with(build_args).is_err(), true);
+            }
+            _ => (),
+        }
+    }
+
+    #[test]
+    fn build_enclave_docker_uri_and_docker_dir_flags_used() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--docker-dir",
+            "/home/user/Dockerfile",
+            "--output-file",
+            "image.eif",
+        ];
+
+        let all_args = app.get_matches_from_safe(args).unwrap();
+
+        match all_args.subcommand() {
+            Some(("build-enclave", build_args)) => {
+                assert_eq!(BuildEnclavesArgs::new_with(build_args).is_err(), false);
+            }
+            _ => (),
+        }
+    }
+
+    #[test]
+    fn build_enclave_docker_uri_and_docker_dir_and_oci_uri_flags_used() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--docker-dir",
+            "/home/user/Dockerfile",
+            "--oci-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--output-file",
+            "image.eif",
+        ];
+
+        let all_args = app.get_matches_from_safe(args).unwrap();
+
+        match all_args.subcommand() {
+            Some(("build-enclave", build_args)) => {
+                assert_eq!(BuildEnclavesArgs::new_with(build_args).is_err(), true);
+            }
+            _ => (),
+        }
     }
 
     #[test]

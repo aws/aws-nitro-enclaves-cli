@@ -1,4 +1,4 @@
-// Copyright 2019-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
@@ -61,8 +61,11 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-devel".to_string(),
+            docker_uri: Some(
+                "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-devel".to_string(),
+            ),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -80,8 +83,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -93,6 +97,7 @@ mod tests {
         let measurements = build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -140,8 +145,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: "hello-world:latest".to_string(),
+            docker_uri: Some("hello-world:latest".to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -153,6 +159,7 @@ mod tests {
         build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -169,8 +176,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: COMMAND_EXECUTER_DOCKER.to_string(),
+            docker_uri: Some(COMMAND_EXECUTER_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -182,6 +190,7 @@ mod tests {
         build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -244,8 +253,9 @@ mod tests {
 
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path,
             signing_certificate: Some(cert_path),
             private_key: Some(key_path),
@@ -257,6 +267,7 @@ mod tests {
         let measurements = build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -304,8 +315,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let build_args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -317,6 +329,7 @@ mod tests {
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
+            &build_args.oci_uri,
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
@@ -350,8 +363,9 @@ mod tests {
 
         setup_env();
         let build_args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path,
             signing_certificate: Some(cert_path),
             private_key: Some(key_path),
@@ -363,6 +377,7 @@ mod tests {
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
+            &build_args.oci_uri,
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
@@ -391,8 +406,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let build_args = BuildEnclavesArgs {
-            docker_uri: COMMAND_EXECUTER_DOCKER.to_string(),
+            docker_uri: Some(COMMAND_EXECUTER_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -404,6 +420,7 @@ mod tests {
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
+            &build_args.oci_uri,
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
@@ -498,8 +515,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let build_args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -511,6 +529,7 @@ mod tests {
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
+            &build_args.oci_uri,
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
@@ -540,8 +559,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let build_args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -553,6 +573,7 @@ mod tests {
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
+            &build_args.oci_uri,
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
@@ -602,8 +623,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let build_args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -615,6 +637,7 @@ mod tests {
         build_from_docker(
             &build_args.docker_uri,
             &build_args.docker_dir,
+            &build_args.oci_uri,
             &build_args.output,
             &build_args.signing_certificate,
             &build_args.private_key,
@@ -692,8 +715,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -705,6 +729,7 @@ mod tests {
         build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -802,8 +827,9 @@ mod tests {
         let meta_path = dir.path().join("meta.json");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -815,6 +841,7 @@ mod tests {
         build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -905,8 +932,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -918,6 +946,7 @@ mod tests {
         build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -1004,8 +1033,9 @@ mod tests {
         let eif_path = dir.path().join("test.eif");
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path.to_str().unwrap().to_string(),
             signing_certificate: None,
             private_key: None,
@@ -1017,6 +1047,7 @@ mod tests {
         build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -1046,8 +1077,9 @@ mod tests {
 
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path,
             signing_certificate: Some(cert_path),
             private_key: Some(key_path),
@@ -1059,6 +1091,7 @@ mod tests {
         build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,
@@ -1088,8 +1121,9 @@ mod tests {
 
         setup_env();
         let args = BuildEnclavesArgs {
-            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_uri: Some(SAMPLE_DOCKER.to_string()),
             docker_dir: None,
+            oci_uri: None,
             output: eif_path,
             signing_certificate: Some(cert_path.clone()),
             private_key: Some(key_path),
@@ -1101,6 +1135,7 @@ mod tests {
         build_from_docker(
             &args.docker_uri,
             &args.docker_dir,
+            &args.oci_uri,
             &args.output,
             &args.signing_certificate,
             &args.private_key,

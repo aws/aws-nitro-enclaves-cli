@@ -1,6 +1,5 @@
 // Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(clippy::too_many_arguments)]
 
 use std::fs::File;
 use std::path::Path;
@@ -80,6 +79,33 @@ pub enum EnclaveBuildError {
 
 pub type Result<T> = std::result::Result<T, EnclaveBuildError>;
 
+pub struct BlobsArgs {
+    pub init_path: String,
+    pub nsm_path: String,
+    pub kernel_img_path: String,
+    pub cmdline: String,
+    pub linuxkit_path: String,
+    pub artifacts_prefix: String,
+}
+
+pub struct SignArgs {
+    pub certificate_path: Option<String>,
+    pub key_path: Option<String>,
+}
+
+pub struct MetadataArgs {
+    pub img_name: Option<String>,
+    pub img_version: Option<String>,
+    pub metadata_path: Option<String>,
+    pub build_info: EifBuildInfo,
+}
+
+pub struct SourceArgs {
+    pub docker_image: Option<String>,
+    pub docker_dir: Option<String>,
+    pub oci_image: Option<String>,
+}
+
 pub struct Docker2Eif<'a> {
     /// This field can be any struct that implements the 'ImageManager' trait.
     image_manager: Box<dyn image_manager::ImageManager>,
@@ -104,65 +130,58 @@ impl<'a> Docker2Eif<'a> {
     /// If the 'oci_image' argument is Some (i.e. the --image-uri flag is used) and the '--docker-dir'
     /// flag is not used, pull and cache the image without using the docker daemon.
     pub fn new(
-        docker_image: Option<String>,
-        docker_dir: Option<String>,
-        oci_image: Option<String>,
-        init_path: String,
-        nsm_path: String,
-        kernel_img_path: String,
-        cmdline: String,
-        linuxkit_path: String,
+        sources: SourceArgs,
+        blobs: BlobsArgs,
         output: &'a mut File,
-        artifacts_prefix: String,
-        certificate_path: &Option<String>,
-        key_path: &Option<String>,
-        img_name: Option<String>,
-        img_version: Option<String>,
-        metadata_path: Option<String>,
-        build_info: EifBuildInfo,
+        signature: SignArgs,
+        metadata: MetadataArgs,
     ) -> Result<Self> {
         // The flags usage was already validated by the commands parser, so now just check if the docker daemon
         // should be used or not
-        let image_manager: Box<dyn image_manager::ImageManager> =
-            match (&docker_image, &docker_dir, &oci_image) {
-                // If the --docker-uri flag is used then the docker client is required either for pulling the image or
-                // for building it locally from the supplied Dockerfile in case --docker-dir is used too
-                (Some(docker_image), _, _) => {
-                    Box::new(crate::docker::DockerImageManager::new(docker_image))
-                }
-                // In all other valid cases, do not use docker
-                (_, _, Some(oci_image)) => {
-                    Box::new(crate::image_manager::OciImageManager::new(oci_image))
-                }
-                (_, _, _) => {
-                    return Err(EnclaveBuildError::ImageDetailError(
-                        "Image directory or URI missing".to_string(),
-                    ))
-                }
-            };
+        let image_manager: Box<dyn image_manager::ImageManager> = match (
+            &sources.docker_image,
+            &sources.docker_dir,
+            &sources.oci_image,
+        ) {
+            // If the --docker-uri flag is used then the docker client is required either for pulling the image or
+            // for building it locally from the supplied Dockerfile in case --docker-dir is used too
+            (Some(docker_image), _, _) => {
+                Box::new(crate::docker::DockerImageManager::new(docker_image))
+            }
+            // In all other valid cases, do not use docker
+            (_, _, Some(oci_image)) => {
+                Box::new(crate::image_manager::OciImageManager::new(oci_image))
+            }
+            (_, _, _) => {
+                return Err(EnclaveBuildError::ImageDetailError(
+                    "Image directory or URI missing".to_string(),
+                ))
+            }
+        };
 
-        if !Path::new(&init_path).is_file() {
+        if !Path::new(&blobs.init_path).is_file() {
             return Err(EnclaveBuildError::PathError("init path".to_string()));
-        } else if !Path::new(&nsm_path).is_file() {
+        } else if !Path::new(&blobs.nsm_path).is_file() {
             return Err(EnclaveBuildError::PathError("nsm path".to_string()));
-        } else if !Path::new(&kernel_img_path).is_file() {
+        } else if !Path::new(&blobs.kernel_img_path).is_file() {
             return Err(EnclaveBuildError::PathError("kernel path".to_string()));
-        } else if !Path::new(&linuxkit_path).is_file() {
+        } else if !Path::new(&blobs.linuxkit_path).is_file() {
             return Err(EnclaveBuildError::PathError("linuxkit path".to_string()));
-        } else if !Path::new(&artifacts_prefix).is_dir() {
+        } else if !Path::new(&blobs.artifacts_prefix).is_dir() {
             return Err(EnclaveBuildError::PathError("artifacts prefix".to_string()));
         }
 
-        if let Some(ref path) = metadata_path {
+        if let Some(ref path) = metadata.metadata_path {
             if !Path::new(path).is_file() {
                 return Err(EnclaveBuildError::PathError("metadata path".to_string()));
             }
         }
 
-        let sign_info = match (certificate_path, key_path) {
+        let sign_info = match (signature.certificate_path, signature.key_path) {
             (None, None) => None,
             (Some(cert_path), Some(key_path)) => Some(
-                SignEnclaveInfo::new(cert_path, key_path).map_err(EnclaveBuildError::SignError)?,
+                SignEnclaveInfo::new(&cert_path, &key_path)
+                    .map_err(EnclaveBuildError::SignError)?,
             ),
             _ => {
                 return Err(EnclaveBuildError::SignError(
@@ -173,18 +192,18 @@ impl<'a> Docker2Eif<'a> {
 
         Ok(Docker2Eif {
             image_manager,
-            init_path,
-            nsm_path,
-            kernel_img_path,
-            cmdline,
-            linuxkit_path,
+            init_path: blobs.init_path,
+            nsm_path: blobs.nsm_path,
+            kernel_img_path: blobs.kernel_img_path,
+            cmdline: blobs.cmdline,
+            linuxkit_path: blobs.linuxkit_path,
             output,
-            artifacts_prefix,
+            artifacts_prefix: blobs.artifacts_prefix,
             sign_info,
-            img_name,
-            img_version,
-            metadata_path,
-            build_info,
+            img_name: metadata.img_name,
+            img_version: metadata.img_version,
+            metadata_path: metadata.metadata_path,
+            build_info: metadata.build_info,
         })
     }
 

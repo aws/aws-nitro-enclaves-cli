@@ -112,8 +112,8 @@ pub struct BuildEnclavesArgs {
     pub output: String,
     /// The path to the signing certificate for signed enclaves.
     pub signing_certificate: Option<String>,
-    /// The path to the private key for signed enclaves.
-    pub private_key: Option<String>,
+    /// The key used for signing the EIF
+    pub signing_key: Option<SigningKey>,
     /// The name of the enclave image.
     pub img_name: Option<String>,
     /// The version of the enclave image.
@@ -127,14 +127,35 @@ impl BuildEnclavesArgs {
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         let signing_certificate = parse_signing_certificate(args);
         let private_key = parse_private_key(args);
+        let kms_key_region = parse_kms_key_region(args);
+        let kms_key_arn = parse_kms_key_arn(args);
 
-        match (&signing_certificate, &private_key) {
+        let signing_key = match (&private_key, &kms_key_arn) {
+            (Some(_), None) => Some(SigningKey::LocalKey {
+                path: private_key.unwrap(),
+            }),
+            (None, Some(_)) => {
+                if kms_key_region.is_none() {
+                    return Err(new_nitro_cli_failure!(
+                        "`kms-key-region` argument not found",
+                        NitroCliErrorEnum::MissingArgument
+                    )
+                    .add_info(vec!["kms-key-region"]));
+                }
+                Some(SigningKey::KmsKey {
+                    arn: kms_key_arn.unwrap(),
+                    region: kms_key_region.unwrap(),
+                })
+            }
+            _ => None,
+        };
+
+        match (&signing_certificate, &signing_key) {
             (Some(_), None) => {
                 return Err(new_nitro_cli_failure!(
-                    "`private-key` argument not found",
+                    "`private-key` or `kms-key-arn` argument not found",
                     NitroCliErrorEnum::MissingArgument
-                )
-                .add_info(vec!["private-key"]))
+                ))
             }
             (None, Some(_)) => {
                 return Err(new_nitro_cli_failure!(
@@ -163,7 +184,7 @@ impl BuildEnclavesArgs {
                 .add_info(vec!["output"])
             })?,
             signing_certificate,
-            private_key,
+            signing_key,
             img_name: parse_image_name(args),
             img_version: parse_image_version(args),
             metadata: parse_metadata(args),
@@ -321,7 +342,7 @@ impl SignArgs {
                         "`kms-key-region` argument not found",
                         NitroCliErrorEnum::MissingArgument
                     )
-                    .add_info(vec!["kms-key-region"]))
+                    .add_info(vec!["kms-key-region"]));
                 }
                 signing_key = SigningKey::KmsKey {
                     arn: kms_key_arn.unwrap(),

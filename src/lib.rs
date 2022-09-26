@@ -18,6 +18,7 @@ pub mod utils;
 use aws_nitro_enclaves_image_format::defs::eif_hasher::EifHasher;
 use aws_nitro_enclaves_image_format::utils::eif_reader::EifReader;
 use aws_nitro_enclaves_image_format::utils::eif_signer::EifSigner;
+use aws_nitro_enclaves_image_format::utils::eif_signer::SigningKey;
 use aws_nitro_enclaves_image_format::{generate_build_info, utils::get_pcrs};
 use log::{debug, info};
 use sha2::{Digest, Sha384};
@@ -60,7 +61,7 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
         &args.docker_dir,
         &args.output,
         &args.signing_certificate,
-        &args.private_key,
+        &args.signing_key,
         &args.img_name,
         &args.img_version,
         &args.metadata,
@@ -90,7 +91,7 @@ pub fn build_from_docker(
     docker_dir: &Option<String>,
     output_path: &str,
     signing_certificate: &Option<String>,
-    private_key: &Option<String>,
+    signing_key: &Option<SigningKey>,
     img_name: &Option<String>,
     img_version: &Option<String>,
     metadata_path: &Option<String>,
@@ -153,7 +154,7 @@ pub fn build_from_docker(
         &mut file_output,
         artifacts_path()?,
         signing_certificate,
-        private_key,
+        signing_key,
         img_name.clone(),
         img_version.clone(),
         metadata_path.clone(),
@@ -283,7 +284,11 @@ pub fn describe_eif(desc_args: DescribeArgs) -> NitroCliResult<EifDescribeInfo> 
     // Check if signature section is present
     if measurements.get(&"PCR8".to_string()).is_some() {
         let cert_info = eif_reader
-            .get_certificate_info(measurements, desc_args.kms_key_region, desc_args.kms_key_arn)
+            .get_certificate_info(
+                measurements,
+                desc_args.kms_key_region,
+                desc_args.kms_key_arn,
+            )
             .map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Failed to get certificate sigining info: {:?}", err),
@@ -680,18 +685,18 @@ macro_rules! create_app {
                             .conflicts_with("config"),
                     )
                     .arg(
-                        Arg::with_name("region")
-                            .long("region")
+                        Arg::with_name("kms-key-region")
+                            .long("kms-key-region")
                             .takes_value(true)
                             .help("The region in which the KMS key resides.")
                             .required(false)
                             .conflicts_with("config"),
                     )
                     .arg(
-                        Arg::with_name("key-id")
-                            .long("key-id")
+                        Arg::with_name("kms-key-arn")
+                            .long("kms-key-arn")
                             .takes_value(true)
-                            .help("The KMS key id.")
+                            .help("The KMS key ARN.")
                             .required(false)
                             .conflicts_with("config"),
                     )
@@ -771,12 +776,6 @@ macro_rules! create_app {
                             .takes_value(true),
                     )
                     .arg(
-                        Arg::with_name("private-key")
-                            .long("private-key")
-                            .help("Local path to developer's Eliptic Curve private key.")
-                            .takes_value(true),
-                    )
-                    .arg(
                         Arg::with_name("image_name")
                             .long("name")
                             .help("Name for enclave image")
@@ -793,6 +792,28 @@ macro_rules! create_app {
                             .long("metadata")
                             .help("Path to JSON containing the custom metadata provided by the user.")
                             .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("private-key")
+                            .long("private-key")
+                            .help("Local path to developer's Eliptic Curve private key.")
+                            .takes_value(true)
+                            .conflicts_with("kms-key-arn")
+                            .conflicts_with("kms-key-region"),
+                    )
+                    .arg(
+                        Arg::with_name("kms-key-region")
+                            .long("kms-key-region")
+                            .help("The region in which the KMS key resides.")
+                            .takes_value(true)
+                            .conflicts_with("private-key"),
+                    )
+                    .arg(
+                        Arg::with_name("kms-key-arn")
+                            .long("kms-key-arn")
+                            .help("The KMS key ARN")
+                            .takes_value(true)
+                            .conflicts_with("private-key"),
                     ),
             )
             .subcommand(
@@ -806,15 +827,15 @@ macro_rules! create_app {
                             .takes_value(true),
                     )
                     .arg(
-                        Arg::with_name("region")
-                            .long("region")
+                        Arg::with_name("kms-key-region")
+                            .long("kms-key-region")
                             .help("The region in which the KMS key resides.")
                             .takes_value(true),
                     )
                     .arg(
-                        Arg::with_name("key-id")
-                            .long("key-id")
-                            .help("The KMS key id.")
+                        Arg::with_name("kms-key-arn")
+                            .long("kms-key-arn")
+                            .help("The KMS key ARN.")
                             .takes_value(true),
                     ),
             )

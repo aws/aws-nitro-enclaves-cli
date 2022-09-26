@@ -5,6 +5,7 @@ use clap::{App, AppSettings, Arg};
 use std::fs::OpenOptions;
 
 use aws_nitro_enclaves_image_format::generate_build_info;
+use aws_nitro_enclaves_image_format::utils::eif_signer::SigningKey;
 use enclave_build::Docker2Eif;
 
 fn main() {
@@ -133,9 +134,12 @@ fn main() {
     let signing_certificate = matches
         .value_of("signing_certificate")
         .map(|val| val.to_string());
-    let private_key = matches
-        .value_of("private_certificate")
-        .map(|val| val.to_string());
+    let private_key = Some(SigningKey::LocalKey {
+        path: matches
+            .value_of("private_certificate")
+            .map(|val| val.to_string())
+            .unwrap(),
+    });
     let img_name = matches.value_of("image_name").map(|val| val.to_string());
     let img_version = matches.value_of("image_version").map(|val| val.to_string());
     let metadata = matches.value_of("metadata").map(|val| val.to_string());

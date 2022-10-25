@@ -1,4 +1,4 @@
-# Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2020-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 %define ne_name nitro_enclaves
@@ -17,7 +17,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.2.0
+Version:    1.2.1
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -192,6 +192,32 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Tue Oct 25 2022 Andra Paraschiv <andraprs@amazon.com> - 1.2.1-0
+- Fix nitro-cli debug mode, when using attach_console and debug_mode options.
+- Refactor Dockerfiles for faster builds and remove duplication.
+- Mock input in nitro-cli unit tests to allow running them on systems without
+  Nitro Enclaves support or having various CPU configurations.
+- Refactor console disconnect timeout feature.
+- Fix race condition in nitro-cli on command dispatch.
+- Allow NITRO_CLI_INSTALL_DIR to be overriden in nitro-cli-env.sh.
+- Use aws-nitro-enclaves-image-format crate.
+- Allow NITRO_CLI_INSTALL_DIR be set for path to allocator.yaml.
+- Use DOCKER_HOST env variable properly when interacting with the shiplift
+  library.
+- Update linuxkit blobs to v0.8+.
+- Create driver-bindings crate with static bindings for the Nitro Enclaves
+  kernel driver.
+- Remove custom metadata structure restriction for EIF images.
+- Add symlinks for the blobs used by the command executer sample.
+- Fix clippy warnings.
+- Bump Rust version to 1.58.1.
+- Bump socket2 from 0.3.11 to 0.3.19 in vsock_proxy.
+- Bump smallvec from 0.6.13 to 0.6.14 in vsock_proxy.
+- Update clap crate to 3.2.
+- Update nitro-cli crates dependencies to the latest version.
+- Fix broken nitro-cli enclave proc doctest.
+- Fix typos in the nitro-cli documentation.
+
 * Tue Feb 22 2022 Eugene Koira <eugkoira@amazon.com> - 1.2.0-0
 - Add support of building EIF with custom name, version and metadata.
 - Add support of checking EIF metadata within describe-eif and describe-enclave commands.

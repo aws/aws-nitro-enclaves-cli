@@ -20,5 +20,6 @@ log = "0.4"
 url = "2.1"
 sha2 = "0.9.5"
 futures = "0.3.13"
+thiserror = "1.0"
 
 aws-nitro-enclaves-image-format = "0.2"

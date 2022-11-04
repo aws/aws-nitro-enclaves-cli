@@ -375,6 +375,7 @@ dependencies = [
  "sha2",
  "shiplift",
  "tempfile",
+ "thiserror",
  "tokio",
  "url",
 ]

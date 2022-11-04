@@ -12,13 +12,70 @@ mod yaml_generator;
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
 use aws_nitro_enclaves_image_format::utils::identity::parse_custom_metadata;
 use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignEnclaveInfo};
-use docker::DockerUtil;
+use docker::{DockerError, DockerUtil};
 use serde_json::json;
 use sha2::Digest;
 use std::collections::BTreeMap;
-use yaml_generator::YamlGenerator;
+use thiserror::Error;
+use yaml_generator::{YamlGenerator, YamlGeneratorError};
 
 pub const DEFAULT_TAG: &str = "1.0";
+
+#[derive(Debug, Error)]
+pub enum EnclaveBuildError {
+    #[error("Docker error: `{0:?}`")]
+    DockerError(DockerError),
+    #[error("Invalid path: `{0}`")]
+    PathError(String),
+    #[error("Image pull error: `{0}`")]
+    ImagePullError(String),
+    #[error("Image inspect failed")]
+    ImageInspectError,
+    #[error("Linuxkit error: `{0}`")]
+    LinuxKitError(String),
+    #[error("File operation error: `{0:?}`")]
+    FileError(std::io::Error),
+    #[error("Ramfs error: `{0:?}`")]
+    RamfsError(YamlGeneratorError),
+    #[error("Signature error: `{0}`")]
+    SignError(String),
+    #[error("Metadata error: `{0}`")]
+    MetadataError(String),
+    #[error("Unsupported architecture")]
+    UnsupportedArchError,
+    #[error("Getting image detail failed: `{0}`")]
+    ImageDetailError(String),
+    #[error("Container image operation failed")]
+    ImageOperationError,
+    #[error("Failed to convert image to EIF")]
+    ImageConvertError,
+    #[error("Hashing error: `{0}`")]
+    HashingError(String),
+    #[error("Serde error: `{0:?}`")]
+    SerdeError(serde_json::Error),
+    #[error("Error while parsing credentials: `{0}`")]
+    CredentialsError(String),
+    #[error("Image cache initialization error: `{0:?}`")]
+    CacheInitError(std::io::Error),
+    #[error("Cache store operation failed: `{0:?}`")]
+    CacheStoreError(std::io::Error),
+    #[error("Cache entry not found or has wrong: `{0:?}`")]
+    CacheMissError(String),
+    #[error("Manifest missing or wrong format")]
+    ConfigError,
+    #[error("Manifest missing or wrong format")]
+    ManifestError,
+    #[error("Failed to extract expressions from image: `{0}`")]
+    ExtractError(String),
+    #[error("Image entrypoint missing or unsupported")]
+    EntrypointError,
+    #[error("Runtime creation failed")]
+    RuntimeError,
+    #[error("EIF build error: `{0}`")]
+    OtherError(String),
+}
+
+pub type Result<T> = std::result::Result<T, EnclaveBuildError>;
 
 pub struct Docker2Eif<'a> {
     docker_image: String,
@@ -37,26 +94,6 @@ pub struct Docker2Eif<'a> {
     build_info: EifBuildInfo,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Docker2EifError {
-    DockerError,
-    DockerfilePathError,
-    ImagePullError,
-    InitPathError,
-    NsmPathError,
-    KernelPathError,
-    LinuxkitExecError,
-    LinuxkitPathError,
-    MetadataPathError,
-    MetadataError(String),
-    ArtifactsPrefixError,
-    RamfsError,
-    RemoveFileError,
-    SignImageError(String),
-    SignArgsError,
-    UnsupportedArchError,
-}
-
 impl<'a> Docker2Eif<'a> {
     pub fn new(
         docker_image: String,
@@ -73,34 +110,37 @@ impl<'a> Docker2Eif<'a> {
         img_version: Option<String>,
         metadata_path: Option<String>,
         build_info: EifBuildInfo,
-    ) -> Result<Self, Docker2EifError> {
+    ) -> Result<Self> {
         let docker = DockerUtil::new(docker_image.clone());
+        let blob_paths = Vec::from([&init_path, &nsm_path, &kernel_img_path, &linuxkit_path]);
 
-        if !Path::new(&init_path).is_file() {
-            return Err(Docker2EifError::InitPathError);
-        } else if !Path::new(&nsm_path).is_file() {
-            return Err(Docker2EifError::NsmPathError);
-        } else if !Path::new(&kernel_img_path).is_file() {
-            return Err(Docker2EifError::KernelPathError);
-        } else if !Path::new(&linuxkit_path).is_file() {
-            return Err(Docker2EifError::LinuxkitPathError);
-        } else if !Path::new(&artifacts_prefix).is_dir() {
-            return Err(Docker2EifError::ArtifactsPrefixError);
+        blob_paths.iter().try_for_each(|path| {
+            if !Path::new(path).is_file() {
+                return Err(EnclaveBuildError::PathError(path.to_string()));
+            }
+            Ok(())
+        })?;
+
+        if !Path::new(&artifacts_prefix).is_dir() {
+            return Err(EnclaveBuildError::PathError(artifacts_prefix));
         }
 
         if let Some(ref path) = metadata_path {
             if !Path::new(path).is_file() {
-                return Err(Docker2EifError::MetadataPathError);
+                return Err(EnclaveBuildError::PathError(path.to_string()));
             }
         }
 
         let sign_info = match (certificate_path, key_path) {
             (None, None) => None,
             (Some(cert_path), Some(key_path)) => Some(
-                SignEnclaveInfo::new(cert_path, key_path)
-                    .map_err(|err| Docker2EifError::SignImageError(format!("{err:?}")))?,
+                SignEnclaveInfo::new(cert_path, key_path).map_err(EnclaveBuildError::SignError)?,
             ),
-            _ => return Err(Docker2EifError::SignArgsError),
+            _ => {
+                return Err(EnclaveBuildError::SignError(
+                    "Invalid signing arguments".to_string(),
+                ))
+            }
         };
 
         Ok(Docker2Eif {
@@ -121,36 +161,36 @@ impl<'a> Docker2Eif<'a> {
         })
     }
 
-    pub fn pull_docker_image(&self) -> Result<(), Docker2EifError> {
+    pub fn pull_docker_image(&self) -> Result<()> {
         self.docker.pull_image().map_err(|e| {
             eprintln!("Docker error: {e:?}");
-            Docker2EifError::DockerError
+            EnclaveBuildError::DockerError(e)
         })?;
 
         Ok(())
     }
 
-    pub fn build_docker_image(&self, dockerfile_dir: String) -> Result<(), Docker2EifError> {
+    pub fn build_docker_image(&self, dockerfile_dir: String) -> Result<()> {
         if !Path::new(&dockerfile_dir).is_dir() {
-            return Err(Docker2EifError::DockerfilePathError);
+            return Err(EnclaveBuildError::PathError(dockerfile_dir));
         }
         self.docker.build_image(dockerfile_dir).map_err(|e| {
             eprintln!("Docker error: {e:?}");
-            Docker2EifError::DockerError
+            EnclaveBuildError::DockerError(e)
         })?;
 
         Ok(())
     }
 
-    fn generate_identity_info(&self) -> Result<EifIdentityInfo, Docker2EifError> {
+    fn generate_identity_info(&self) -> Result<EifIdentityInfo> {
         let docker_info = self
             .docker
             .inspect_image()
-            .map_err(|e| Docker2EifError::MetadataError(format!("Docker inspect error: {e:?}")))?;
+            .map_err(EnclaveBuildError::DockerError)?;
 
         let uri_split: Vec<&str> = self.docker_image.split(':').collect();
         if uri_split.is_empty() {
-            return Err(Docker2EifError::MetadataError(
+            return Err(EnclaveBuildError::ImageDetailError(
                 "Wrong image name specified".to_string(),
             ));
         }
@@ -164,7 +204,7 @@ impl<'a> Docker2Eif<'a> {
             .and_then(|val| val.as_str())
             .and_then(|str| str.strip_prefix("sha256:"))
             .ok_or_else(|| {
-                Docker2EifError::MetadataError(
+                EnclaveBuildError::MetadataError(
                     "Image info must contain string Id field".to_string(),
                 )
             })?;
@@ -180,7 +220,7 @@ impl<'a> Docker2Eif<'a> {
 
         let mut custom_info = json!(null);
         if let Some(ref path) = self.metadata_path {
-            custom_info = parse_custom_metadata(path).map_err(Docker2EifError::MetadataError)?
+            custom_info = parse_custom_metadata(path).map_err(EnclaveBuildError::MetadataError)?
         }
 
         Ok(EifIdentityInfo {
@@ -192,10 +232,10 @@ impl<'a> Docker2Eif<'a> {
         })
     }
 
-    pub fn create(&mut self) -> Result<BTreeMap<String, String>, Docker2EifError> {
+    pub fn create(&mut self) -> Result<BTreeMap<String, String>> {
         let (cmd_file, env_file) = self.docker.load().map_err(|e| {
             eprintln!("Docker error: {e:?}");
-            Docker2EifError::DockerError
+            EnclaveBuildError::DockerError(e)
         })?;
 
         let yaml_generator = YamlGenerator::new(
@@ -208,11 +248,11 @@ impl<'a> Docker2Eif<'a> {
 
         let ramfs_config_file = yaml_generator.get_bootstrap_ramfs().map_err(|e| {
             eprintln!("Ramfs error: {e:?}");
-            Docker2EifError::RamfsError
+            EnclaveBuildError::RamfsError(e)
         })?;
         let ramfs_with_rootfs_config_file = yaml_generator.get_customer_ramfs().map_err(|e| {
             eprintln!("Ramfs error: {e:?}");
-            Docker2EifError::RamfsError
+            EnclaveBuildError::RamfsError(e)
         })?;
 
         let bootstrap_ramfs = format!("{}/bootstrap-initrd.img", self.artifacts_prefix);
@@ -228,13 +268,16 @@ impl<'a> Docker2Eif<'a> {
                 ramfs_config_file.path().to_str().unwrap(),
             ])
             .output()
-            .map_err(|_| Docker2EifError::LinuxkitExecError)?;
+            .map_err(|e| EnclaveBuildError::LinuxKitError(format!("{:?}", e)))?;
         if !output.status.success() {
             eprintln!(
                 "Linuxkit reported an error while creating the bootstrap ramfs: {:?}",
                 String::from_utf8_lossy(&output.stderr)
             );
-            return Err(Docker2EifError::LinuxkitExecError);
+            return Err(EnclaveBuildError::LinuxKitError(format!(
+                "{:?}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
         }
 
         // Prefix the docker image filesystem, as expected by init
@@ -251,24 +294,29 @@ impl<'a> Docker2Eif<'a> {
                 ramfs_with_rootfs_config_file.path().to_str().unwrap(),
             ])
             .output()
-            .map_err(|_| Docker2EifError::LinuxkitExecError)?;
+            .map_err(|e| EnclaveBuildError::LinuxKitError(format!("{:?}", e)))?;
         if !output.status.success() {
             eprintln!(
                 "Linuxkit reported an error while creating the customer ramfs: {:?}",
                 String::from_utf8_lossy(&output.stderr)
             );
-            return Err(Docker2EifError::LinuxkitExecError);
+            return Err(EnclaveBuildError::LinuxKitError(format!(
+                "{:?}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
         }
 
         let arch = self.docker.architecture().map_err(|e| {
             eprintln!("Docker error: {e:?}");
-            Docker2EifError::DockerError
+            EnclaveBuildError::DockerError(e)
         })?;
 
         let flags = match arch.as_str() {
             docker::DOCKER_ARCH_ARM64 => EIF_HDR_ARCH_ARM64,
             docker::DOCKER_ARCH_AMD64 => 0,
-            _ => return Err(Docker2EifError::UnsupportedArchError),
+            _ => {
+                return Err(EnclaveBuildError::UnsupportedArchError);
+            }
         };
 
         let mut build = EifBuilder::new(

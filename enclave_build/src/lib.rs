@@ -218,7 +218,7 @@ impl<'a> Docker2Eif<'a> {
         let customer_ramfs = format!("{}/customer-initrd.img", self.artifacts_prefix);
 
         let output = Command::new(&self.linuxkit_path)
-            .args(&[
+            .args([
                 "build",
                 "-name",
                 &bootstrap_ramfs,
@@ -238,7 +238,7 @@ impl<'a> Docker2Eif<'a> {
 
         // Prefix the docker image filesystem, as expected by init
         let output = Command::new(&self.linuxkit_path)
-            .args(&[
+            .args([
                 "build",
                 "-docker",
                 "-name",

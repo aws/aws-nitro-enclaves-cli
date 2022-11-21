@@ -37,7 +37,7 @@ Supported Linux versions:
 Generate bindings for a new Linux version:
 
 ```
-bindgen --allowlist-type "ne_.*" --allowlist-var "NE_ERR_.*" -o bindings.rs \
+bindgen --with-derive-default --allowlist-type "ne_.*" --allowlist-var "NE_ERR_.*" -o bindings.rs \
 		/usr/src/kernels/$(uname -r)/include/uapi/linux/nitro_enclaves.h -- \
 		-fretain-comments-from-system-headers -fparse-all-comments
 ```

@@ -56,7 +56,7 @@ impl RunEnclavesArgs {
                     NitroCliErrorEnum::SerdeError
                 )
             })?;
-            if json.cpu_count == None && json.cpu_ids == None {
+            if json.cpu_count.is_none() && json.cpu_ids.is_none() {
                 return Err(new_nitro_cli_failure!(
                     "Missing both `cpu-count` and `cpu-ids`",
                     NitroCliErrorEnum::MissingArgument

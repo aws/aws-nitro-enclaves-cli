@@ -131,11 +131,9 @@ fn main() {
     let linuxkit_path = matches.value_of("linuxkit_path").unwrap();
     let output = matches.value_of("output").unwrap();
     let signing_certificate = matches
-        .value_of("signing_certificate")
+        .value_of("signing-certificate")
         .map(|val| val.to_string());
-    let private_key = matches
-        .value_of("private_certificate")
-        .map(|val| val.to_string());
+    let private_key = matches.value_of("private-key").map(|val| val.to_string());
     let img_name = matches.value_of("image_name").map(|val| val.to_string());
     let img_version = matches.value_of("image_version").map(|val| val.to_string());
     let metadata = matches.value_of("metadata").map(|val| val.to_string());
@@ -144,6 +142,7 @@ fn main() {
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(output)
         .expect("Failed to create output file");
 

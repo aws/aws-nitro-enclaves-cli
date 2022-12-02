@@ -9,6 +9,7 @@ use std::process::Command;
 mod docker;
 mod image;
 mod pull;
+mod storage;
 mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
@@ -59,12 +60,12 @@ pub enum EnclaveBuildError {
     SerdeError(serde_json::Error),
     #[error("Error while parsing credentials: `{0}`")]
     CredentialsError(String),
-    #[error("Image cache initialization error: `{0:?}`")]
-    CacheInitError(std::io::Error),
-    #[error("Cache store operation failed: `{0:?}`")]
-    CacheStoreError(std::io::Error),
-    #[error("Cache entry not found or has wrong: `{0:?}`")]
-    CacheMissError(String),
+    #[error("Image storage initialization error: `{0:?}`")]
+    OciStorageInit(std::io::Error),
+    #[error("Image store operation failed: `{0:?}`")]
+    OciStorageStore(std::io::Error),
+    #[error("Storage entry not found or has wrong: `{0:?}`")]
+    OciStorageNotFound(String),
     #[error("Manifest missing or wrong format")]
     ConfigError,
     #[error("Manifest missing or wrong format")]

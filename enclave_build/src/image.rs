@@ -71,7 +71,7 @@ pub fn deserialize_from_reader<R: Read, T: DeserializeOwned>(reader: R) -> Resul
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use oci_distribution::{
         client::{Config, ImageLayer},
@@ -80,10 +80,10 @@ mod tests {
 
     /// Name of the custom image to be used for testing the cache.
     /// This image will not be pulled from remote.
-    const TEST_IMAGE_NAME: &str = "hello-world";
+    pub const TEST_IMAGE_NAME: &str = "hello-world";
 
     /// The manifest.json of the image used for testing.
-    const TEST_MANIFEST: &str = r#"
+    pub const TEST_MANIFEST: &str = r#"
     {
         "schemaVersion":2,
         "mediaType":"application/vnd.docker.distribution.manifest.v2+json",
@@ -185,12 +185,12 @@ mod tests {
     "##;
 
     /// The hash of the test image calculated as the SHA256 digest of the image config
-    const TEST_IMAGE_HASH: &str =
+    pub const TEST_IMAGE_HASH: &str =
         "9f5747c1f734cb78bf90123f791324f2a75c75863f1b94a91051702aa87e9511";
 
     // Simple layers used for testing
-    const TEST_LAYER_1: &str = "Hello World 1";
-    const TEST_LAYER_2: &str = "Hello World 2";
+    pub const TEST_LAYER_1: &str = "Hello World 1";
+    pub const TEST_LAYER_2: &str = "Hello World 2";
 
     /// Builds a mock ImageData struct in order to avoid pulling it from remote.
     pub fn build_image_data() -> ImageData {

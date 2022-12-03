@@ -64,22 +64,6 @@ pytest-3 tests/integration/test_installation.py || test_failed
 # Clean up build artefacts
 make clean
 
-# Run 'cargo fmt'
-echo "=================== cargo fmt ========================="
-make nitro-format || test_failed
-
-# Run 'cargo clippy'
-echo "=================== cargo clippy ==========================="
-make nitro-clippy || test_failed
-
-# Run 'cargo audit'
-echo "=================== cargo audit ==========================="
-make nitro-audit || test_failed
-
-# Check Rust licenses
-echo "=================== cargo about ==========================="
-make nitro-about || test_failed
-
 # Setup the environement with everything needed to run the integration tests
 make command-executer || test_failed
 make nitro-tests || test_failed

@@ -428,6 +428,40 @@ impl OciStorage {
             image_config.clone(),
         ))
     }
+
+    /// Returns the default root folder path of the local storage.
+    ///
+    /// The default storage path is {XDG_DATA_HOME}/.aws-nitro-enclaves-cli/container_storage, and if the env
+    /// variable is not set, {HOME}/.local/share/.aws-nitro-enclaves-cli/container_storage is used.
+    pub fn get_default_root_path() -> Result<PathBuf> {
+        // Try to use XDG_DATA_HOME as default root
+        let root = match std::env::var_os(STORAGE_ROOT_FOLDER) {
+            Some(val) => val
+                .into_string()
+                .map_err(|_| EnclaveBuildError::PathError("storage root folder".to_string()))?,
+            // If XDG_DATA_HOME is not set, use {HOME}/.local/share as specified in
+            // https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
+            None => {
+                let home_folder = std::env::var_os("HOME").ok_or_else(|| {
+                    EnclaveBuildError::PathError(
+                        "HOME environment variable is not set.".to_string(),
+                    )
+                })?;
+                format!(
+                    "{}/.local/share/",
+                    home_folder
+                        .into_string()
+                        .map_err(|err| EnclaveBuildError::PathError(format!("{:?}", err)))?
+                )
+            }
+        };
+
+        let mut path = PathBuf::from(root);
+        // Add the additional path to the root
+        path.push(".aws-nitro-enclaves-cli/container_storage");
+
+        Ok(path)
+    }
 }
 
 #[cfg(test)]
@@ -629,5 +663,25 @@ pub mod tests {
         assert!(storage
             .fetch_image_details(image::tests::TEST_IMAGE_NAME)
             .is_err());
+    }
+
+    #[test]
+    fn test_get_default_root_path() {
+        let default_path = match std::env::var_os("XDG_DATA_HOME") {
+            Some(val) => PathBuf::from(val.to_str().unwrap().to_string())
+                .join(".aws-nitro-enclaves-cli/container_storage"),
+            None => {
+                let home = std::env::var_os("HOME").expect("HOME env not set");
+                let append = format!(
+                    "{}/.local/share/.aws-nitro-enclaves-cli/container_storage",
+                    home.to_str().unwrap().to_string()
+                );
+                PathBuf::from(home).join(append)
+            }
+        };
+        let calc_path =
+            OciStorage::get_default_root_path().expect("failed to determine default storage path");
+
+        assert_eq!(default_path, calc_path);
     }
 }

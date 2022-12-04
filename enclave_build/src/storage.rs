@@ -10,7 +10,9 @@ use std::{
 
 use oci_distribution::{
     client::ImageData,
-    manifest::{ImageIndexEntry, OciImageIndex, OciImageManifest, OCI_IMAGE_MEDIA_TYPE},
+    manifest::{
+        ImageIndexEntry, OciDescriptor, OciImageIndex, OciImageManifest, OCI_IMAGE_MEDIA_TYPE,
+    },
 };
 use serde_json::json;
 use sha2::Digest;
@@ -208,8 +210,136 @@ impl OciStorage {
             .map_err(EnclaveBuildError::OciStorageStore)?
             .write_all(bytes)
             .map_err(EnclaveBuildError::OciStorageStore)?;
+        Ok(())
+    }
+
+    /// Determines if an image is stored correctly
+    fn check_stored_image(&self, image_name: &str) -> Result<()> {
+        // Check that the index file exists
+        let index: OciImageIndex = Self::fetch_index(&self.root_path)?;
+
+        // First validate the manifest
+        // Since the struct pulled by the oci_distribution API does not contain the manifest digest,
+        // and another HTTP request should be made to get the digest, just check that the manifest file
+        // exists and has the right structure for the next validations
+        let manifest = self
+            .fetch_manifest_from_index(image_name, index)
+            .map_err(|_| EnclaveBuildError::ManifestError)?;
+
+        // The manifest is checked, so now validate the layers from the manifest
+        self.validate_layers(&manifest)?;
+
+        // Extract the config digest from the manifest
+        let config_digest = manifest
+            .config
+            .digest
+            .strip_prefix("sha256:")
+            .ok_or(EnclaveBuildError::ConfigError)?;
+
+        // Finally, check that the config is correctly stored
+        // This is done by applying a hash function on the config file contents and comparing the
+        // result with the config digest from the manifest
+        let config_string = Self::fetch_config(&self.root_path, config_digest)?;
+
+        // Compare the two digests
+        if config_digest != format!("{:x}", sha2::Sha256::digest(config_string.as_bytes())) {
+            return Err(EnclaveBuildError::OciStorageMalformed(
+                "Config content digest and digest from manifest do not match".to_string(),
+            ));
+        }
 
         Ok(())
+    }
+
+    /// Validates that the image layers are stored correctly by checking them with the layer
+    /// descriptors from the image manifest.
+    fn validate_layers(&self, manifest_obj: &OciImageManifest) -> Result<()> {
+        let layers_path = self.root_path.join(STORAGE_BLOBS_FOLDER);
+
+        // Get the stored blobs as a HashMap mapping a layer digest to the corresponding layer file
+        let mut blobs = HashMap::new();
+
+        fs::read_dir(layers_path)
+            .map_err(|err| {
+                EnclaveBuildError::OciStorageNotFound(format!(
+                    "Failed to get image layers: {:?}",
+                    err
+                ))
+            })?
+            .into_iter()
+            // Get only the valid directory entries that are valid files and return (name, file) pair
+            .filter_map(|entry| match entry {
+                Ok(dir_entry) => match File::open(dir_entry.path()) {
+                    Ok(file) => Some((dir_entry.file_name(), file)),
+                    Err(_) => None,
+                },
+                Err(_) => None,
+            })
+            // Map a layer digest to the layer file
+            // The blobs hashmap will contain all layer files found in the storage for the current image
+            // (along with config blobs as well which will be ignored)
+            .for_each(|(name, file)| {
+                if let Ok(file_name) = name.into_string() {
+                    blobs.insert(file_name, file);
+                }
+            });
+
+        // Iterate through each layer found in the image manifest and validate that it is
+        // stored by checking the digest
+        manifest_obj
+            .layers
+            .iter()
+            .try_for_each(|layer| Self::check_layer(layer, &blobs))?;
+
+        Ok(())
+    }
+
+    /// Validate particular layer manifest entry against stored blob files
+    fn check_layer(layer: &OciDescriptor, blobs: &HashMap<String, File>) -> Result<()> {
+        // Get the stored layer file matching the digest
+        // If not present, then a layer file is missing, so return Error
+        let layer_ref = layer.digest.strip_prefix("sha256:").ok_or_else(|| {
+            EnclaveBuildError::OciStorageMalformed("Layer digest incorrect.".to_string())
+        })?;
+        let mut layer_file = blobs.get(layer_ref).ok_or_else(|| {
+            EnclaveBuildError::OciStorageNotFound("Layer missing from storage.".to_string())
+        })?;
+        let mut layer_string = String::new();
+        layer_file.read_to_string(&mut layer_string).map_err(|_| {
+            EnclaveBuildError::OciStorageNotFound("Failed to read layer".to_string())
+        })?;
+
+        let calc_digest = Self::blob_hash(layer_string.as_bytes());
+
+        // Check that the digests match
+        if calc_digest != layer.digest {
+            return Err(EnclaveBuildError::OciStorageMalformed(
+                "Layer not valid".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Returns the manifest JSON string from the storage
+    fn fetch_manifest_from_index(
+        &self,
+        image_name: &str,
+        index: OciImageIndex,
+    ) -> Result<OciImageManifest> {
+        let img_ref = Self::normalize_reference(&image::build_image_reference(image_name)?.whole());
+        let manifest_entry = index
+            .manifests
+            .iter()
+            .find(|entry| match &entry.annotations {
+                Some(annotations) => annotations
+                    .get(REF_ANNOTATION)
+                    .map_or_else(|| false, |value| img_ref == *value),
+                None => false,
+            })
+            .ok_or(EnclaveBuildError::ManifestError)?;
+
+        Self::fetch_manifest(&self.root_path, &manifest_entry.digest)
     }
 
     /// Fetch index file from the storage root path
@@ -232,7 +362,7 @@ impl OciStorage {
 
         // Read the JSON string from the stored manifest file
         let manifest_path = target_path.join(digest);
-        let file = File::open(&manifest_path).map_err(|_| EnclaveBuildError::ManifestError)?;
+        let file = File::open(manifest_path).map_err(|_| EnclaveBuildError::ManifestError)?;
         let manifest: OciImageManifest =
             serde_json::from_reader(file).map_err(EnclaveBuildError::SerdeError)?;
 
@@ -240,7 +370,7 @@ impl OciStorage {
     }
 
     /// Returns the config JSON string from the storage
-    fn fetch_config(root_path: &Path, config_digest: &str) -> Result<ImageConfiguration> {
+    fn fetch_config(root_path: &Path, config_digest: &str) -> Result<String> {
         let target_path = root_path.join(STORAGE_BLOBS_FOLDER);
 
         let mut config_json = String::new();
@@ -253,7 +383,7 @@ impl OciStorage {
             return Err(EnclaveBuildError::ConfigError);
         }
 
-        deserialize_from_reader(config_json.as_bytes())
+        Ok(config_json)
     }
 
     /// Add `docker.io` to references that are missing this registry. `Linuxkit` will search
@@ -305,6 +435,63 @@ pub mod tests {
             .expect("failed to store test image to storage");
 
         (root_dir, storage)
+    }
+
+    #[test]
+    fn test_image_is_valid() {
+        let (_root_path, storage) = setup_temp_storage();
+
+        assert!(storage
+            .check_stored_image(image::tests::TEST_IMAGE_NAME)
+            .is_ok())
+    }
+
+    #[test]
+    fn test_image_is_not_valid() {
+        let (root_dir, storage) = setup_temp_storage();
+        let root_path = root_dir.as_path();
+
+        // Delete the index file so that check_stored_image() returns error
+        let index_file_path = root_path.join(STORAGE_INDEX_FILE_NAME);
+        fs::remove_file(&index_file_path).expect("could not remove the storage index file");
+
+        assert!(storage
+            .check_stored_image(image::tests::TEST_IMAGE_NAME)
+            .is_err())
+    }
+
+    #[test]
+    fn test_validate_layers() {
+        let (root_dir, storage) = setup_temp_storage();
+        let root_path = root_dir.as_path();
+
+        // Digest of the layer to be deleted
+        let delete_layer_digest =
+            "1aed4d8555515c961bffea900d5e7f1c1e4abf0f6da250d8bf15843106e0533b";
+
+        let layer_path = root_path
+            .join(STORAGE_BLOBS_FOLDER)
+            .join(delete_layer_digest);
+        fs::remove_file(&layer_path).expect("could not remove the layer file");
+
+        let res = storage.check_stored_image(image::tests::TEST_IMAGE_NAME);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_fetch_manifest_from_index() {
+        let (_root_path, storage) = setup_temp_storage();
+
+        let index: OciImageIndex = OciStorage::fetch_index(&storage.root_path).unwrap();
+        let manifest = storage
+            .fetch_manifest_from_index(image::tests::TEST_IMAGE_NAME, index)
+            .unwrap();
+
+        let expected_manifest: serde_json::Value =
+            serde_json::from_str(image::tests::TEST_MANIFEST).unwrap();
+
+        assert_eq!(json!(manifest), expected_manifest);
     }
 
     #[test]
@@ -377,8 +564,7 @@ pub mod tests {
         let config = OciStorage::fetch_config(&root_path, image::tests::TEST_IMAGE_HASH)
             .expect("failed to fetch image config from storage");
 
-        let expected_config =
-            image::deserialize_from_reader(image::tests::TEST_CONFIG.as_bytes()).unwrap();
+        let expected_config = image::tests::TEST_CONFIG.to_string();
 
         assert_eq!(config, expected_config);
     }

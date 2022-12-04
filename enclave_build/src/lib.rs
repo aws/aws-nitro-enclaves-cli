@@ -66,6 +66,8 @@ pub enum EnclaveBuildError {
     OciStorageStore(std::io::Error),
     #[error("Storage entry not found or has wrong: `{0:?}`")]
     OciStorageNotFound(String),
+    #[error("Storage has the wrong structure: `{0:?}`")]
+    OciStorageMalformed(String),
     #[error("Manifest missing or wrong format")]
     ConfigError,
     #[error("Manifest missing or wrong format")]

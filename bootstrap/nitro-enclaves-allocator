@@ -5,6 +5,11 @@
 # Its purpose is to reserve the requested memory and CPUs (specified in
 # /etc/nitro_enclaves/allocator.yaml).
 
+# Set language to English. This way the parsing logic from the current script
+# works properly when a different language is set in the locale configuration
+# (e.g. /etc/locale.conf).
+LANG=en_US.UTF-8
+
 # The file which holds the CPU pool.
 CPU_POOL_FILE="/sys/module/nitro_enclaves/parameters/ne_cpus"
 

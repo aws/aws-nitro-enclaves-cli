@@ -1,5 +1,4 @@
-FROM ubuntu:latest
-  COPY command-executer .
-  RUN apt-get update && apt-get install -y \
-      apt-utils
-  CMD ./command-executer listen --port 5005
+FROM public.ecr.aws/ubuntu/ubuntu:20.04
+
+COPY command-executer .
+CMD ./command-executer listen --port 5005

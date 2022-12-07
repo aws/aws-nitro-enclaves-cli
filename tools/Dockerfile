@@ -1,10 +1,12 @@
-FROM ubuntu:18.04
+FROM public.ecr.aws/ubuntu/ubuntu:20.04
 
 SHELL ["/bin/bash", "-c"]
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install rust toolchain and its dependencies
 RUN apt-get update && \
-	apt-get install -y curl unzip jq
+	apt-get install -y curl unzip jq make
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
 RUN echo "source $HOME/.cargo/env" >> $HOME/.bashrc
 

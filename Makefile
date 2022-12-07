@@ -106,7 +106,7 @@ driver-deps:
 	&& echo "Successfully installed the driver deps"
 
 build-container:
-	@docker image build --pull --quiet -t $(CONTAINER_TAG) -f tools/Dockerfile1804 tools/
+	@docker image build --pull -t $(CONTAINER_TAG) -f tools/Dockerfile tools/
 
 $(OBJ_PATH):
 	$(MKDIR) -p $(OBJ_PATH)

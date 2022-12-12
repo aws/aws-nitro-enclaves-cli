@@ -40,6 +40,8 @@ const OCI_LAYOUT: (&str, &str) = ("imageLayoutVersion", "1.0.0");
 /// Structure which provides operations with the local storage.
 ///
 /// The index file is located in the storage root folder and keeps track of stored images.
+/// The storage will be consumed during image operations (pull and inspect) to prevent requests to the
+/// image registry. Also `linuxkit` will use this storage as its own to prevent subsequent requests
 ///
 /// The storage structure is:
 ///
@@ -75,7 +77,7 @@ impl OciStorage {
     }
 
     /// Stores the image data provided as argument in the storage at the folder pointed
-    /// by the 'root_path' field.
+    /// by the 'root_path' field: adds image to the index content, stores manifest, config, layers
     pub fn store_image_data(&mut self, image_name: &str, image_data: &ImageData) -> Result<()> {
         // Create the folder where the image data will be stored. Each image blob will be stored in
         // a file named by the SHA256 digest of the content.
@@ -110,6 +112,9 @@ impl OciStorage {
         }
     }
 
+    // Each layer file will be named after the layer's digest hash. Only blobs found in the
+    // image manifest `layer` section:
+    // https://github.com/opencontainers/image-spec/blob/main/image-layout.md#example-blobs
     fn store_layers(blobs_path: &Path, image_data: &ImageData) -> Result<()> {
         for layer in &image_data.layers {
             Self::write_blob(blobs_path, &layer.data)?;
@@ -118,6 +123,8 @@ impl OciStorage {
         Ok(())
     }
 
+    // Store the manifest as a blob with the following content:
+    // https://github.com/opencontainers/image-spec/blob/main/manifest.md#example-image-manifest
     fn store_manifest<'a>(
         blobs_path: &Path,
         image_data: &'a ImageData,
@@ -133,6 +140,9 @@ impl OciStorage {
         Ok(manifest)
     }
 
+    // Store the config and validate UTF8 bytes. Saved as a blob as well
+    // with the hash saved in the manifest:
+    // https://github.com/opencontainers/image-spec/blob/main/config.md#example
     fn store_config(blobs_path: &Path, image_data: &ImageData) -> Result<String> {
         let config_content = String::from_utf8(image_data.config.data.clone()).map_err(|_| {
             EnclaveBuildError::OciStorageStore(Error::new(
@@ -177,7 +187,8 @@ impl OciStorage {
             .open(self.root_path.join(STORAGE_INDEX_FILE_NAME))
             .map_err(EnclaveBuildError::OciStorageStore)?;
 
-        // Write index file content
+        // Write index file content. It must be present and defines the OCI storage structure:
+        // https://github.com/opencontainers/image-spec/blob/main/image-layout.md#oci-layout-file
         serde_json::to_writer(index_file, &index_content).map_err(EnclaveBuildError::SerdeError)?;
 
         Ok(())
@@ -229,7 +240,8 @@ impl OciStorage {
         // The manifest is checked, so now validate the layers from the manifest
         self.validate_layers(&manifest)?;
 
-        // Extract the config digest from the manifest
+        // Extract the digest from the manifest `config` section:
+        // https://github.com/opencontainers/image-spec/blob/main/manifest.md#example-image-manifest
         let config_digest = manifest
             .config
             .digest
@@ -284,8 +296,8 @@ impl OciStorage {
                 }
             });
 
-        // Iterate through each layer found in the image manifest and validate that it is
-        // stored by checking the digest
+        // Iterate through each layer found in the image manifest and validate that it is stored
+        // by checking that the digest corresponds to the file name
         manifest_obj
             .layers
             .iter()
@@ -321,7 +333,7 @@ impl OciStorage {
         Ok(())
     }
 
-    /// Returns the manifest JSON string from the storage
+    /// Returns the manifest JSON string from the storage index. Needed to later validate the digest
     fn fetch_manifest_from_index(
         &self,
         image_name: &str,
@@ -353,7 +365,7 @@ impl OciStorage {
         }
     }
 
-    /// Returns manifest from blob, given the digest
+    /// Returns manifest from blob, given the digest. Needed to later validate the digest
     fn fetch_manifest(root_path: &Path, manifest_hash: &str) -> Result<OciImageManifest> {
         let digest = manifest_hash
             .strip_prefix("sha256:")

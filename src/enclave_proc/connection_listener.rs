@@ -233,16 +233,16 @@ impl ConnectionListener {
     pub fn get_next_connection(&self, enc_fd: Option<RawFd>) -> NitroCliResult<Connection> {
         // Wait on epoll until a valid event is received.
         let mut events = [EpollEvent::empty(); 1];
-
         loop {
-            let num_events = epoll::epoll_wait(self.epoll_fd, &mut events, -1).map_err(|e| {
-                new_nitro_cli_failure!(
-                    &format!("Failed to wait on epoll: {:?}", e),
-                    NitroCliErrorEnum::EpollError
-                )
-            })?;
-            if num_events > 0 {
-                break;
+            match epoll::epoll_wait(self.epoll_fd, &mut events, -1) {
+                Ok(_) => break,
+                Err(nix::errno::Errno::EINTR) => continue,
+                Err(e) => {
+                    return Err(new_nitro_cli_failure!(
+                        &format!("Failed to wait on epoll: {:?}", e),
+                        NitroCliErrorEnum::EpollError
+                    ))
+                }
             }
         }
 

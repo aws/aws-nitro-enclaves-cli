@@ -297,7 +297,7 @@ fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
     let timeval = TimeVal::milliseconds(millis);
     let ret = unsafe {
         libc::setsockopt(
-            fd as i32,
+            fd,
             libc::AF_VSOCK,
             SO_VM_SOCKETS_CONNECT_TIMEOUT,
             &timeval as *const _ as *const c_void,

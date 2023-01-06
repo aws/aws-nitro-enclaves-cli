@@ -1,6 +1,5 @@
 // Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -488,7 +487,7 @@ pub mod tests {
 
     /// This function stores the test image in a temporary directory and returns that directory and
     /// the storage manager initialized with it as root path.
-    fn setup_temp_storage() -> (TempDir, OciStorage) {
+    pub fn setup_temp_storage() -> (TempDir, OciStorage) {
         // Use a temporary dir as the storage root path
         // Create temporary random path so tests running in parallel won't overlap
         let root_dir = TempDir::new().unwrap();

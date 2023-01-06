@@ -49,6 +49,10 @@ impl ImageDetails {
             config: deserialize_from_reader(image_data.config.data.as_slice())?,
         })
     }
+
+    pub fn config(&self) -> &ImageConfiguration {
+        &self.config
+    }
 }
 
 /// URIs that are missing a domain will be converted to a reference using the Docker defaults.

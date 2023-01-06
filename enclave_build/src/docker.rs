@@ -1,8 +1,8 @@
 // Copyright 2019-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use base64::{engine::general_purpose, Engine as _};
 use crate::{EnclaveBuildError, Result};
+use base64::{engine::general_purpose, Engine as _};
 use futures::stream::StreamExt;
 use log::{debug, info};
 use serde_json::{json, Value};

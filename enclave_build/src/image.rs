@@ -4,6 +4,7 @@
 use crate::{EnclaveBuildError, Result};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::io::Read;
+use tempfile::NamedTempFile;
 
 use sha2::Digest;
 
@@ -52,6 +53,40 @@ impl ImageDetails {
 
     pub fn config(&self) -> &ImageConfiguration {
         &self.config
+    }
+
+    /// Extracts from the image and returns the CMD and ENV expressions (in this order).
+    ///
+    /// If there are no CMD expressions found, it tries to locate the ENTRYPOINT command.
+    /// The returned result will contain the files needed for the YAML generator.
+    pub fn extract_expressions(&self) -> Result<(NamedTempFile, NamedTempFile)> {
+        // Get the expressions from the image
+        let config_section = self
+            .config
+            .config()
+            .as_ref()
+            .ok_or(EnclaveBuildError::ConfigError)?;
+
+        let cmd = config_section.cmd();
+        let env = config_section.env();
+        let entrypoint = config_section.entrypoint();
+
+        // If no CMD instructions are found, try to locate an ENTRYPOINT command
+        let (cmd, env) = match (cmd, env, entrypoint) {
+            (Some(cmd), Some(env), _) => Ok((cmd.to_vec(), env.to_vec())),
+            (_, Some(env), Some(entrypoint)) => Ok((entrypoint.to_vec(), env.to_vec())),
+            (_, _, Some(entrypoint)) => Ok((entrypoint.to_vec(), Vec::new())),
+            (_, _, _) => Err(EnclaveBuildError::ExtractError(
+                "Failed to locate ENTRYPOINT".to_string(),
+            )),
+        }?;
+
+        let cmd_file = crate::docker::write_config(cmd)
+            .map_err(|err| EnclaveBuildError::ExtractError(format!("{:?}", err)))?;
+        let env_file = crate::docker::write_config(env)
+            .map_err(|err| EnclaveBuildError::ExtractError(format!("{:?}", err)))?;
+
+        Ok((cmd_file, env_file))
     }
 }
 

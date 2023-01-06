@@ -4,11 +4,24 @@
 
 use std::convert::TryFrom;
 
+use log::warn;
 use oci_distribution::Reference;
+use tempfile::NamedTempFile;
 
 use crate::image::ImageDetails;
 use crate::storage::OciStorage;
 use crate::{EnclaveBuildError, Result};
+
+/// Trait which provides an interface for handling an image (OCI or Docker)
+pub trait ImageManager {
+    fn image_name(&self) -> &str;
+    /// Inspects the image and returns its metadata in the form of a JSON Value
+    fn inspect_image(&self) -> Result<serde_json::Value>;
+    /// Returns the architecture of the image
+    fn architecture(&self) -> Result<String>;
+    /// Returns two temp files containing the CMD and ENV expressions extracted from the image
+    fn extract_expressions(&self) -> Result<(NamedTempFile, NamedTempFile)>;
+}
 
 pub struct OciImageManager {
     /// Name of the container image.
@@ -25,16 +38,15 @@ impl OciImageManager {
         let image_name = normalize_tag(image_name)?;
 
         // The docker daemon is not used, so a local storage needs to be created
-        let storage =
-            match OciStorage::get_default_root_path().map_err(|err| eprintln!("{:?}", err)) {
-                Ok(root_path) => {
-                    // Try to create/read the storage. If the storage could not be created, log the error
-                    OciStorage::new(&root_path)
-                        .map_err(|err| eprintln!("{:?}", err))
-                        .ok()
-                }
-                Err(_) => None,
-            };
+        let storage = match OciStorage::get_default_root_path().map_err(|err| warn!("{:?}", err)) {
+            Ok(root_path) => {
+                // Try to create/read the storage. If the storage could not be created, log the error
+                OciStorage::new(&root_path)
+                    .map_err(|err| warn!("{:?}", err))
+                    .ok()
+            }
+            Err(_) => None,
+        };
 
         let image_details = Self::fetch_image_details(&image_name, storage).await?;
 
@@ -60,11 +72,7 @@ impl OciImageManager {
 
         let image_details = if let Some(storage) = local_storage {
             // Try to fetch the image from the storage
-            storage.fetch_image_details(image_name).map_err(|err| {
-                // Log the fetching error
-                eprintln!("{:?}", err);
-                err
-            })
+            storage.fetch_image_details(image_name)
         } else {
             Err(EnclaveBuildError::OciStorageNotFound(
                 "Local storage missing".to_string(),
@@ -74,7 +82,8 @@ impl OciImageManager {
         // If the fetching failed, pull it from remote and store it
         match image_details {
             Ok(details) => Ok(details),
-            Err(_) => {
+            Err(err) => {
+                warn!("Fetching from storage failed: {}", err);
                 // The image is not stored, so try to pull and then store it
                 let image_data = crate::pull::pull_image_data(image_name).await?;
 
@@ -82,7 +91,7 @@ impl OciImageManager {
                 if let Some(local_storage) = storage.as_mut() {
                     local_storage
                         .store_image_data(image_name, &image_data)
-                        .map_err(|err| eprintln!("Failed to store image: {:?}", err))
+                        .map_err(|err| warn!("Failed to store image: {:?}", err))
                         .ok();
                 }
 
@@ -105,8 +114,35 @@ fn normalize_tag(image_name: &str) -> Result<String> {
     }
 }
 
+impl ImageManager for OciImageManager {
+    fn image_name(&self) -> &str {
+        &self.image_name
+    }
+
+    /// Inspect the image and return its description as a JSON String.
+    fn inspect_image(&self) -> Result<serde_json::Value> {
+        // Serialize to a serde_json::Value
+        serde_json::to_value(&self.image_details).map_err(EnclaveBuildError::SerdeError)
+    }
+
+    /// Extracts the CMD and ENV expressions from the image and returns them each in a
+    /// temporary file
+    fn extract_expressions(&self) -> Result<(NamedTempFile, NamedTempFile)> {
+        self.image_details.extract_expressions()
+    }
+
+    /// Returns architecture information of the image.
+    fn architecture(&self) -> Result<String> {
+        Ok(format!("{}", self.image_details.config().architecture()))
+    }
+}
+
 #[cfg(test)]
-pub mod tests {
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Read;
+
     use sha2::Digest;
 
     use super::{normalize_tag, OciImageManager};
@@ -176,5 +212,38 @@ pub mod tests {
         );
 
         assert_eq!(&config_hash, IMAGE_HASH);
+    }
+
+    /// Test extracted configuration is as expected
+    #[tokio::test]
+    async fn test_config() {
+        #[cfg(target_arch = "x86_64")]
+        let image_manager = OciImageManager::new(
+            "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-x86_64",
+        ).await.unwrap();
+        #[cfg(target_arch = "aarch64")]
+        let mut image_manager = OciImageManager::new(
+            "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64",
+        ).await.unwrap();
+
+        let (cmd_file, env_file) = image_manager.extract_expressions().unwrap();
+        let mut cmd_file = File::open(cmd_file.path()).unwrap();
+        let mut env_file = File::open(env_file.path()).unwrap();
+
+        let mut cmd = String::new();
+        cmd_file.read_to_string(&mut cmd).unwrap();
+        assert_eq!(
+            cmd,
+            "/bin/sh\n\
+             -c\n\
+             ./vsock-sample server --port 5005\n"
+        );
+
+        let mut env = String::new();
+        env_file.read_to_string(&mut env).unwrap();
+        assert_eq!(
+            env,
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n"
+        );
     }
 }

@@ -277,7 +277,6 @@ impl OciStorage {
                     err
                 ))
             })?
-            .into_iter()
             // Get only the valid directory entries that are valid files and return (name, file) pair
             .filter_map(|entry| match entry {
                 Ok(dir_entry) => match File::open(dir_entry.path()) {

@@ -8,6 +8,7 @@ use std::process::Command;
 
 mod docker;
 mod image;
+mod image_manager;
 mod pull;
 mod storage;
 mod yaml_generator;

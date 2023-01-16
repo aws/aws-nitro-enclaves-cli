@@ -14,7 +14,11 @@ export NITRO_CLI_BLOBS="${SCRIPTDIR}/blobs"
 export NITRO_CLI_ARTIFACTS="${SCRIPTDIR}/build"
 ARCH="$(uname -m)"
 
-$(aws ecr get-login --no-include-email --region us-east-1)
+AWS_ACCOUNT_ID=667861386598
+ECR_REGION=us-east-1
+ECR_URL="$AWS_ACCOUNT_ID.dkr.ecr.$ECR_REGION.amazonaws.com"
+
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_URL
 
 # Indicate that the test suite has failed
 function register_test_fail() {

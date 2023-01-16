@@ -121,6 +121,7 @@ do
 
 	configure_ne_driver
 
+	timeout 5m \
 	./build/nitro_cli/"${ARCH}"-unknown-linux-musl/release/deps/"${test_exec_name}" \
 		--test-threads=1 --nocapture || test_failed
 done < <(grep -v '^ *#' < build/test_executables.txt)

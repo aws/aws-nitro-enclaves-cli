@@ -143,9 +143,10 @@ impl<'a> Docker2Eif<'a> {
     }
 
     fn generate_identity_info(&self) -> Result<EifIdentityInfo, Docker2EifError> {
-        let docker_info = self.docker.inspect_image().map_err(|e| {
-            Docker2EifError::MetadataError(format!("Docker inspect error: {e:?}"))
-        })?;
+        let docker_info = self
+            .docker
+            .inspect_image()
+            .map_err(|e| Docker2EifError::MetadataError(format!("Docker inspect error: {e:?}")))?;
 
         let uri_split: Vec<&str> = self.docker_image.split(':').collect();
         if uri_split.is_empty() {

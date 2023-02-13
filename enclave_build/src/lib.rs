@@ -98,7 +98,7 @@ impl<'a> Docker2Eif<'a> {
             (None, None) => None,
             (Some(cert_path), Some(key_path)) => Some(
                 SignEnclaveInfo::new(cert_path, key_path)
-                    .map_err(|err| Docker2EifError::SignImageError(format!("{:?}", err)))?,
+                    .map_err(|err| Docker2EifError::SignImageError(format!("{err:?}")))?,
             ),
             _ => return Err(Docker2EifError::SignArgsError),
         };
@@ -123,7 +123,7 @@ impl<'a> Docker2Eif<'a> {
 
     pub fn pull_docker_image(&self) -> Result<(), Docker2EifError> {
         self.docker.pull_image().map_err(|e| {
-            eprintln!("Docker error: {:?}", e);
+            eprintln!("Docker error: {e:?}");
             Docker2EifError::DockerError
         })?;
 
@@ -135,7 +135,7 @@ impl<'a> Docker2Eif<'a> {
             return Err(Docker2EifError::DockerfilePathError);
         }
         self.docker.build_image(dockerfile_dir).map_err(|e| {
-            eprintln!("Docker error: {:?}", e);
+            eprintln!("Docker error: {e:?}");
             Docker2EifError::DockerError
         })?;
 
@@ -144,7 +144,7 @@ impl<'a> Docker2Eif<'a> {
 
     fn generate_identity_info(&self) -> Result<EifIdentityInfo, Docker2EifError> {
         let docker_info = self.docker.inspect_image().map_err(|e| {
-            Docker2EifError::MetadataError(format!("Docker inspect error: {:?}", e))
+            Docker2EifError::MetadataError(format!("Docker inspect error: {e:?}"))
         })?;
 
         let uri_split: Vec<&str> = self.docker_image.split(':').collect();
@@ -193,7 +193,7 @@ impl<'a> Docker2Eif<'a> {
 
     pub fn create(&mut self) -> Result<BTreeMap<String, String>, Docker2EifError> {
         let (cmd_file, env_file) = self.docker.load().map_err(|e| {
-            eprintln!("Docker error: {:?}", e);
+            eprintln!("Docker error: {e:?}");
             Docker2EifError::DockerError
         })?;
 
@@ -206,11 +206,11 @@ impl<'a> Docker2Eif<'a> {
         );
 
         let ramfs_config_file = yaml_generator.get_bootstrap_ramfs().map_err(|e| {
-            eprintln!("Ramfs error: {:?}", e);
+            eprintln!("Ramfs error: {e:?}");
             Docker2EifError::RamfsError
         })?;
         let ramfs_with_rootfs_config_file = yaml_generator.get_customer_ramfs().map_err(|e| {
-            eprintln!("Ramfs error: {:?}", e);
+            eprintln!("Ramfs error: {e:?}");
             Docker2EifError::RamfsError
         })?;
 
@@ -260,7 +260,7 @@ impl<'a> Docker2Eif<'a> {
         }
 
         let arch = self.docker.architecture().map_err(|e| {
-            eprintln!("Docker error: {:?}", e);
+            eprintln!("Docker error: {e:?}");
             Docker2EifError::DockerError
         })?;
 
@@ -280,8 +280,8 @@ impl<'a> Docker2Eif<'a> {
         );
 
         // Linuxkit adds -initrd.img sufix to the file names.
-        let bootstrap_ramfs = format!("{}-initrd.img", bootstrap_ramfs);
-        let customer_ramfs = format!("{}-initrd.img", customer_ramfs);
+        let bootstrap_ramfs = format!("{bootstrap_ramfs}-initrd.img");
+        let customer_ramfs = format!("{customer_ramfs}-initrd.img");
 
         build.add_ramdisk(Path::new(&bootstrap_ramfs));
         build.add_ramdisk(Path::new(&customer_ramfs));

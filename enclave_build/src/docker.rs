@@ -66,7 +66,7 @@ impl DockerUtil {
         } else {
             // Some Docker URIs don't have the protocol included, so just use
             // a dummy one to trick Url that it's a properly defined Uri.
-            let uri = format!("dummy://{}", image);
+            let uri = format!("dummy://{image}");
             if let Ok(uri) = Url::parse(&uri) {
                 uri.host().map(|s| s.to_string())
             } else {
@@ -78,7 +78,7 @@ impl DockerUtil {
             let config_file = self.get_config_file()?;
 
             let config_json: serde_json::Value = serde_json::from_reader(&config_file)
-                .map_err(|err| CredentialsError(format!("JSON was not well-formatted: {}", err)))?;
+                .map_err(|err| CredentialsError(format!("JSON was not well-formatted: {err}")))?;
 
             let auths = config_json.get("auths").ok_or_else(|| {
                 CredentialsError("Could not find auths key in config JSON".to_string())
@@ -99,10 +99,10 @@ impl DockerUtil {
 
                     let auth = auth.replace('"', "");
                     let decoded = base64::decode(auth).map_err(|err| {
-                        CredentialsError(format!("Invalid Base64 encoding for auth: {}", err))
+                        CredentialsError(format!("Invalid Base64 encoding for auth: {err}"))
                     })?;
                     let decoded = std::str::from_utf8(&decoded).map_err(|err| {
-                        CredentialsError(format!("Invalid utf8 encoding for auth: {}", err))
+                        CredentialsError(format!("Invalid utf8 encoding for auth: {err}"))
                     })?;
 
                     if let Some(index) = decoded.rfind(':') {
@@ -127,14 +127,13 @@ impl DockerUtil {
             let config_file = File::open(file).map_err(|err| {
                 DockerError::CredentialsError(format!(
                     "Could not open file pointed by env\
-                     DOCKER_CONFIG: {}",
-                    err
+                     DOCKER_CONFIG: {err}"
                 ))
             })?;
             Ok(config_file)
         } else {
             if let Ok(home_dir) = std::env::var("HOME") {
-                let default_config_path = format!("{}/.docker/config.json", home_dir);
+                let default_config_path = format!("{home_dir}/.docker/config.json");
                 let config_path = Path::new(&default_config_path);
                 if config_path.exists() {
                     let config_file = File::open(config_path).map_err(|err| {
@@ -391,7 +390,7 @@ fn write_config(config: Vec<String>) -> Result<NamedTempFile, DockerError> {
     let mut file = NamedTempFile::new().map_err(|_| DockerError::TempfileError)?;
 
     for line in config {
-        file.write_fmt(format_args!("{}\n", line))
+        file.write_fmt(format_args!("{line}\n"))
             .map_err(|_| DockerError::TempfileError)?;
     }
 

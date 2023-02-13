@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
-use std::io::{Error, SeekFrom};
+use std::io::Error;
 use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str;
@@ -1113,7 +1113,7 @@ fn write_eif_to_regions(
         })?
         .len() as usize;
 
-    eif_file.seek(SeekFrom::Start(0)).map_err(|_| {
+    eif_file.rewind().map_err(|_| {
         new_nitro_cli_failure!(
             "Failed to seek to the beginning of the EIF file",
             NitroCliErrorEnum::FileOperationFailure

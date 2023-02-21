@@ -8,9 +8,9 @@ mod tests {
     use nitro_cli::common::commands_parser::{
         BuildEnclavesArgs, RunEnclavesArgs, TerminateEnclavesArgs,
     };
-    use nitro_cli::common::json_output::EnclaveDescribeInfo;
     use nitro_cli::enclave_proc::commands::{describe_enclaves, run_enclaves, terminate_enclaves};
     use nitro_cli::enclave_proc::resource_manager::NE_ENCLAVE_DEBUG_MODE;
+    use nitro_cli::common::json_output::EnclaveDescribeInfo;
     use nitro_cli::enclave_proc::utils::{
         flags_to_string, generate_enclave_id, get_enclave_describe_info,
     };

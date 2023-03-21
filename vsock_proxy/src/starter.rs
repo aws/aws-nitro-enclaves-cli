@@ -15,8 +15,7 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::os::unix::io::AsRawFd;
 use threadpool::ThreadPool;
-use vsock::SockAddr;
-use vsock::VsockListener;
+use vsock::{VsockAddr, VsockListener};
 use yaml_rust::YamlLoader;
 
 const BUFF_SIZE: usize = 8192;
@@ -162,7 +161,7 @@ impl Proxy {
     /// Creates a listening socket
     /// Returns the file descriptor for it or the appropriate error
     pub fn sock_listen(&self) -> VsockProxyResult<VsockListener> {
-        let sockaddr = SockAddr::new_vsock(VSOCK_PROXY_CID, self.local_port);
+        let sockaddr = VsockAddr::new(VSOCK_PROXY_CID, self.local_port);
         let listener = VsockListener::bind(&sockaddr)
             .map_err(|_| format!("Could not bind to {:?}", sockaddr))?;
         info!("Bound to {:?}", sockaddr);

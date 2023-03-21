@@ -20,8 +20,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use vsock::SockAddr;
-use vsock::VsockListener;
+use vsock::{VsockAddr, VsockListener};
 
 use crate::common::json_output::EnclaveBuildInfo;
 use crate::common::{construct_error_message, notify_error};
@@ -565,7 +564,7 @@ impl EnclaveHandle {
         self.init_cpus()
             .map_err(|e| e.add_subaction("vCPUs initialization issue".to_string()))?;
 
-        let sockaddr = SockAddr::new_vsock(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
+        let sockaddr = VsockAddr::new(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
         let listener = VsockListener::bind(&sockaddr).map_err(|_| {
             new_nitro_cli_failure!(
                 "Enclave boot heartbeat vsock connection - vsock bind error",

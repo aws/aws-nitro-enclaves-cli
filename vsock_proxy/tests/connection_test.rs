@@ -9,12 +9,12 @@ use std::str;
 use std::sync::mpsc;
 use std::thread;
 use tempfile::NamedTempFile;
-use vsock::{SockAddr, VsockStream};
+use vsock::{VsockAddr, VsockStream};
 
 use vsock_proxy::starter::Proxy;
 
 fn vsock_connect(port: u32) -> VsockStream {
-    let sockaddr = SockAddr::new_vsock(vsock_proxy::starter::VSOCK_PROXY_CID, port);
+    let sockaddr = VsockAddr::new(vsock_proxy::starter::VSOCK_PROXY_CID, port);
     VsockStream::connect(&sockaddr).expect("Could not connect")
 }
 

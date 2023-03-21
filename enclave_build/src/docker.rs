@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::docker::DockerError::CredentialsError;
+use base64::{engine::general_purpose, Engine as _};
 use futures::stream::StreamExt;
 use log::{debug, error, info};
 use serde_json::{json, Value};
@@ -98,7 +99,7 @@ impl DockerUtil {
                         .to_string();
 
                     let auth = auth.replace('"', "");
-                    let decoded = base64::decode(auth).map_err(|err| {
+                    let decoded = general_purpose::STANDARD.decode(auth).map_err(|err| {
                         CredentialsError(format!("Invalid Base64 encoding for auth: {err}"))
                     })?;
                     let decoded = std::str::from_utf8(&decoded).map_err(|err| {

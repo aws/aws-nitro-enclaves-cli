@@ -28,8 +28,8 @@ Source0: aws-nitro-enclaves-cli.tar.gz
 Source1: nitro-cli-dependencies.tar.gz
 
 BuildRequires: openssl-devel
-BuildRequires: rust >= 1.58
-BuildRequires: cargo >= 1.58
+BuildRequires: rust >= 1.60
+BuildRequires: cargo >= 1.60
 BuildRequires: make
 BuildRequires: llvm
 BuildRequires: clang

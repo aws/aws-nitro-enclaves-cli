@@ -66,7 +66,7 @@ dependencies = [
  "aws-nitro-enclaves-cose",
  "byteorder",
  "chrono",
- "clap",
+ "clap 3.2.23",
  "crc",
  "hex",
  "num-derive",
@@ -99,7 +99,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "clap",
+ "clap 3.2.23",
  "env_logger 0.9.0",
  "lazy_static",
  "lazycell",
@@ -214,7 +214,7 @@ checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
  "atty",
  "bitflags",
- "clap_lex",
+ "clap_lex 0.2.4",
  "indexmap",
  "strsim",
  "termcolor",
@@ -222,10 +222,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap"
+version = "4.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c911b090850d79fc64fe9ea01e28e465f65e821e08813ced95bced72f7a8a9b"
+dependencies = [
+ "bitflags",
+ "clap_lex 0.3.3",
+ "is-terminal",
+ "strsim",
+ "termcolor",
+]
+
+[[package]]
 name = "clap_lex"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
+dependencies = [
+ "os_str_bytes",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "033f6b7a4acb1f358c742aaca805c939ee73b4c6209ae4318ec7aca81c42e646"
 dependencies = [
  "os_str_bytes",
 ]
@@ -366,7 +388,7 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64 0.21.0",
- "clap",
+ "clap 4.1.13",
  "futures",
  "log",
  "serde",
@@ -1021,7 +1043,7 @@ dependencies = [
  "aws-nitro-enclaves-image-format",
  "bindgen",
  "chrono",
- "clap",
+ "clap 4.1.13",
  "driver-bindings",
  "eif_loader",
  "enclave_build",
@@ -1865,7 +1887,7 @@ dependencies = [
 name = "vsock-proxy"
 version = "0.1.0"
 dependencies = [
- "clap",
+ "clap 4.1.13",
  "dns-lookup",
  "env_logger 0.7.1",
  "idna",

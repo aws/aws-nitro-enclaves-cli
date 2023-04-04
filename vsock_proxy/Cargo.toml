@@ -19,5 +19,5 @@ threadpool = "1.7.1"
 vsock = "0.3"
 
 [dev-dependencies]
-rand = "0.7.0"
+rand = "0.8.5"
 tempfile = "3.5.0"

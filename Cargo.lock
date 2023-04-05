@@ -638,9 +638,9 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "hashbrown"
-version = "0.11.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hermit-abi"
@@ -793,9 +793,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.8.0"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "282a6247722caba404c065016bbfa522806e51714c34f5dfc3e4a3a46fcb4223"
+checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
  "hashbrown",
@@ -1503,14 +1503,15 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.8.26"
+version = "0.9.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "578a7433b776b56a35785ed5ce9a7e777ac0598aac5a6dd1b4b18a307c7fc71b"
+checksum = "0feade41f4649f0549d22df8c0432b2c25128b50f5d926b22173022e25b7c69e"
 dependencies = [
  "indexmap",
+ "itoa",
  "ryu",
  "serde",
- "yaml-rust",
+ "unsafe-libyaml",
 ]
 
 [[package]]
@@ -1808,6 +1809,12 @@ name = "unicode-width"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ed742d4ea2bd1176e236172c8429aaf54486e7ac098db29ffe6529e0ce50973"
+
+[[package]]
+name = "unsafe-libyaml"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad2024452afd3874bf539695e04af6732ba06517424dbf958fdb16a01f3bef6c"
 
 [[package]]
 name = "url"

@@ -263,15 +263,20 @@ static bool ne_check_enclaves_created(void)
  */
 static int ne_setup_cpu_pool(const char *ne_cpu_list)
 {
-	int core_id = -1;
+	int core_id = 0;
 	unsigned int cpu = 0;
+	unsigned int sibling = 0;
 	cpumask_var_t cpu_pool;
+	cpumask_var_t cpu_added;
 	unsigned int cpu_sibling = 0;
 	unsigned int i = 0;
 	int numa_node = -1;
 	int rc = -EINVAL;
 
 	if (!zalloc_cpumask_var(&cpu_pool, GFP_KERNEL))
+		return -ENOMEM;
+
+	if (!zalloc_cpumask_var(&cpu_added, GFP_KERNEL))
 		return -ENOMEM;
 
 	mutex_lock(&ne_cpu_pool.mutex);
@@ -399,19 +404,14 @@ static int ne_setup_cpu_pool(const char *ne_cpu_list)
 	 * Split the NE CPU pool in threads per core to keep the CPU topology
 	 * after offlining the CPUs.
 	 */
-	for_each_cpu(cpu, cpu_pool) {
-		core_id = topology_core_id(cpu);
-		if (core_id < 0 || core_id >= ne_cpu_pool.nr_parent_vm_cores) {
-			pr_err("%s: Invalid core id  %d for CPU %d\n",
-			       ne_misc_dev.name, core_id, cpu);
-
-			rc = -EINVAL;
-
-			goto clear_cpumask;
+	for_each_cpu(cpu, cpu_pool)
+		if (!cpumask_test_cpu(cpu, cpu_added)) {
+			for_each_cpu(sibling, topology_sibling_cpumask(cpu)) {
+					cpumask_set_cpu(sibling, cpu_added);
+					cpumask_set_cpu(sibling, ne_cpu_pool.avail_threads_per_core[core_id]);
+			}
+			core_id++;
 		}
-
-		cpumask_set_cpu(cpu, ne_cpu_pool.avail_threads_per_core[core_id]);
-	}
 
 	/*
 	 * CPUs that are given to enclave(s) should not be considered online
@@ -444,7 +444,6 @@ static int ne_setup_cpu_pool(const char *ne_cpu_list)
 online_cpus:
 	for_each_cpu(cpu, cpu_pool)
 		add_cpu(cpu);
-clear_cpumask:
 	for (i = 0; i < ne_cpu_pool.nr_parent_vm_cores; i++)
 		cpumask_clear(ne_cpu_pool.avail_threads_per_core[i]);
 free_cores_cpumask:

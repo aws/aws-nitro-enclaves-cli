@@ -34,12 +34,28 @@ mod tests {
     use openssl::x509::{X509Name, X509};
 
     // Remote Docker image
+    const SAMPLE_DOCKER: &str = "public.ecr.aws/aws-nitro-enclaves/hello:v1";
+
     #[cfg(target_arch = "x86_64")]
-    const SAMPLE_DOCKER: &str =
-        "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-x86_64";
+    mod sample_docker_pcrs {
+        /// PCR0
+        pub const IMAGE_PCR: &str = "7f3287dd1c4dbc49513abfaabc7f6afe79ab8269743c0c4ee55bb9e92d4f0a36f0cae7c0356d0bfec78b59b4d20c689c";
+        /// PCR1
+        pub const KERNEL_PCR: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f";
+        /// PCR2
+        pub const APP_PCR: &str = "dd61366a5424eea46f60c4e9d59e6c645a46420ccf962550ee1f3c109d230f88ec23667617aeaac425a1f50fe8e384d7";
+    }
+
     #[cfg(target_arch = "aarch64")]
-    const SAMPLE_DOCKER: &str =
-        "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64";
+    mod sample_docker_pcrs {
+        /// PCR0
+        pub const IMAGE_PCR: &str = "b32a774b09fff4324a6405dacf3f5aa462a75e554e3a563ee64708abd585456bb480fdf70b2e2c2ab9ec205717bc690e";
+        /// PCR1
+        pub const KERNEL_PCR: &str = "5d3938eb05288e20a981038b1861062ff4174884968a39aee5982b312894e60561883576cc7381d1a7d05b809936bd16";
+        /// PCR2
+        pub const APP_PCR: &str = "9397173aa14e47fe087e8aeb63928a233db048e290830de6ce2041f4580f83b599c48432467601bed8a4883e9d94ff10";
+    }
+
     // Local Docker image
     const COMMAND_EXECUTER_DOCKER: &str = "command_executer:eif";
 
@@ -50,8 +66,7 @@ mod tests {
 
     fn setup_env() {
         if std::env::var("NITRO_CLI_BLOBS").is_err() {
-            let home = std::env::var("HOME").unwrap();
-            std::env::set_var("NITRO_CLI_BLOBS", format!("{}/.nitro_cli/prebuilt", home));
+            std::env::set_var("NITRO_CLI_BLOBS", "/usr/share/nitro_enclaves/blobs");
         }
     }
 
@@ -102,35 +117,17 @@ mod tests {
         )
         .expect("Docker build failed")
         .1;
-        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "c22753ee2f1733872a86fbeb8656625f126dc57fe55609155678d15a71dc9543583fc129c051cef12045adaee8795803"
+            sample_docker_pcrs::IMAGE_PCR
         );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            measurements.get("PCR0").unwrap(),
-            "adf436d453f5dc7f805ca4c867ea3d639955838d7649c293ae8c3feb9c769c3391a11c502ef304bc2968bbd3d7a4f25e"
-        );
-        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f"
+            sample_docker_pcrs::KERNEL_PCR
         );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            measurements.get("PCR1").unwrap(),
-            "5d3938eb05288e20a981038b1861062ff4174884968a39aee5982b312894e60561883576cc7381d1a7d05b809936bd16"
-        );
-        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "10ffd6773d365539696fa3520c28312cf657152fc3f89538d02af5e8b579e964a9f9a5c763470a122763f4fd0a1dd2d7"
-        );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            measurements.get("PCR2").unwrap(),
-            "28737c9aa5d964c0daaddd1460b7b50c46788f1c037aa6317d66b3eb95823840c0ae774e6ee744deb8293265d97bbd1f"
+            sample_docker_pcrs::APP_PCR
         );
     }
 
@@ -266,35 +263,18 @@ mod tests {
         )
         .expect("Docker build failed")
         .1;
-        #[cfg(target_arch = "x86_64")]
+
         assert_eq!(
             measurements.get("PCR0").unwrap(),
-            "c22753ee2f1733872a86fbeb8656625f126dc57fe55609155678d15a71dc9543583fc129c051cef12045adaee8795803"
+            sample_docker_pcrs::IMAGE_PCR
         );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            measurements.get("PCR0").unwrap(),
-            "adf436d453f5dc7f805ca4c867ea3d639955838d7649c293ae8c3feb9c769c3391a11c502ef304bc2968bbd3d7a4f25e"
-        );
-        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR1").unwrap(),
-            "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f"
+            sample_docker_pcrs::KERNEL_PCR
         );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            measurements.get("PCR1").unwrap(),
-            "5d3938eb05288e20a981038b1861062ff4174884968a39aee5982b312894e60561883576cc7381d1a7d05b809936bd16"
-        );
-        #[cfg(target_arch = "x86_64")]
         assert_eq!(
             measurements.get("PCR2").unwrap(),
-            "10ffd6773d365539696fa3520c28312cf657152fc3f89538d02af5e8b579e964a9f9a5c763470a122763f4fd0a1dd2d7"
-        );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            measurements.get("PCR2").unwrap(),
-            "28737c9aa5d964c0daaddd1460b7b50c46788f1c037aa6317d66b3eb95823840c0ae774e6ee744deb8293265d97bbd1f"
+            sample_docker_pcrs::APP_PCR
         );
     }
 
@@ -744,38 +724,19 @@ mod tests {
 
         get_enclave_describe_info(&enclave_manager, false).unwrap();
         let build_info = enclave_manager.get_measurements().unwrap();
-        let enclave_name = enclave_manager.enclave_name.clone();
+        let measurements = build_info.measurements;
 
-        assert_eq!(enclave_name, "testName");
-        #[cfg(target_arch = "x86_64")]
         assert_eq!(
-            build_info.measurements.get(&"PCR0".to_string()).unwrap(),
-            "c22753ee2f1733872a86fbeb8656625f126dc57fe55609155678d15a71dc9543583fc129c051cef12045adaee8795803"
+            measurements.get("PCR0").unwrap(),
+            sample_docker_pcrs::IMAGE_PCR
         );
-        #[cfg(target_arch = "aarch64")]
         assert_eq!(
-            build_info.measurements.get(&"PCR0".to_string()).unwrap(),
-            "adf436d453f5dc7f805ca4c867ea3d639955838d7649c293ae8c3feb9c769c3391a11c502ef304bc2968bbd3d7a4f25e"
+            measurements.get("PCR1").unwrap(),
+            sample_docker_pcrs::KERNEL_PCR
         );
-        #[cfg(target_arch = "x86_64")]
         assert_eq!(
-            build_info.measurements.get(&"PCR1".to_string()).unwrap(),
-            "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f"
-        );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            build_info.measurements.get(&"PCR1".to_string()).unwrap(),
-            "5d3938eb05288e20a981038b1861062ff4174884968a39aee5982b312894e60561883576cc7381d1a7d05b809936bd16"
-        );
-        #[cfg(target_arch = "x86_64")]
-        assert_eq!(
-            build_info.measurements.get(&"PCR2".to_string()).unwrap(),
-            "10ffd6773d365539696fa3520c28312cf657152fc3f89538d02af5e8b579e964a9f9a5c763470a122763f4fd0a1dd2d7"
-        );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            build_info.measurements.get(&"PCR2".to_string()).unwrap(),
-            "28737c9aa5d964c0daaddd1460b7b50c46788f1c037aa6317d66b3eb95823840c0ae774e6ee744deb8293265d97bbd1f"
+            measurements.get("PCR2").unwrap(),
+            sample_docker_pcrs::APP_PCR
         );
 
         let _enclave_id = generate_enclave_id(0).expect("Describe enclaves failed");
@@ -862,7 +823,7 @@ mod tests {
             metadata.build_info.build_tool_version,
             env!("CARGO_PKG_VERSION")
         );
-        #[cfg(target_arch = "x86_64")]
+
         assert_eq!(
             *metadata
                 .docker_info
@@ -870,18 +831,9 @@ mod tests {
                 .unwrap()
                 .get(0)
                 .unwrap(),
-            json!("667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-x86_64")
+            json!("public.ecr.aws/aws-nitro-enclaves/hello:v1")
         );
-        #[cfg(target_arch = "aarch64")]
-        assert_eq!(
-            *metadata
-                .docker_info
-                .get("RepoTags")
-                .unwrap()
-                .get(0)
-                .unwrap(),
-            json!("667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64")
-        );
+
         assert_eq!(
             *metadata.custom_info.get("AppVersion").unwrap(),
             json!("3.2")

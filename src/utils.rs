@@ -7,7 +7,7 @@ use libc::{c_void, close};
 use nix::poll::poll;
 use nix::poll::{PollFd, PollFlags};
 use nix::sys::socket::{connect, socket};
-use nix::sys::socket::{AddressFamily, SockAddr, SockFlag, SockType};
+use nix::sys::socket::{AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::sys::time::{TimeVal, TimeValLike};
 use nix::unistd::read;
 use std::io::Write;
@@ -73,7 +73,7 @@ impl Console {
             )
         })?;
 
-        let sockaddr = SockAddr::new_vsock(cid, port);
+        let sockaddr = VsockAddr::new(cid, port);
 
         vsock_set_connect_timeout(socket_fd, CONSOLE_CONNECT_TIMEOUT).map_err(|err| {
             err.add_subaction("Failed to set console connect timeout".to_string())
@@ -109,7 +109,7 @@ impl Console {
             err.add_subaction("Failed to set console connect timeout".to_string())
         })?;
 
-        let sockaddr = SockAddr::new_vsock(cid, port);
+        let sockaddr = VsockAddr::new(cid, port);
         let result = connect(socket_fd, &sockaddr);
 
         match result {

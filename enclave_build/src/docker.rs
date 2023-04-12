@@ -406,14 +406,7 @@ mod tests {
     /// Test extracted configuration is as expected
     #[test]
     fn test_config() {
-        #[cfg(target_arch = "x86_64")]
-        let docker = DockerUtil::new(String::from(
-            "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-x86_64",
-        ));
-        #[cfg(target_arch = "aarch64")]
-        let docker = DockerUtil::new(String::from(
-            "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64",
-        ));
+        let docker = DockerUtil::new(String::from("public.ecr.aws/aws-nitro-enclaves/hello:v1"));
 
         let (cmd_file, env_file) = docker.load().unwrap();
         let mut cmd_file = File::open(cmd_file.path()).unwrap();
@@ -421,18 +414,14 @@ mod tests {
 
         let mut cmd = String::new();
         cmd_file.read_to_string(&mut cmd).unwrap();
-        assert_eq!(
-            cmd,
-            "/bin/sh\n\
-             -c\n\
-             ./vsock-sample server --port 5005\n"
-        );
+        assert_eq!(cmd, "/bin/hello.sh\n");
 
         let mut env = String::new();
         env_file.read_to_string(&mut env).unwrap();
         assert_eq!(
             env,
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n"
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n\
+             HELLO=Hello from the enclave side!\n"
         );
     }
 }

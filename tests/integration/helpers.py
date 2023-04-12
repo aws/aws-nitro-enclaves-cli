@@ -15,8 +15,8 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__)) + "/../../"
 TEST_IMAGES = "test_images/"
 ARCH =  subprocess.run(["uname", "-m"], stdout=PIPE, stderr=PIPE,
         check=False).stdout.decode('UTF-8').rstrip("\n")
-SAMPLE_EIF = "vsock-sample-server-" + ARCH + ".eif"
-SIGNED_EIF = "vsock-sample-server-" + ARCH + "-signed.eif"
+SAMPLE_EIF = "hello.eif"
+SIGNED_EIF = "hello-signed.eif"
 SIGN_CERT = "cert.pem"
 
 

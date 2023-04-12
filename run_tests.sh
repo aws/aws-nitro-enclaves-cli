@@ -15,10 +15,6 @@ export NITRO_CLI_ARTIFACTS="${SCRIPTDIR}/build"
 ARCH="$(uname -m)"
 
 AWS_ACCOUNT_ID=667861386598
-ECR_REGION=us-east-1
-ECR_URL="$AWS_ACCOUNT_ID.dkr.ecr.$ECR_REGION.amazonaws.com"
-
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_URL
 
 # Indicate that the test suite has failed
 function register_test_fail() {
@@ -30,8 +26,9 @@ function clean_up_and_exit() {
 	[ "$(lsmod | grep -cw nitro_enclaves)" -eq 0 ] || rmmod nitro_enclaves || register_test_fail
 	make clean
 	rm -rf test_images
+
 	# Cleanup pulled images during testing
-	docker rmi 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" 2> /dev/null || true
+	docker rmi public.ecr.aws/aws-nitro-enclaves/hello:v1 2> /dev/null || true
 	docker rmi hello-world:latest 2> /dev/null || true
 
 	rm -rf examples/"${ARCH}"/hello-entrypoint
@@ -88,8 +85,8 @@ mkdir -p test_images || test_failed
 export HOME="/root"
 
 # Simple EIF
-nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" \
-	--output-file test_images/vsock-sample-server-"${ARCH}".eif || test_failed
+nitro-cli build-enclave --docker-uri public.ecr.aws/aws-nitro-enclaves/hello:v1 \
+	--output-file test_images/hello.eif || test_failed
 
 # Generate signing certificate
 openssl ecparam -name secp384r1 -genkey -out test_images/key.pem || test_failed
@@ -98,8 +95,8 @@ openssl req -new -key test_images/key.pem -sha384 -nodes \
 openssl x509 -req -days 20  -in test_images/csr.pem -out test_images/cert.pem \
 	-sha384 -signkey test_images/key.pem || test_failed
 # Signed EIF
-nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" \
-	--output-file test_images/vsock-sample-server-"${ARCH}"-signed.eif \
+nitro-cli build-enclave --docker-uri public.ecr.aws/aws-nitro-enclaves/hello:v1 \
+	--output-file test_images/hello-signed.eif \
 	--private-key test_images/key.pem --signing-certificate test_images/cert.pem || test_failed
 
 

@@ -386,7 +386,7 @@ impl ResourceAllocator {
         // larger-page allocations (Ex: if we have 1 x 1 GB page and 1 x 2 MB page, but
         // we want to allocate only 512 MB, the above algorithm will have allocated only
         // the 2 MB page, since the 1 GB page was too large for what was needed; we now
-        // need to allocate in increasing order of page size in order to reduce westage).
+        // need to allocate in increasing order of page size in order to reduce wastage).
 
         if needed_mem > 0 {
             for (_, page_info) in HUGE_PAGE_MAP.iter().rev().enumerate() {
@@ -402,7 +402,7 @@ impl ResourceAllocator {
             }
         }
 
-        // If we still have memory to alocate, it means we have insufficient resources.
+        // If we still have memory to allocate, it means we have insufficient resources.
         if needed_mem > 0 {
             return Err(new_nitro_cli_failure!(
                 &format!(
@@ -756,7 +756,7 @@ impl EnclaveHandle {
                 .map_err(|e| e.add_subaction("Failed to release used memory".to_string()))?;
             info!("Enclave terminated.");
 
-            // Mark enclave as termiated.
+            // Mark enclave as terminated.
             self.clear();
         }
 
@@ -1144,7 +1144,7 @@ fn write_eif_to_regions(
             })?;
 
         if written_plus_region_size <= image_write_offset {
-            // All bytes need to be skiped to get to the image write offset.
+            // All bytes need to be skipped to get to the image write offset.
         } else {
             let region_offset = image_write_offset.saturating_sub(total_written);
             let file_offset = total_written.saturating_sub(image_write_offset);

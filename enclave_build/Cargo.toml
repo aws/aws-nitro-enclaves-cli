@@ -19,6 +19,6 @@ base64 = "0.21"
 log = "0.4"
 url = "2.3"
 sha2 = "0.9.5"
-futures = "0.3.27"
+futures = "0.3.28"
 
 aws-nitro-enclaves-image-format = "0.2"

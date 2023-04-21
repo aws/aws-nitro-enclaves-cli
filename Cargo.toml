@@ -26,7 +26,7 @@ enclave_build = { path = "./enclave_build" }
 openssl = "0.10"
 vsock = "0.3"
 vmm-sys-util = "0.11.1"
-sha2 = "0.9.5"
+sha2 = "0.10.6"
 hex = "0.4"
 
 lazy_static = "1.4.0"

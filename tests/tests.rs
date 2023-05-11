@@ -318,8 +318,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         run_describe_terminate(args);
     }
@@ -368,8 +366,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         run_describe_terminate(args);
     }
@@ -411,8 +407,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         run_describe_terminate(args);
     }
@@ -520,8 +514,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
 
         run_describe_terminate(run_args);
@@ -564,8 +556,6 @@ mod tests {
             debug_mode: false,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
 
         let mut enclave_manager = run_enclaves(&run_args, None)
@@ -628,8 +618,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
 
         let mut enclave_manager = run_enclaves(&run_args, None)
@@ -721,8 +709,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let mut enclave_manager = run_result.enclave_manager;
@@ -814,8 +800,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         let run_result = run_enclaves(&run_args, None).expect("Run enclaves failed");
         let mut enclave_manager = run_result.enclave_manager;
@@ -910,8 +894,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: None,
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         let names = Vec::new();
         run_args.enclave_name =
@@ -942,8 +924,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("enclaveName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         let mut names = Vec::new();
         let name =
@@ -1005,8 +985,6 @@ mod tests {
 
         let describe_args = DescribeArgs {
             eif_path: args.output,
-            kms_key_region: None,
-            kms_key_arn: None,
         };
 
         let eif_info = describe_eif(describe_args).unwrap();
@@ -1055,8 +1033,6 @@ mod tests {
 
         let describe_args = DescribeArgs {
             eif_path: args.output,
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         
         let eif_info = describe_eif(describe_args).unwrap();
@@ -1105,8 +1081,6 @@ mod tests {
 
         let describe_args = DescribeArgs {
             eif_path: args.output,
-            kms_key_region: None,
-            kms_key_arn: None,
         };
 
         // Describe EIF and get PCR8
@@ -1171,8 +1145,6 @@ mod tests {
 
         let describe_args = DescribeArgs {
             eif_path: args.output,
-            kms_key_region: None,
-            kms_key_arn: None,
         };
 
         let eif_info = describe_eif(describe_args).unwrap();
@@ -1238,8 +1210,6 @@ mod tests {
             debug_mode: true,
             attach_console: false,
             enclave_name: Some("testName".to_string()),
-            kms_key_region: None,
-            kms_key_arn: None,
         };
         run_describe_terminate(args);
     }
@@ -1291,8 +1261,6 @@ mod tests {
 
         let describe_args = DescribeArgs {
             eif_path: args.output,
-            kms_key_region: None,
-            kms_key_arn: None,
         };
 
         // Describe EIF and get PCR8

@@ -298,8 +298,6 @@ pub fn describe_eif(desc_args: DescribeArgs) -> NitroCliResult<EifDescribeInfo> 
         let cert_info = eif_reader
             .get_certificate_info(
                 measurements,
-                desc_args.kms_key_region,
-                desc_args.kms_key_arn,
             )
             .map_err(|err| {
                 new_nitro_cli_failure!(
@@ -697,22 +695,6 @@ macro_rules! create_app {
                             .conflicts_with("config"),
                     )
                     .arg(
-                        Arg::with_name("kms-key-region")
-                            .long("kms-key-region")
-                            .takes_value(true)
-                            .help("The region in which the KMS key resides.")
-                            .required(false)
-                            .conflicts_with("config"),
-                    )
-                    .arg(
-                        Arg::with_name("kms-key-arn")
-                            .long("kms-key-arn")
-                            .takes_value(true)
-                            .help("The KMS key ARN.")
-                            .required(false)
-                            .conflicts_with("config"),
-                    )
-                    .arg(
                         Arg::with_name("config")
                             .long("config")
                             .takes_value(true)
@@ -840,20 +822,6 @@ macro_rules! create_app {
                             .required(true)
                             .takes_value(true),
                     )
-                    .arg(
-                        Arg::with_name("kms-key-region")
-                            .long("kms-key-region")
-                            .help("The region in which the KMS key resides.")
-                            .required(false)
-                            .takes_value(true),
-                    )
-                    .arg(
-                        Arg::with_name("kms-key-arn")
-                            .long("kms-key-arn")
-                            .help("The KMS key ARN.")
-                            .required(false)
-                            .takes_value(true),
-                    ),
             )
             .subcommand(
                 SubCommand::with_name("describe-enclaves")

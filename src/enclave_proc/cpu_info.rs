@@ -285,6 +285,8 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(343),
             enclave_name: Some("testName".to_string()),
+            kms_key_region: None,
+            kms_key_arn: None,
         };
 
         let mut result = cpu_info.get_cpu_config(&run_args);
@@ -318,6 +320,8 @@ mod tests {
             cpu_ids: None,
             cpu_count: Some(2),
             enclave_name: Some("testName".to_string()),
+            kms_key_region: None,
+            kms_key_arn: None,
         };
 
         let mut result = cpu_info.get_cpu_config(&run_args);

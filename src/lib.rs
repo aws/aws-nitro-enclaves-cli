@@ -81,7 +81,19 @@ pub fn sign_eif_file(args: SignArgs) -> NitroCliResult<()> {
                 NitroCliErrorEnum::EifParsingError
             )
         })?;
-    signer.sign_image().expect("Failed signing");
+    let measurements = signer.sign_image().expect("Failed signing");
+
+    eprintln!("Successfully signed the Enclave Image.");
+
+    let info = EnclaveBuildInfo::new(measurements);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&info).map_err(|err| new_nitro_cli_failure!(
+            &format!("Failed to display EnclaveBuild data: {:?}", err),
+            NitroCliErrorEnum::SerdeError
+        ))?
+    );
+
     Ok(())
 }
 
@@ -806,6 +818,7 @@ macro_rules! create_app {
                             .long("kms-key-region")
                             .help("The region in which the KMS key resides.")
                             .takes_value(true)
+                            .required(false)
                             .conflicts_with("private-key"),
                     )
                     .arg(
@@ -813,6 +826,7 @@ macro_rules! create_app {
                             .long("kms-key-arn")
                             .help("The KMS key ARN")
                             .takes_value(true)
+                            .required(false)
                             .conflicts_with("private-key"),
                     ),
             )
@@ -830,12 +844,14 @@ macro_rules! create_app {
                         Arg::with_name("kms-key-region")
                             .long("kms-key-region")
                             .help("The region in which the KMS key resides.")
+                            .required(false)
                             .takes_value(true),
                     )
                     .arg(
                         Arg::with_name("kms-key-arn")
                             .long("kms-key-arn")
                             .help("The KMS key ARN.")
+                            .required(false)
                             .takes_value(true),
                     ),
             )
@@ -928,6 +944,7 @@ macro_rules! create_app {
                             .long("private-key")
                             .help("Local path to developer's Eliptic Curve private key.")
                             .takes_value(true)
+                            .required_unless("kms-key-arn")
                             .conflicts_with("kms-key-arn")
                             .conflicts_with("kms-key-region"),
                     )
@@ -936,6 +953,7 @@ macro_rules! create_app {
                             .long("kms-key-region")
                             .help("The region in which the KMS key resides.")
                             .takes_value(true)
+                            .required(false)
                             .conflicts_with("private-key"),
                     )
                     .arg(
@@ -943,6 +961,7 @@ macro_rules! create_app {
                             .long("kms-key-arn")
                             .help("The KMS key ARN")
                             .takes_value(true)
+                            .required_unless("private-key")
                             .conflicts_with("private-key"),
                     ),
             )

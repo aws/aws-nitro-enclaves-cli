@@ -15,6 +15,7 @@ use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_C
 use crate::get_id_by_name;
 use crate::new_nitro_cli_failure;
 use crate::utils::PcrType;
+use tokio::runtime::Runtime;
 
 /// The arguments used by the `run-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,6 +80,16 @@ impl RunEnclavesArgs {
 
             Ok(json)
         } else {
+            let mut kms_key_region = parse_kms_key_region(args);
+            if kms_key_region.is_none() {
+                let act = async {
+                    let config = aws_config::load_from_env().await;
+                    kms_key_region = Some(config.region().unwrap().to_string());
+                    eprintln!("Using default region from aws config: {}", config.region().unwrap());
+                };
+                let runtime = Runtime::new().unwrap();
+                runtime.block_on(act);
+            }
             Ok(RunEnclavesArgs {
                 cpu_count: parse_cpu_count(args)
                     .map_err(|err| err.add_subaction("Parse CPU count".to_string()))?,
@@ -94,7 +105,7 @@ impl RunEnclavesArgs {
                 attach_console: attach_console(args),
                 enclave_name: parse_enclave_name(args)
                     .map_err(|err| err.add_subaction("Parse enclave name".to_string()))?,
-                kms_key_region: parse_kms_key_region(args),
+                kms_key_region,
                 kms_key_arn: parse_kms_key_arn(args),
             })
         }
@@ -127,7 +138,7 @@ impl BuildEnclavesArgs {
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         let signing_certificate = parse_signing_certificate(args);
         let private_key = parse_private_key(args);
-        let kms_key_region = parse_kms_key_region(args);
+        let mut kms_key_region = parse_kms_key_region(args);
         let kms_key_arn = parse_kms_key_arn(args);
 
         let signing_key = match (&private_key, &kms_key_arn) {
@@ -135,6 +146,15 @@ impl BuildEnclavesArgs {
                 path: private_key.unwrap(),
             }),
             (None, Some(_)) => {
+                if kms_key_region.is_none() {
+                    let act = async {
+                        let config = aws_config::load_from_env().await;
+                        kms_key_region = Some(config.region().unwrap().to_string());
+                        eprintln!("Using default region from aws config: {}", config.region().unwrap());
+                    };
+                    let runtime = Runtime::new().unwrap();
+                    runtime.block_on(act);
+                }
                 if kms_key_region.is_none() {
                     return Err(new_nitro_cli_failure!(
                         "`kms-key-region` argument not found",
@@ -324,7 +344,7 @@ impl SignArgs {
     /// Construct a new `SignArg` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         let private_key = parse_private_key(args);
-        let kms_key_region = parse_kms_key_region(args);
+        let mut kms_key_region = parse_kms_key_region(args);
         let kms_key_arn = parse_kms_key_arn(args);
         let signing_key;
         let signing_method;
@@ -337,6 +357,15 @@ impl SignArgs {
                 signing_method = "PrivateKey";
             }
             (None, Some(_)) => {
+                if kms_key_region.is_none() {
+                    let act = async {
+                        let config = aws_config::load_from_env().await;
+                        kms_key_region = Some(config.region().unwrap().to_string());
+                        eprintln!("Using default region from aws config: {}", config.region().unwrap());
+                    };
+                    let runtime = Runtime::new().unwrap();
+                    runtime.block_on(act);
+                }
                 if kms_key_region.is_none() {
                     return Err(new_nitro_cli_failure!(
                         "`kms-key-region` argument not found",
@@ -388,9 +417,9 @@ pub struct DescribeArgs {
 impl DescribeArgs {
     /// Construct a new `DescribeArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        let kms_key_region = parse_kms_key_region(args);
+        let mut kms_key_region = parse_kms_key_region(args);
         let kms_key_arn = parse_kms_key_arn(args);
-
+        
         match (&kms_key_region, &kms_key_arn) {
             (Some(_), None) => {
                 return Err(new_nitro_cli_failure!(
@@ -400,11 +429,22 @@ impl DescribeArgs {
                 .add_info(vec!["kms-key-arn"]))
             }
             (None, Some(_)) => {
-                return Err(new_nitro_cli_failure!(
-                    "`kms-key-region` argument not found",
-                    NitroCliErrorEnum::MissingArgument
-                )
-                .add_info(vec!["kms-key-region"]))
+                if kms_key_region.is_none() {
+                    let act = async {
+                        let config = aws_config::load_from_env().await;
+                        kms_key_region = Some(config.region().unwrap().to_string());
+                        eprintln!("Using default region from aws config: {}", config.region().unwrap());
+                    };
+                    let runtime = Runtime::new().unwrap();
+                    runtime.block_on(act);
+                }
+                if kms_key_region.is_none() {
+                    return Err(new_nitro_cli_failure!(
+                        "`kms-key-region` argument not found",
+                        NitroCliErrorEnum::MissingArgument
+                    )
+                    .add_info(vec!["kms-key-region"]))
+                }
             }
             _ => (),
         };

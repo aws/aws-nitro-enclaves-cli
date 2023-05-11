@@ -56,9 +56,10 @@ const SOCKETS_DIR_PATH: &str = "/run/nitro_enclaves";
 const BACKTRACE_VAR: &str = "BACKTRACE";
 
 /// All possible errors which may occur.
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, Hash, PartialEq)]
 pub enum NitroCliErrorEnum {
     /// Unspecified error (should avoid using it thoughout the code).
+    #[default]
     UnspecifiedError = 0,
     /// Error for handling missing arguments.
     MissingArgument,
@@ -178,12 +179,6 @@ pub enum NitroCliErrorEnum {
     EnclaveNamingError,
     /// Signature checker error
     EIFSignatureCheckerError,
-}
-
-impl Default for NitroCliErrorEnum {
-    fn default() -> NitroCliErrorEnum {
-        NitroCliErrorEnum::UnspecifiedError
-    }
 }
 
 impl Eq for NitroCliErrorEnum {}

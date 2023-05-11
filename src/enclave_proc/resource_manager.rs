@@ -109,9 +109,10 @@ pub struct MemoryRegion {
 }
 
 /// The state an enclave may be in.
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub enum EnclaveState {
     /// The enclave is not running (it's either not started or has been terminated).
+    #[default]
     Empty,
     /// The enclave is running.
     Running,
@@ -177,12 +178,6 @@ impl ToString for EnclaveState {
             EnclaveState::Terminating => "TERMINATING",
         }
         .to_string()
-    }
-}
-
-impl Default for EnclaveState {
-    fn default() -> Self {
-        EnclaveState::Empty
     }
 }
 

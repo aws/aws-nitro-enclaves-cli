@@ -650,4 +650,124 @@ mod test_nitro_cli_args {
 
         assert_eq!(app.get_matches_from_safe(args).is_err(), false)
     }
+
+    #[test]
+    fn sign_eif_pkey_correct() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "sign-eif",
+            "--signing-certificate",
+            "cert.pem",
+            "--private-key",
+            "key.pem",
+            "--eif-path",
+            "image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn sign_eif_kms_correct() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "sign-eif",
+            "--signing-certificate",
+            "cert.pem",
+            "--kms-key-arn",
+            "a23f54c8-b2ce-1a5c-a2db-f444a5b3d22d",
+            "--kms-key-region",
+            "eu-west-1",
+            "--eif-path",
+            "image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn sign_eif_kms_no_region_correct() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "sign-eif",
+            "--signing-certificate",
+            "cert.pem",
+            "--kms-key-arn",
+            "a23f54c8-b2ce-1a5c-a2db-f444a5b3d22d",
+            "--eif-path",
+            "image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn sign_eif_conflicting_arguments() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "sign-eif",
+            "--signing-certificate",
+            "cert.pem",
+            "--private-key",
+            "key.pem",
+            "--kms-key-arn",
+            "a23f54c8-b2ce-1a5c-a2db-f444a5b3d22d",
+            "--eif-path",
+            "image.eif",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
+
+    #[test]
+    fn build_kms_signed_enclave_correct_command() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--docker-dir",
+            "dir/",
+            "--output-file",
+            "image.eif",
+            "--signing-certificate",
+            "cert.pem",
+            "--kms-key-arn",
+            "a23f54c8-b2ce-1a5c-a2db-f444a5b3d22d",
+            "--kms-key-region",
+            "eu-west-1",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+    }
+
+    #[test]
+    fn build_kms_signed_enclave_conflicting_arguments() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "build-enclave",
+            "--docker-uri",
+            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
+            "--docker-dir",
+            "dir/",
+            "--output-file",
+            "image.eif",
+            "--signing-certificate",
+            "cert.pem",
+            "--kms-key-arn",
+            "a23f54c8-b2ce-1a5c-a2db-f444a5b3d22d",
+            "--kms-key-region",
+            "eu-west-1",
+            "--private-key",
+            "key.pem",
+        ];
+
+        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+    }
 }

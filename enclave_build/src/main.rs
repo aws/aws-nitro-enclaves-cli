@@ -88,6 +88,18 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("kms-key-arn")
+                .long("kms-key-arn")
+                .help("Specify ARN of the KMS key")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("kms-key-region")
+                .long("kms-key-region")
+                .help("Specify region in which the KMS key resides")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("build")
                 .short('b')
                 .long("build")
@@ -134,12 +146,26 @@ fn main() {
     let signing_certificate = matches
         .value_of("signing_certificate")
         .map(|val| val.to_string());
-    let private_key = Some(SigningKey::LocalKey {
-        path: matches
-            .value_of("private_certificate")
-            .map(|val| val.to_string())
-            .unwrap(),
-    });
+    let kms_key_arn = matches.value_of("kms-key-arn");
+    let kms_key_region = matches.value_of("kms-key-region");
+    let private_key_path = matches
+        .value_of("private_key")
+        .map(|val| val.to_string());
+
+    let signing_key = match (kms_key_arn, private_key_path) {
+        (None, Some(key_path)) => {
+            Some(SigningKey::LocalKey{
+                path: key_path
+            })
+        },
+        (Some(kms_arn), None) => {
+            Some(SigningKey::KmsKey{
+                arn: kms_arn.to_string(),
+                region: kms_key_region.unwrap().to_string()
+            })
+        },
+        _ => None
+    };
     let img_name = matches.value_of("image_name").map(|val| val.to_string());
     let img_version = matches.value_of("image_version").map(|val| val.to_string());
     let metadata = matches.value_of("metadata").map(|val| val.to_string());
@@ -161,7 +187,7 @@ fn main() {
         &mut output,
         ".".to_string(),
         &signing_certificate,
-        &private_key,
+        &signing_key,
         img_name,
         img_version,
         metadata,

@@ -17,6 +17,8 @@ pub mod utils;
 
 use aws_nitro_enclaves_image_format::defs::eif_hasher::EifHasher;
 use aws_nitro_enclaves_image_format::utils::eif_reader::EifReader;
+use aws_nitro_enclaves_image_format::utils::eif_signer::EifSigner;
+use aws_nitro_enclaves_image_format::utils::eif_signer::SigningKey;
 use aws_nitro_enclaves_image_format::{generate_build_info, utils::get_pcrs};
 use log::{debug, info};
 use sha2::{Digest, Sha384};
@@ -27,7 +29,9 @@ use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use common::commands_parser::{BuildEnclavesArgs, EmptyArgs, RunEnclavesArgs};
+use common::commands_parser::{
+    BuildEnclavesArgs, DescribeArgs, EmptyArgs, RunEnclavesArgs, SignArgs,
+};
 use common::json_output::{
     EifDescribeInfo, EnclaveBuildInfo, EnclaveTerminateInfo, MetadataDescribeInfo,
 };
@@ -57,12 +61,39 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
         &args.docker_dir,
         &args.output,
         &args.signing_certificate,
-        &args.private_key,
+        &args.signing_key,
         &args.img_name,
         &args.img_version,
         &args.metadata,
     )
     .map_err(|e| e.add_subaction("Failed to build EIF from docker".to_string()))?;
+    Ok(())
+}
+
+/// Sign an existing EIF file
+pub fn sign_eif_file(args: SignArgs) -> NitroCliResult<()> {
+    debug!("sign_eif_file");
+    eprintln!("Start signing the Enclave Image...");
+    let mut signer = EifSigner::new(args.eif_path, args.signing_certificate, args.signing_key)
+        .map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to initialize EIF signer: {:?}", e),
+                NitroCliErrorEnum::EifParsingError
+            )
+        })?;
+    let measurements = signer.sign_image().expect("Failed signing");
+
+    eprintln!("Successfully signed the Enclave Image.");
+
+    let info = EnclaveBuildInfo::new(measurements);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&info).map_err(|err| new_nitro_cli_failure!(
+            &format!("Failed to display EnclaveBuild data: {:?}", err),
+            NitroCliErrorEnum::SerdeError
+        ))?
+    );
+
     Ok(())
 }
 
@@ -72,7 +103,7 @@ pub fn build_from_docker(
     docker_dir: &Option<String>,
     output_path: &str,
     signing_certificate: &Option<String>,
-    private_key: &Option<String>,
+    signing_key: &Option<SigningKey>,
     img_name: &Option<String>,
     img_version: &Option<String>,
     metadata_path: &Option<String>,
@@ -135,7 +166,7 @@ pub fn build_from_docker(
         &mut file_output,
         artifacts_path()?,
         signing_certificate,
-        private_key,
+        signing_key,
         img_name.clone(),
         img_version.clone(),
         metadata_path.clone(),
@@ -218,8 +249,8 @@ pub fn new_enclave_name(run_args: RunEnclavesArgs, names: Vec<String>) -> NitroC
 ///
 /// Calculates PCRs 0, 1, 2, 8 at each call in addition to metadata,
 /// EIF details, identification provided by the user at build.
-pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
-    let mut eif_reader = EifReader::from_eif(eif_path).map_err(|e| {
+pub fn describe_eif(desc_args: DescribeArgs) -> NitroCliResult<EifDescribeInfo> {
+    let mut eif_reader = EifReader::from_eif(desc_args.eif_path).map_err(|e| {
         new_nitro_cli_failure!(
             &format!("Failed to initialize EIF reader: {:?}", e),
             NitroCliErrorEnum::EifParsingError
@@ -265,7 +296,9 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
     // Check if signature section is present
     if measurements.get(&"PCR8".to_string()).is_some() {
         let cert_info = eif_reader
-            .get_certificate_info(measurements)
+            .get_certificate_info(
+                measurements,
+            )
             .map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Failed to get certificate sigining info: {:?}", err),
@@ -737,12 +770,6 @@ macro_rules! create_app {
                             .takes_value(true),
                     )
                     .arg(
-                        Arg::with_name("private-key")
-                            .long("private-key")
-                            .help("Local path to developer's Eliptic Curve private key.")
-                            .takes_value(true),
-                    )
-                    .arg(
                         Arg::with_name("image_name")
                             .long("name")
                             .help("Name for enclave image")
@@ -759,6 +786,30 @@ macro_rules! create_app {
                             .long("metadata")
                             .help("Path to JSON containing the custom metadata provided by the user.")
                             .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("private-key")
+                            .long("private-key")
+                            .help("Local path to developer's Eliptic Curve private key.")
+                            .takes_value(true)
+                            .conflicts_with("kms-key-arn")
+                            .conflicts_with("kms-key-region"),
+                    )
+                    .arg(
+                        Arg::with_name("kms-key-region")
+                            .long("kms-key-region")
+                            .help("The region in which the KMS key resides.")
+                            .takes_value(true)
+                            .required(false)
+                            .conflicts_with("private-key"),
+                    )
+                    .arg(
+                        Arg::with_name("kms-key-arn")
+                            .long("kms-key-arn")
+                            .help("The KMS key ARN")
+                            .takes_value(true)
+                            .required(false)
+                            .conflicts_with("private-key"),
                     ),
             )
             .subcommand(
@@ -770,7 +821,7 @@ macro_rules! create_app {
                             .help("Path to the EIF to describe.")
                             .required(true)
                             .takes_value(true),
-                    ),
+                    )
             )
             .subcommand(
                 SubCommand::with_name("describe-enclaves")
@@ -837,6 +888,49 @@ macro_rules! create_app {
                             .takes_value(true)
                             .help("Error code, as returned by the misbehaving Nitro CLI command")
                             .required(true),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("sign-eif")
+                    .about("Sign an existing enclave image")
+                    .arg(
+                        Arg::with_name("eif-path")
+                            .long("eif-path")
+                            .takes_value(true)
+                            .help("Path to the enclave image file.")
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("signing-certificate")
+                            .long("signing-certificate")
+                            .takes_value(true)
+                            .help("Local path to developer's X509 signing certificate.")
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("private-key")
+                            .long("private-key")
+                            .help("Local path to developer's Eliptic Curve private key.")
+                            .takes_value(true)
+                            .required_unless("kms-key-arn")
+                            .conflicts_with("kms-key-arn")
+                            .conflicts_with("kms-key-region"),
+                    )
+                    .arg(
+                        Arg::with_name("kms-key-region")
+                            .long("kms-key-region")
+                            .help("The region in which the KMS key resides.")
+                            .takes_value(true)
+                            .required(false)
+                            .conflicts_with("private-key"),
+                    )
+                    .arg(
+                        Arg::with_name("kms-key-arn")
+                            .long("kms-key-arn")
+                            .help("The KMS key ARN")
+                            .takes_value(true)
+                            .required_unless("private-key")
+                            .conflicts_with("private-key"),
                     ),
             )
     };

@@ -10,6 +10,7 @@ mod docker;
 mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
+use aws_nitro_enclaves_image_format::utils::eif_signer::SigningKey;
 use aws_nitro_enclaves_image_format::utils::identity::parse_custom_metadata;
 use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignEnclaveInfo};
 use docker::DockerUtil;
@@ -68,7 +69,7 @@ impl<'a> Docker2Eif<'a> {
         output: &'a mut File,
         artifacts_prefix: String,
         certificate_path: &Option<String>,
-        key_path: &Option<String>,
+        signing_key: &Option<SigningKey>,
         img_name: Option<String>,
         img_version: Option<String>,
         metadata_path: Option<String>,
@@ -94,11 +95,11 @@ impl<'a> Docker2Eif<'a> {
             }
         }
 
-        let sign_info = match (certificate_path, key_path) {
+        let sign_info = match (certificate_path, signing_key) {
             (None, None) => None,
-            (Some(cert_path), Some(key_path)) => Some(
-                SignEnclaveInfo::new(cert_path, key_path)
-                    .map_err(|err| Docker2EifError::SignImageError(format!("{err:?}")))?,
+            (Some(cert_path), Some(signing_key)) => Some(
+                SignEnclaveInfo::new(cert_path, signing_key)
+                    .map_err(|err| Docker2EifError::SignImageError(format!("{:?}", err)))?,
             ),
             _ => return Err(Docker2EifError::SignArgsError),
         };

@@ -3,6 +3,7 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+use aws_nitro_enclaves_image_format::utils::eif_signer::SigningKey;
 use clap::ArgMatches;
 use libc::VMADDR_CID_HOST;
 #[cfg(test)]
@@ -14,6 +15,7 @@ use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_C
 use crate::get_id_by_name;
 use crate::new_nitro_cli_failure;
 use crate::utils::PcrType;
+use tokio::runtime::Runtime;
 
 /// The arguments used by the `run-enclave` command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,8 +107,8 @@ pub struct BuildEnclavesArgs {
     pub output: String,
     /// The path to the signing certificate for signed enclaves.
     pub signing_certificate: Option<String>,
-    /// The path to the private key for signed enclaves.
-    pub private_key: Option<String>,
+    /// The key used for signing the EIF
+    pub signing_key: Option<SigningKey>,
     /// The name of the enclave image.
     pub img_name: Option<String>,
     /// The version of the enclave image.
@@ -120,14 +122,44 @@ impl BuildEnclavesArgs {
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         let signing_certificate = parse_signing_certificate(args);
         let private_key = parse_private_key(args);
+        let mut kms_key_region = parse_kms_key_region(args);
+        let kms_key_arn = parse_kms_key_arn(args);
 
-        match (&signing_certificate, &private_key) {
+        let signing_key = match (&private_key, &kms_key_arn) {
+            (Some(_), None) => Some(SigningKey::LocalKey {
+                path: private_key.unwrap(),
+            }),
+            (None, Some(_)) => {
+                if kms_key_region.is_none() {
+                    let act = async {
+                        let config = aws_config::load_from_env().await;
+                        kms_key_region = Some(config.region().unwrap().to_string());
+                        eprintln!("Using default region from aws config: {}", config.region().unwrap());
+                    };
+                    let runtime = Runtime::new().unwrap();
+                    runtime.block_on(act);
+                }
+                if kms_key_region.is_none() {
+                    return Err(new_nitro_cli_failure!(
+                        "`kms-key-region` argument not found",
+                        NitroCliErrorEnum::MissingArgument
+                    )
+                    .add_info(vec!["kms-key-region"]));
+                }
+                Some(SigningKey::KmsKey {
+                    arn: kms_key_arn.unwrap(),
+                    region: kms_key_region.unwrap(),
+                })
+            }
+            _ => None,
+        };
+
+        match (&signing_certificate, &signing_key) {
             (Some(_), None) => {
                 return Err(new_nitro_cli_failure!(
-                    "`private-key` argument not found",
+                    "`private-key` or `kms-key-arn` argument not found",
                     NitroCliErrorEnum::MissingArgument
-                )
-                .add_info(vec!["private-key"]))
+                ))
             }
             (None, Some(_)) => {
                 return Err(new_nitro_cli_failure!(
@@ -156,7 +188,7 @@ impl BuildEnclavesArgs {
                 .add_info(vec!["output"])
             })?,
             signing_certificate,
-            private_key,
+            signing_key,
             img_name: parse_image_name(args),
             img_version: parse_image_version(args),
             metadata: parse_metadata(args),
@@ -276,6 +308,100 @@ impl PcrArgs {
         let path = parse_file_path(args, val_name)
             .map_err(|e| e.add_subaction("Parse PCR file".to_string()))?;
         Ok(Self { path, pcr_type })
+    }
+}
+
+/// The arguments used by `sign-eif` command
+#[derive(Debug, Clone)]
+pub struct SignArgs {
+    /// The method used for signing the EIF
+    pub signing_method: String,
+    /// The path to the enclave image file.
+    pub eif_path: String,
+    /// The path to the signing certificate.
+    pub signing_certificate: String,
+    /// The key used for signing the EIF
+    pub signing_key: SigningKey,
+}
+
+impl SignArgs {
+    /// Construct a new `SignArg` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        let private_key = parse_private_key(args);
+        let mut kms_key_region = parse_kms_key_region(args);
+        let kms_key_arn = parse_kms_key_arn(args);
+        let signing_key;
+        let signing_method;
+
+        match (&private_key, &kms_key_arn) {
+            (Some(_), None) => {
+                signing_key = SigningKey::LocalKey {
+                    path: private_key.unwrap(),
+                };
+                signing_method = "PrivateKey";
+            }
+            (None, Some(_)) => {
+                if kms_key_region.is_none() {
+                    let act = async {
+                        let config = aws_config::load_from_env().await;
+                        kms_key_region = Some(config.region().unwrap().to_string());
+                        eprintln!("Using default region from aws config: {}", config.region().unwrap());
+                    };
+                    let runtime = Runtime::new().unwrap();
+                    runtime.block_on(act);
+                }
+                if kms_key_region.is_none() {
+                    return Err(new_nitro_cli_failure!(
+                        "`kms-key-region` argument not found",
+                        NitroCliErrorEnum::MissingArgument
+                    )
+                    .add_info(vec!["kms-key-region"]));
+                }
+                signing_key = SigningKey::KmsKey {
+                    arn: kms_key_arn.unwrap(),
+                    region: kms_key_region.unwrap(),
+                };
+                signing_method = "KMS";
+            }
+            _ => {
+                return Err(new_nitro_cli_failure!(
+                    "Missing one of: `private-key` or `kms-key-arn`",
+                    NitroCliErrorEnum::MissingArgument
+                ));
+            }
+        };
+
+        Ok(SignArgs {
+            signing_method: signing_method.to_string(),
+            eif_path: parse_eif_path(args)
+                .map_err(|err| err.add_subaction("Parse EIF path".to_string()))?,
+            signing_certificate: parse_signing_certificate(args).ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`signing_certificate` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["signing_certificate"])
+            })?,
+            signing_key,
+        })
+    }
+}
+
+/// The arguments used by `describe-eif` command
+#[derive(Debug, Clone)]
+pub struct DescribeArgs {
+    /// The path to the enclave image file.
+    pub eif_path: String,
+}
+
+impl DescribeArgs {
+    /// Construct a new `DescribeArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+
+        Ok(DescribeArgs {
+            eif_path: parse_eif_path(args)
+                .map_err(|err| err.add_subaction("Parse EIF path".to_string()))?,
+        })
     }
 }
 
@@ -516,6 +642,14 @@ fn parse_error_code_str(args: &ArgMatches) -> NitroCliResult<String> {
         )
     })?;
     Ok(error_code_str.to_string())
+}
+
+fn parse_kms_key_region(args: &ArgMatches) -> Option<String> {
+    args.value_of("kms-key-region").map(|val| val.to_string())
+}
+
+fn parse_kms_key_arn(args: &ArgMatches) -> Option<String> {
+    args.value_of("kms-key-arn").map(|val| val.to_string())
 }
 
 #[cfg(test)]

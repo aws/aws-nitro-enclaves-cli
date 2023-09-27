@@ -609,7 +609,10 @@ macro_rules! create_app {
                     .arg(
                         Arg::with_name("memory")
                             .long("memory")
-                            .help("Memory to allocate for the enclave in MB")
+                            .help(
+                                "Memory to allocate for the enclave in MB. Depending on the available \
+                                pages, more might be allocated."
+                            )
                             .required_unless("config")
                             .takes_value(true)
                             .conflicts_with("config"),
@@ -637,7 +640,7 @@ macro_rules! create_app {
                                 "Starts enclave in debug-mode. This makes the console of the enclave \
                                 available over vsock at CID: VMADDR_CID_HYPERVISOR (0), port: \
                                 enclave_cid + 10000. \n The stream could be accessed with the console \
-                                sub-command" ,
+                                sub-command"
                             )
                             .conflicts_with("config"),
                     )

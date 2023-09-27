@@ -190,7 +190,7 @@ where
 
     // Get the number of expected replies.
     let mut num_replies_expected = comms.len() - num_errors;
-    let mut events = vec![EpollEvent::empty(); 1];
+    let mut events = [EpollEvent::empty(); 1];
 
     while num_replies_expected > 0 {
         let num_events = loop {

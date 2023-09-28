@@ -89,7 +89,7 @@ impl EnclaveProcLogWriter {
     /// Generate a single message string.
     fn create_msg(&self, now: &DateTime<Local>, record: &Record) -> NitroCliResult<String> {
         // UTC timestamp according to RFC 2822
-        let timestamp = DateTime::<Utc>::from_utc(now.naive_utc(), Utc)
+        let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(now.naive_utc(), Utc)
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         let logger_id = self.logger_id.lock().map_err(|e| {
             new_nitro_cli_failure!(

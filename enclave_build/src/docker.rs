@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::docker::DockerError::CredentialsError;
+use base64::{engine::general_purpose, Engine as _};
 use futures::stream::StreamExt;
 use log::{debug, error, info};
 use serde_json::{json, Value};
@@ -66,7 +67,7 @@ impl DockerUtil {
         } else {
             // Some Docker URIs don't have the protocol included, so just use
             // a dummy one to trick Url that it's a properly defined Uri.
-            let uri = format!("dummy://{}", image);
+            let uri = format!("dummy://{image}");
             if let Ok(uri) = Url::parse(&uri) {
                 uri.host().map(|s| s.to_string())
             } else {
@@ -78,7 +79,7 @@ impl DockerUtil {
             let config_file = self.get_config_file()?;
 
             let config_json: serde_json::Value = serde_json::from_reader(&config_file)
-                .map_err(|err| CredentialsError(format!("JSON was not well-formatted: {}", err)))?;
+                .map_err(|err| CredentialsError(format!("JSON was not well-formatted: {err}")))?;
 
             let auths = config_json.get("auths").ok_or_else(|| {
                 CredentialsError("Could not find auths key in config JSON".to_string())
@@ -98,11 +99,11 @@ impl DockerUtil {
                         .to_string();
 
                     let auth = auth.replace('"', "");
-                    let decoded = base64::decode(&auth).map_err(|err| {
-                        CredentialsError(format!("Invalid Base64 encoding for auth: {}", err))
+                    let decoded = general_purpose::STANDARD.decode(auth).map_err(|err| {
+                        CredentialsError(format!("Invalid Base64 encoding for auth: {err}"))
                     })?;
                     let decoded = std::str::from_utf8(&decoded).map_err(|err| {
-                        CredentialsError(format!("Invalid utf8 encoding for auth: {}", err))
+                        CredentialsError(format!("Invalid utf8 encoding for auth: {err}"))
                     })?;
 
                     if let Some(index) = decoded.rfind(':') {
@@ -127,14 +128,13 @@ impl DockerUtil {
             let config_file = File::open(file).map_err(|err| {
                 DockerError::CredentialsError(format!(
                     "Could not open file pointed by env\
-                     DOCKER_CONFIG: {}",
-                    err
+                     DOCKER_CONFIG: {err}"
                 ))
             })?;
             Ok(config_file)
         } else {
             if let Ok(home_dir) = std::env::var("HOME") {
-                let default_config_path = format!("{}/.docker/config.json", home_dir);
+                let default_config_path = format!("{home_dir}/.docker/config.json");
                 let config_path = Path::new(&default_config_path);
                 if config_path.exists() {
                     let config_file = File::open(config_path).map_err(|err| {
@@ -391,7 +391,7 @@ fn write_config(config: Vec<String>) -> Result<NamedTempFile, DockerError> {
     let mut file = NamedTempFile::new().map_err(|_| DockerError::TempfileError)?;
 
     for line in config {
-        file.write_fmt(format_args!("{}\n", line))
+        file.write_fmt(format_args!("{line}\n"))
             .map_err(|_| DockerError::TempfileError)?;
     }
 
@@ -406,14 +406,7 @@ mod tests {
     /// Test extracted configuration is as expected
     #[test]
     fn test_config() {
-        #[cfg(target_arch = "x86_64")]
-        let docker = DockerUtil::new(String::from(
-            "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-x86_64",
-        ));
-        #[cfg(target_arch = "aarch64")]
-        let docker = DockerUtil::new(String::from(
-            "667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-aarch64",
-        ));
+        let docker = DockerUtil::new(String::from("public.ecr.aws/aws-nitro-enclaves/hello:v1"));
 
         let (cmd_file, env_file) = docker.load().unwrap();
         let mut cmd_file = File::open(cmd_file.path()).unwrap();
@@ -421,18 +414,14 @@ mod tests {
 
         let mut cmd = String::new();
         cmd_file.read_to_string(&mut cmd).unwrap();
-        assert_eq!(
-            cmd,
-            "/bin/sh\n\
-             -c\n\
-             ./vsock-sample server --port 5005\n"
-        );
+        assert_eq!(cmd, "/bin/hello.sh\n");
 
         let mut env = String::new();
         env_file.read_to_string(&mut env).unwrap();
         assert_eq!(
             env,
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n"
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n\
+             HELLO=Hello from the enclave side!\n"
         );
     }
 }

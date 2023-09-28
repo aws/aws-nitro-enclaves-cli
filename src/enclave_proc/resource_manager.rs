@@ -14,14 +14,13 @@ use std::collections::BTreeMap;
 use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
-use std::io::{Error, SeekFrom};
+use std::io::Error;
 use std::mem::size_of;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use vsock::SockAddr;
-use vsock::VsockListener;
+use vsock::{VsockAddr, VsockListener};
 
 use crate::common::json_output::EnclaveBuildInfo;
 use crate::common::{construct_error_message, notify_error};
@@ -387,7 +386,7 @@ impl ResourceAllocator {
         // larger-page allocations (Ex: if we have 1 x 1 GB page and 1 x 2 MB page, but
         // we want to allocate only 512 MB, the above algorithm will have allocated only
         // the 2 MB page, since the 1 GB page was too large for what was needed; we now
-        // need to allocate in increasing order of page size in order to reduce westage).
+        // need to allocate in increasing order of page size in order to reduce wastage).
 
         if needed_mem > 0 {
             for (_, page_info) in HUGE_PAGE_MAP.iter().rev().enumerate() {
@@ -403,7 +402,7 @@ impl ResourceAllocator {
             }
         }
 
-        // If we still have memory to alocate, it means we have insufficient resources.
+        // If we still have memory to allocate, it means we have insufficient resources.
         if needed_mem > 0 {
             return Err(new_nitro_cli_failure!(
                 &format!(
@@ -565,7 +564,7 @@ impl EnclaveHandle {
         self.init_cpus()
             .map_err(|e| e.add_subaction("vCPUs initialization issue".to_string()))?;
 
-        let sockaddr = SockAddr::new_vsock(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
+        let sockaddr = VsockAddr::new(VMADDR_CID_PARENT, ENCLAVE_READY_VSOCK_PORT);
         let listener = VsockListener::bind(&sockaddr).map_err(|_| {
             new_nitro_cli_failure!(
                 "Enclave boot heartbeat vsock connection - vsock bind error",
@@ -757,7 +756,7 @@ impl EnclaveHandle {
                 .map_err(|e| e.add_subaction("Failed to release used memory".to_string()))?;
             info!("Enclave terminated.");
 
-            // Mark enclave as termiated.
+            // Mark enclave as terminated.
             self.clear();
         }
 
@@ -1113,7 +1112,7 @@ fn write_eif_to_regions(
         })?
         .len() as usize;
 
-    eif_file.seek(SeekFrom::Start(0)).map_err(|_| {
+    eif_file.rewind().map_err(|_| {
         new_nitro_cli_failure!(
             "Failed to seek to the beginning of the EIF file",
             NitroCliErrorEnum::FileOperationFailure
@@ -1145,7 +1144,7 @@ fn write_eif_to_regions(
             })?;
 
         if written_plus_region_size <= image_write_offset {
-            // All bytes need to be skiped to get to the image write offset.
+            // All bytes need to be skipped to get to the image write offset.
         } else {
             let region_offset = image_write_offset.saturating_sub(total_written);
             let file_offset = total_written.saturating_sub(image_write_offset);

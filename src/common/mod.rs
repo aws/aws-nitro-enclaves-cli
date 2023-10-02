@@ -225,7 +225,7 @@ pub enum EnclaveProcessReply {
 }
 
 /// Struct that is passed along the backtrace and accumulates error messages.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct NitroCliFailure {
     /// Main action which was attempted and failed.
     pub action: String,

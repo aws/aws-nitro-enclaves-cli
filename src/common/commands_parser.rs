@@ -9,6 +9,7 @@ use libc::VMADDR_CID_HOST;
 use libc::VMADDR_CID_LOCAL;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
+use std::str::FromStr;
 
 use crate::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult, VMADDR_CID_PARENT};
 use crate::get_id_by_name;
@@ -290,21 +291,74 @@ fn parse_file_path(args: &ArgMatches, val_name: &str) -> NitroCliResult<String> 
     Ok(path.to_string())
 }
 
+#[derive(Debug)]
+enum MemoryUnit {
+    Mebibytes,
+    Gibibytes,
+    Tebibytes,
+}
+
+#[derive(Debug)]
+struct UnknownMemoryUnitErr;
+
+impl MemoryUnit {
+    fn to_mebibytes(&self) -> u64 {
+        match self {
+            MemoryUnit::Mebibytes => 1,
+            MemoryUnit::Gibibytes => 1024,
+            MemoryUnit::Tebibytes => 1024 * 1024,
+        }
+    }
+}
+
+impl FromStr for MemoryUnit {
+    type Err = UnknownMemoryUnitErr;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "M" | "m" | "" => Ok(MemoryUnit::Mebibytes),
+            "G" | "g" => Ok(MemoryUnit::Gibibytes),
+            "T" | "t" => Ok(MemoryUnit::Tebibytes),
+            _ => Err(UnknownMemoryUnitErr),
+        }
+    }
+}
+
 /// Parse the requested amount of enclave memory from the command-line arguments.
-fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
+/// It can be just a number like 123, or it can end in a size indicator like 100M or 10G.
+/// If the size indicator is missing, it defaults to M.
+/// If the size indicator is not M, G or T, it returns an error.
+///
+/// # Arguments
+/// * `args` - The command-line arguments.
+pub fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
     let memory = args.value_of("memory").ok_or_else(|| {
         new_nitro_cli_failure!(
             "`memory` argument not found",
             NitroCliErrorEnum::MissingArgument
         )
     })?;
-    memory.parse().map_err(|_| {
+
+    let (num_str, size_str) = match memory.find(|c: char| !c.is_numeric()) {
+        Some(index) => memory.split_at(index),
+        None => (memory, ""),
+    };
+    let num = num_str.parse::<u64>().map_err(|_| {
         new_nitro_cli_failure!(
-            "`memory` is not a number",
+            "`memory` argument does not contain a number",
             NitroCliErrorEnum::InvalidArgument
         )
         .add_info(vec!["memory", memory])
-    })
+    })?;
+
+    let unit = size_str.parse::<MemoryUnit>().map_err(|_| {
+        new_nitro_cli_failure!(
+            "`memory` argument does not contain a valid size indicator",
+            NitroCliErrorEnum::InvalidArgument
+        )
+        .add_info(vec!["memory", memory])
+    })?;
+    Ok(num * unit.to_mebibytes())
 }
 
 /// Parse the Docker tag from the command-line arguments.
@@ -565,6 +619,102 @@ mod tests {
             let err_str = construct_error_message(&err_info);
             assert!(err_str.contains("Invalid argument provided"))
         }
+
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "256",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+        ];
+
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_memory(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert_eq!(result, Ok(256));
+
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "100M",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+        ];
+
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_memory(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert_eq!(result, Ok(100));
+
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "10G",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+        ];
+
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_memory(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert_eq!(result, Ok(10_240));
+
+        let app = create_app!();
+        let args = vec![
+            "nitro-cli",
+            "run-enclave",
+            "--memory",
+            "2T",
+            "--cpu-count",
+            "2",
+            "--eif-path",
+            "non_existing_eif.eif",
+        ];
+
+        let matches = app.get_matches_from_safe(args);
+        assert!(matches.is_ok());
+
+        let result = parse_memory(
+            matches
+                .as_ref()
+                .unwrap()
+                .subcommand_matches("run-enclave")
+                .unwrap(),
+        );
+        assert_eq!(result, Ok(2 * 1024 * 1024));
     }
 
     #[test]

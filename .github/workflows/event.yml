@@ -9,6 +9,7 @@ on:
 
 jobs:
   build:
+    if: ${{ github.repository == "aws/aws-nitro-enclaves-cli" }}
     runs-on: ubuntu-latest
     steps:
       - name: if_pr

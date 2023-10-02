@@ -3,7 +3,7 @@ name = "enclave_build"
 version = "0.2.0"
 authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
 edition = "2018"
-rust-version = "1.58"
+rust-version = "1.60"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,12 +13,12 @@ serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 serde_json = "1.0"
 shiplift = "0.7"
-tempfile = "3.1.0"
-tokio = { version = "1.18", features = ["rt-multi-thread"] }
-base64 = "0.13"
+tempfile = "3.5.0"
+tokio = { version = "1.27", features = ["rt-multi-thread"] }
+base64 = "0.21"
 log = "0.4"
-url = "2.1"
+url = "2.3"
 sha2 = "0.9.5"
-futures = "0.3.13"
+futures = "0.3.28"
 
 aws-nitro-enclaves-image-format = "0.2"

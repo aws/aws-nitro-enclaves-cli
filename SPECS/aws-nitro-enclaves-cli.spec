@@ -17,7 +17,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.2.1
+Version:    1.2.2
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -28,8 +28,8 @@ Source0: aws-nitro-enclaves-cli.tar.gz
 Source1: nitro-cli-dependencies.tar.gz
 
 BuildRequires: openssl-devel
-BuildRequires: rust >= 1.58
-BuildRequires: cargo >= 1.58
+BuildRequires: rust >= 1.60
+BuildRequires: cargo >= 1.60
 BuildRequires: make
 BuildRequires: llvm
 BuildRequires: clang
@@ -192,6 +192,37 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Tue Mar 07 2023 Petre Eftime <epetre@amazon.com> - 1.2.2-0
+- update third party crates license file
+- update clap
+- update bindgen
+- update cpufeatures
+- update chrono
+- update tempfile
+- update hyper
+- Fix fmt issues
+- Fix clippy issues after tokio update.
+- build(deps): bump tokio from 1.18.4 to 1.18.5
+- ci: reserve 2 cpus, not specific cpus
+- ci: mark logs as plaintext
+- CI: prevent tests from getting stuck
+- CI: use get-login-password instead of get-login
+- build(deps): bump tokio from 1.17.0 to 1.18.4
+- clippy: fix minor issue
+- cli/enclave_proc: handle EINTR for epoll_wait()
+- use ubuntu from the public ECR gallery
+- Update THIRD_PARTY_LICENSES_RUST_CRATES.html
+- nitro-enclaves-allocator: Set local language to English
+- do not re-run Actions checks during tests
+- add license checks
+- add audit step
+- ci: add workflows build, clippy and format workflows
+- fix clippy::explicit_auto_deref
+- fix clippy::partialeq_to_none
+- regenerate driver-bindings with Default
+- enclave_build: Fix clippy warning (clippy::needless_borrow)
+- vsock-proxy: Add "ap-southeast-3" endpoints to config
+
 * Tue Oct 25 2022 Andra Paraschiv <andraprs@amazon.com> - 1.2.1-0
 - Fix nitro-cli debug mode, when using attach_console and debug_mode options.
 - Refactor Dockerfiles for faster builds and remove duplication.

@@ -4,6 +4,7 @@ accepted = [
     "Zlib",
     "BSD-3-Clause",
     "ISC",
+    "Unicode-DFS-2016",
 ]
 
 targets = [

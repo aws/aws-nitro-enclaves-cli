@@ -6,7 +6,7 @@
 use chrono::offset::{Local, Utc};
 use chrono::DateTime;
 use flexi_logger::writers::LogWriter;
-use flexi_logger::{DeferredNow, LogTarget, Record};
+use flexi_logger::{DeferredNow, Record};
 use nix::unistd::Uid;
 use std::env;
 use std::fs::{File, OpenOptions, Permissions};
@@ -89,7 +89,7 @@ impl EnclaveProcLogWriter {
     /// Generate a single message string.
     fn create_msg(&self, now: &DateTime<Local>, record: &Record) -> NitroCliResult<String> {
         // UTC timestamp according to RFC 2822
-        let timestamp = DateTime::<Utc>::from_utc(now.naive_utc(), Utc)
+        let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(now.naive_utc(), Utc)
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         let logger_id = self.logger_id.lock().map_err(|e| {
             new_nitro_cli_failure!(
@@ -225,8 +225,14 @@ pub fn init_logger() -> NitroCliResult<EnclaveProcLogWriter> {
     let log_writer = EnclaveProcLogWriter::new()?;
 
     // Initialize logging with the new log writer.
-    flexi_logger::Logger::with_env_or_str(DEFAULT_LOG_LEVEL)
-        .log_target(LogTarget::Writer(Box::new(log_writer.clone())))
+    flexi_logger::Logger::try_with_env_or_str(DEFAULT_LOG_LEVEL)
+        .map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to initialize enclave process logger: {:?}", e),
+                NitroCliErrorEnum::LoggerError
+            )
+        })?
+        .log_to_writer(Box::new(log_writer.clone()))
         .start()
         .map_err(|e| {
             new_nitro_cli_failure!(

@@ -121,8 +121,9 @@ pub fn get_slot_id(enclave_id: String) -> Result<u64, String> {
     let tokens: Vec<&str> = enclave_id.split("-enc").collect();
 
     match tokens.get(1) {
-        Some(slot_id) => u64::from_str_radix(*slot_id, 16)
-            .map_err(|_err| "Invalid enclave id format".to_string()),
+        Some(slot_id) => {
+            u64::from_str_radix(slot_id, 16).map_err(|_err| "Invalid enclave id format".to_string())
+        }
         None => Err("Invalid enclave_id.".to_string()),
     }
 }

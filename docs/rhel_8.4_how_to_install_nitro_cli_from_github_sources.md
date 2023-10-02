@@ -185,7 +185,7 @@ memory_mib: 512
 # How many CPUs to reserve for enclaves.
 cpu_count: 2
 #
-# Alternatively, the exact CPUs to be reserved for the enclave can be explicitely
+# Alternatively, the exact CPUs to be reserved for the enclave can be explicitly
 # configured by using `cpu_pool` (like below), instead of `cpu_count`.
 # Note: cpu_count and cpu_pool conflict with each other. Only use exactly one of them.
 # Example of reserving CPUs 2, 3, and 6 through 9:

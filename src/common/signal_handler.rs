@@ -1,4 +1,4 @@
-// Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2020-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -37,7 +37,7 @@ impl SignalHandler {
 
     /// Mask (block) all signals covered by the handler.
     pub fn mask_all(self) -> NitroCliResult<Self> {
-        for set in self.sig_set.iter() {
+        if let Some(set) = self.sig_set {
             set.thread_block().map_err(|e| {
                 new_nitro_cli_failure!(
                     &format!("Masking signals covered by handler failed: {:?}", e),
@@ -51,7 +51,7 @@ impl SignalHandler {
 
     /// Unmask (unblock) all signals covered by the handler.
     pub fn unmask_all(self) -> NitroCliResult<Self> {
-        for set in self.sig_set.iter() {
+        if let Some(set) = self.sig_set {
             set.thread_unblock().map_err(|e| {
                 new_nitro_cli_failure!(
                     &format!("Unmasking signals covered by handler failed: {:?}", e),

@@ -217,7 +217,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
             } else {
                 ret.push_str(
                     format!(
-                        "Insufficient memory requested. User provided `{}` is {} MB, and memory should be greated than 0 MB.",
+                        "Insufficient memory requested. User provided `{}` is {} MB, and memory should be greater than 0 MB.",
                         additional_info.get(0).unwrap_or(&info_placeholder),
                         additional_info.get(1).unwrap_or(&info_placeholder)
                     ).as_str(),
@@ -227,7 +227,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         "E27" => {
             ret.push_str(
                 format!(
-                    "Insufficient memory available. User provided `{}` is {} MB, which is more than the available hugepage memory.\nYou can increase the available memory by editing the `memory_mib` value from '/etc/nitro_enclaves/allocator.yaml' and then enable the nitro-enclaves-allocator.service.",
+                    "Insufficient memory available. User provided `{}` is {} MB, which is more than the available hugepage memory.\nYou can increase the available memory by editing the `memory_mib` value from '/etc/nitro_enclaves/allocator.yaml' and then restart the nitro-enclaves-allocator.service.",
                     additional_info.get(0).unwrap_or(&info_placeholder),
                     additional_info.get(1).unwrap_or(&info_placeholder)
                 ).as_str(),

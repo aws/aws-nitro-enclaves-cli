@@ -20,14 +20,14 @@ fn main() -> VsockProxyResult<()> {
         .setting(AppSettings::DisableVersion)
         .arg(
             Arg::with_name("ipv4")
-                .short("4")
+                .short('4')
                 .long("ipv4")
                 .help("Force the proxy to use IPv4 addresses only.")
                 .required(false),
         )
         .arg(
             Arg::with_name("ipv6")
-                .short("6")
+                .short('6')
                 .long("ipv6")
                 .help("Force the proxy to use IPv6 addresses only.")
                 .required(false)
@@ -35,7 +35,7 @@ fn main() -> VsockProxyResult<()> {
         )
         .arg(
             Arg::with_name("workers")
-                .short("w")
+                .short('w')
                 .long("num_workers")
                 .help("Set the maximum number of simultaneous\nconnections supported.")
                 .required(false)

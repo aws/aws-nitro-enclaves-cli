@@ -51,7 +51,7 @@ set +e
 TEST_RESULTS=$?
 set -e
 
-aws s3 cp test_logs.out s3://aws-nitro-enclaves-cli/${LOGS_PATH}
+aws s3 cp --content-type 'text/plain' test_logs.out s3://aws-nitro-enclaves-cli/${LOGS_PATH}
 
 STATE="success"
 if [[ "${TEST_RESULTS}" != "0" ]];then

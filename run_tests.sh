@@ -14,7 +14,7 @@ export NITRO_CLI_BLOBS="${SCRIPTDIR}/blobs"
 export NITRO_CLI_ARTIFACTS="${SCRIPTDIR}/build"
 ARCH="$(uname -m)"
 
-$(aws ecr get-login --no-include-email --region us-east-1)
+AWS_ACCOUNT_ID=667861386598
 
 # Indicate that the test suite has failed
 function register_test_fail() {
@@ -26,8 +26,9 @@ function clean_up_and_exit() {
 	[ "$(lsmod | grep -cw nitro_enclaves)" -eq 0 ] || rmmod nitro_enclaves || register_test_fail
 	make clean
 	rm -rf test_images
+
 	# Cleanup pulled images during testing
-	docker rmi 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" 2> /dev/null || true
+	docker rmi public.ecr.aws/aws-nitro-enclaves/hello:v1 2> /dev/null || true
 	docker rmi hello-world:latest 2> /dev/null || true
 
 	rm -rf examples/"${ARCH}"/hello-entrypoint
@@ -54,7 +55,7 @@ function configure_ne_driver() {
 		# Preallocate 2046 Mb, that should be enough for all the tests. We explicitly
 		# pick this value to have both 1 GB and 2 MB pages if the system allows it.
 		source build/install/etc/profile.d/nitro-cli-env.sh || test_failed
-		./build/install/etc/profile.d/nitro-cli-config -m 2046 -p 1,3 || test_failed
+		./build/install/etc/profile.d/nitro-cli-config -m 2046 -t 2 || test_failed
 	fi
 }
 
@@ -63,22 +64,6 @@ pytest-3 tests/integration/test_installation.py || test_failed
 
 # Clean up build artefacts
 make clean
-
-# Run 'cargo fmt'
-echo "=================== cargo fmt ========================="
-make nitro-format || test_failed
-
-# Run 'cargo clippy'
-echo "=================== cargo clippy ==========================="
-make nitro-clippy || test_failed
-
-# Run 'cargo audit'
-echo "=================== cargo audit ==========================="
-make nitro-audit || test_failed
-
-# Check Rust licenses
-echo "=================== cargo about ==========================="
-make nitro-about || test_failed
 
 # Setup the environement with everything needed to run the integration tests
 make command-executer || test_failed
@@ -100,8 +85,8 @@ mkdir -p test_images || test_failed
 export HOME="/root"
 
 # Simple EIF
-nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" \
-	--output-file test_images/vsock-sample-server-"${ARCH}".eif || test_failed
+nitro-cli build-enclave --docker-uri public.ecr.aws/aws-nitro-enclaves/hello:v1 \
+	--output-file test_images/hello.eif || test_failed
 
 # Generate signing certificate
 openssl ecparam -name secp384r1 -genkey -out test_images/key.pem || test_failed
@@ -110,8 +95,8 @@ openssl req -new -key test_images/key.pem -sha384 -nodes \
 openssl x509 -req -days 20  -in test_images/csr.pem -out test_images/cert.pem \
 	-sha384 -signkey test_images/key.pem || test_failed
 # Signed EIF
-nitro-cli build-enclave --docker-uri 667861386598.dkr.ecr.us-east-1.amazonaws.com/enclaves-samples:vsock-sample-server-"${ARCH}" \
-	--output-file test_images/vsock-sample-server-"${ARCH}"-signed.eif \
+nitro-cli build-enclave --docker-uri public.ecr.aws/aws-nitro-enclaves/hello:v1 \
+	--output-file test_images/hello-signed.eif \
 	--private-key test_images/key.pem --signing-certificate test_images/cert.pem || test_failed
 
 
@@ -133,6 +118,7 @@ do
 
 	configure_ne_driver
 
+	timeout 5m \
 	./build/nitro_cli/"${ARCH}"-unknown-linux-musl/release/deps/"${test_exec_name}" \
 		--test-threads=1 --nocapture || test_failed
 done < <(grep -v '^ *#' < build/test_executables.txt)

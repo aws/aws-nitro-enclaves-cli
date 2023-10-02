@@ -34,7 +34,7 @@ pub struct DescribeThreadResult {
 /// Thread handle from parallel computing of PCRs and fetching of metadata
 pub type DescribeThread = Option<JoinHandle<NitroCliResult<DescribeThreadResult>>>;
 
-/// Information retuned by run_enclave function.
+/// Information returned by run_enclave function.
 pub struct RunEnclaveResult {
     /// Manager structure describing the enclave.
     pub enclave_manager: EnclaveManager,
@@ -77,7 +77,7 @@ pub fn run_enclaves(
         args.memory_mib,
         cpu_ids,
         eif_file,
-        args.debug_mode.unwrap_or(false),
+        args.debug_mode,
         enclave_name.to_string(),
     )
     .map_err(|e| {

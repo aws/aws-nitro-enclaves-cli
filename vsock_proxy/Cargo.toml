@@ -9,7 +9,7 @@ rust-version = "1.68"
 
 [dependencies]
 clap = "3.2"
-dns-lookup = "1.0.1"
+dns-lookup = "2.0.3"
 env_logger = "0.10"
 idna = "0.3.0"
 log = "0.4"

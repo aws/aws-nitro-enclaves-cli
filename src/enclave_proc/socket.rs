@@ -75,7 +75,7 @@ impl EnclaveProcSock {
     pub fn start_monitoring(&mut self, exit_on_delete: bool) -> NitroCliResult<()> {
         let path_clone = self.socket_path.clone();
         let requested_remove_clone = self.requested_remove.clone();
-        let mut socket_inotify = Inotify::init().map_err(|e| {
+        let socket_inotify = Inotify::init().map_err(|e| {
             new_nitro_cli_failure!(
                 &format!("Failed to initialize socket notifications: {:?}", e),
                 NitroCliErrorEnum::InotifyError
@@ -86,7 +86,8 @@ impl EnclaveProcSock {
         // - IN_DELETE_SELF: triggered when the socket file inode gets removed.
         // - IN_ATTRIB: triggered when the reference count of the file inode changes.
         socket_inotify
-            .add_watch(
+            .watches()
+            .add(
                 self.socket_path.as_path(),
                 WatchMask::ATTRIB | WatchMask::DELETE_SELF,
             )

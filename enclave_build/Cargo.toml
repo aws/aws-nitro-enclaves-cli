@@ -13,7 +13,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 serde_json = "1.0"
 shiplift = "0.7"
-tempfile = "3.5.0"
+tempfile = "3.8.0"
 tokio = { version = "1.27", features = ["rt-multi-thread"] }
 base64 = "0.21"
 log = "0.4"

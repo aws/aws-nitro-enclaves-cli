@@ -20,4 +20,4 @@ vsock = "0.3"
 
 [dev-dependencies]
 rand = "0.8.5"
-tempfile = "3.5.0"
+tempfile = "3.8.0"

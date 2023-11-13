@@ -15,6 +15,9 @@
 %define _third_party_licenses_file %{_datadir}/licenses/%{name}-%{version}/%{_licenses_filename}
 %define _pkg_licenses_file %{_src_dir}/%{_licenses_filename}
 
+# Stop mangling shebangs for scripts from examples
+%global __brp_mangle_shebangs_exclude_from %{ne_data_dir}/examples/
+
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
 Version:    1.2.2

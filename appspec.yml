@@ -2,5 +2,5 @@ version: 0.0
 os: linux
 hooks:
   AfterInstall:
-    - location: ci_entrypoint.sh
-      timeout: 3600
+    - location: ci_entrypoint_wrapper.sh
+      timeout: 3601

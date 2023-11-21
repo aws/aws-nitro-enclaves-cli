@@ -1,5 +1,6 @@
 # Copyright 2020-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
+#TODO
 
 %define ne_name nitro_enclaves
 %define ne_group ne

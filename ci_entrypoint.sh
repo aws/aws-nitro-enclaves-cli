@@ -36,7 +36,7 @@ ARCH=$(uname -m)
 PR_NUMBER=$(echo "$CODEBUILD_SOURCE_VERSION" | cut -d"/" -f2)
 LOGS_PATH="tests_results/${PR_NUMBER}/ci_logs_${CODEBUILD_RESOLVED_SOURCE_VERSION}_${ARCH}.txt"
 LOGS_URL="https://console.aws.amazon.com/s3/object/aws-nitro-enclaves-cli/${LOGS_PATH}"
-ACCESS_TOKEN=$(aws ssm get-parameter --name GITHUB_TOKEN --region us-east-1 | jq -r .Parameter.Value)
+ACCESS_TOKEN=$(aws ssm get-parameter --name GITHUB_TOKEN_LVPV --region us-east-1 | jq -r .Parameter.Value)
 if [[ $ACCESS_TOKEN == "" ]];
 then
         echo "Invalid ACCESS_TOKEN"

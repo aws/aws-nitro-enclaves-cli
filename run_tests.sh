@@ -109,6 +109,11 @@ sed -i 's/CMD/ENTRYPOINT/g' examples/"${ARCH}"/hello-entrypoint/Dockerfile || te
 nitro-cli build-enclave --docker-dir examples/"${ARCH}"/hello-entrypoint --docker-uri hello-entrypoint-usage \
 	--output-file test_images/hello-entrypoint-usage.eif || test_failed
 
+# Load vsock_loopback module for connection_test test of vsock-proxy
+if [ "$(lsmod | grep -cw vsock_loopback)" -eq 0 ]; then
+	modprobe vsock_loopback || echo "Module vsock_loopback not available."
+fi
+
 # Run all unit tests
 while IFS= read -r test_line
 do

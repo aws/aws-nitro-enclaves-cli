@@ -7,7 +7,7 @@ use protocol_helpers::{recv_loop, recv_u64, send_loop, send_u64};
 
 use nix::sys::socket::listen as listen_vsock;
 use nix::sys::socket::{accept, bind, connect, shutdown, socket};
-use nix::sys::socket::{AddressFamily, Shutdown, SockAddr, SockFlag, SockType};
+use nix::sys::socket::{AddressFamily, Shutdown, VsockAddr, SockFlag, SockType};
 use nix::unistd::close;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -56,7 +56,7 @@ impl AsRawFd for VsockSocket {
 }
 
 fn vsock_connect(cid: u32, port: u32) -> Result<VsockSocket, String> {
-    let sockaddr = SockAddr::new_vsock(cid, port);
+    let sockaddr = VsockAddr::new(cid, port);
     let mut err_msg = String::new();
 
     for i in 0..MAX_CONNECTION_ATTEMPTS {
@@ -197,7 +197,7 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
     )
     .map_err(|err| format!("Create socket failed: {:?}", err))?;
 
-    let sockaddr = SockAddr::new_vsock(VMADDR_CID_ANY, args.port);
+    let sockaddr = VsockAddr::new(VMADDR_CID_ANY, args.port);
 
     bind(socket_fd, &sockaddr).map_err(|err| format!("Bind failed: {:?}", err))?;
 

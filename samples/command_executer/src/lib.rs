@@ -7,7 +7,7 @@ use protocol_helpers::{recv_loop, recv_u64, send_loop, send_u64};
 
 use nix::sys::socket::listen as listen_vsock;
 use nix::sys::socket::{accept, bind, connect, shutdown, socket};
-use nix::sys::socket::{AddressFamily, Shutdown, VsockAddr, SockFlag, SockType};
+use nix::sys::socket::{AddressFamily, Shutdown, SockFlag, SockType, VsockAddr};
 use nix::unistd::close;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;

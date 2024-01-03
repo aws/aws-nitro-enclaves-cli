@@ -47,7 +47,7 @@ STATE="pending"
 status_update
 
 set +e
-./run_tests.sh 2>&1 | tee test_logs.out
+./scripts/run_tests.sh 2>&1 | tee test_logs.out
 TEST_RESULTS=$?
 set -e
 

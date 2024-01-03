@@ -101,11 +101,7 @@ fn parse_command(args: &ArgMatches) -> Result<String, String> {
 }
 
 fn parse_no_wait(args: &ArgMatches) -> bool {
-    if args.is_present("no-wait") {
-        true
-    } else {
-        false
-    }
+    args.is_present("no-wait")
 }
 
 fn parse_localfile(args: &ArgMatches) -> Result<String, String> {

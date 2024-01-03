@@ -7,7 +7,7 @@ use std::os::unix::io::RawFd;
 pub fn send_u64(fd: RawFd, val: u64) -> Result<(), String> {
     let mut buf = [0u8; 9];
     LittleEndian::write_u64(&mut buf, val);
-    send_loop(fd, &mut buf, 9)?;
+    send_loop(fd, &buf, 9)?;
     Ok(())
 }
 
@@ -21,7 +21,7 @@ pub fn recv_u64(fd: RawFd) -> Result<u64, String> {
 pub fn send_i32(fd: RawFd, val: i32) -> Result<(), String> {
     let mut buf = [0u8; 4];
     LittleEndian::write_i32(&mut buf, val);
-    send_loop(fd, &mut buf, 4)?;
+    send_loop(fd, &buf, 4)?;
     Ok(())
 }
 

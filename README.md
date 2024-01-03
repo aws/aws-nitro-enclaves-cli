@@ -4,6 +4,7 @@
 
 ## Nitro Enclaves Command Line Interface (Nitro CLI)
 
+TODO
 This repository contains a collection of tools and commands used for managing the lifecycle of enclaves. The Nitro CLI needs to be installed on the parent instance, and it can be used to start, manage, and terminate enclaves.  
 
 ### Prerequisites

@@ -159,7 +159,7 @@ This repository contains a collection of tools and commands used for managing th
 
   - 'ci_entrypoint.sh': The script which launches the CLI continuous integration tests
 
-  - 'run_tests.sh': The continuous integration test suite for the CLI across all supported platforms
+  - 'scripts/run_tests.sh': The continuous integration test suite for the CLI across all supported platforms
 
 ## Security issue notifications
 

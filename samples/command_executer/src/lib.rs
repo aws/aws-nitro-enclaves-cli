@@ -120,7 +120,7 @@ fn run_server(fd: RawFd, no_wait: bool) -> Result<(), String> {
     let buf = json_output.as_bytes();
     let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
     send_u64(fd, len)?;
-    send_loop(fd, &buf, len)?;
+    send_loop(fd, buf, len)?;
     Ok(())
 }
 
@@ -261,7 +261,7 @@ pub fn run(args: RunArgs) -> Result<i32, String> {
     let buf = args.command.as_bytes();
     let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
     send_u64(socket_fd, len)?;
-    send_loop(socket_fd, &buf, len)?;
+    send_loop(socket_fd, buf, len)?;
 
     // recv output
     let mut buf = [0u8; BUF_MAX_LEN];
@@ -304,7 +304,7 @@ pub fn recv_file(args: FileArgs) -> Result<(), String> {
     let buf = args.remotefile.as_bytes();
     let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
     send_u64(socket_fd, len)?;
-    send_loop(socket_fd, &buf, len)?;
+    send_loop(socket_fd, buf, len)?;
 
     // Receive filesize
     let filesize = recv_u64(socket_fd)?;
@@ -344,7 +344,7 @@ pub fn send_file(args: FileArgs) -> Result<(), String> {
     let buf = args.remotefile.as_bytes();
     let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
     send_u64(socket_fd, len)?;
-    send_loop(socket_fd, &buf, len)?;
+    send_loop(socket_fd, buf, len)?;
 
     let filesize = file
         .metadata()

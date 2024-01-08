@@ -7,6 +7,7 @@ use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::Command;
 
+use driver_bindings::bindings::ne_enclave_start_info;
 use nitro_cli::common::{NitroCliErrorEnum, NitroCliFailure, NitroCliResult};
 use nitro_cli::enclave_proc::cpu_info::CpuInfo;
 use nitro_cli::enclave_proc::resource_manager::{
@@ -201,12 +202,12 @@ impl CheckDmesg {
         ];
         let lines = self.get_dmesg_lines().unwrap();
 
-        for i in self.recorded_line..lines.len() {
-            let upper_line = lines[i].to_uppercase();
+        for line in lines.iter().skip(self.recorded_line) {
+            let upper_line = line.to_uppercase();
             for word in checks.iter() {
                 if upper_line.contains(&word.to_uppercase()) {
                     return Err(NitroCliFailure::new()
-                        .add_subaction(format!("Dmesg line: {} contains: {}", lines[i], word))
+                        .add_subaction(format!("Dmesg line: {} contains: {}", line, word))
                         .set_error_code(NitroCliErrorEnum::IoctlFailure)
                         .set_file_and_line(file!(), line!()));
                 }
@@ -536,14 +537,18 @@ mod test_dev_driver {
         assert!(result.is_ok());
 
         // Start with an invalid flag.
-        let mut enclave_start_info = EnclaveStartInfo::default();
-        enclave_start_info.flags = 1234;
+        let enclave_start_info = ne_enclave_start_info {
+            flags: 1234,
+            ..Default::default()
+        };
         let result = enclave.start(enclave_start_info);
         assert!(result.is_err());
 
         // Start with an invalid CID.
-        let mut enclave_start_info = EnclaveStartInfo::default();
-        enclave_start_info.enclave_cid = VMADDR_CID_LOCAL as u64;
+        let mut enclave_start_info = ne_enclave_start_info {
+            enclave_cid: VMADDR_CID_LOCAL as u64,
+            ..Default::default()
+        };
         let result = enclave.start(enclave_start_info);
         assert!(result.is_err());
 

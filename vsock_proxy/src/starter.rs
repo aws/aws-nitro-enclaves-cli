@@ -48,7 +48,7 @@ pub fn check_allowlist(
         // Obtain the remote server's IP address.
         let mut addrs = Proxy::parse_addr(remote_host, only_4, only_6)
             .map_err(|err| format!("Could not parse remote address: {}", err))?;
-        let remote_addr = *addrs.get(0).ok_or("No IP address found")?;
+        let remote_addr = *addrs.first().ok_or("No IP address found")?;
 
         for raw_service in services {
             let addr = raw_service["address"].as_str().ok_or("No address field")?;

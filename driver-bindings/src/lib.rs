@@ -7,5 +7,5 @@
 #![allow(missing_docs)]
 #![allow(non_camel_case_types)]
 
-mod bindings;
+pub mod bindings;
 pub use self::bindings::*;

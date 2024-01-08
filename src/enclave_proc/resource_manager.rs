@@ -368,7 +368,7 @@ impl ResourceAllocator {
         // Always allocate larger pages first, to reduce fragmentation and page count.
         // Once an allocation of a given page size fails, proceed to the next smaller
         // page size and retry.
-        for (_, page_info) in HUGE_PAGE_MAP.iter().enumerate() {
+        for page_info in HUGE_PAGE_MAP.iter() {
             while needed_mem >= page_info.1 as i64 {
                 match MemoryRegion::new(page_info.0) {
                     Ok(value) => {
@@ -389,7 +389,7 @@ impl ResourceAllocator {
         // need to allocate in increasing order of page size in order to reduce wastage).
 
         if needed_mem > 0 {
-            for (_, page_info) in HUGE_PAGE_MAP.iter().rev().enumerate() {
+            for page_info in HUGE_PAGE_MAP.iter().rev() {
                 while needed_mem > 0 {
                     match MemoryRegion::new(page_info.0) {
                         Ok(value) => {
@@ -420,7 +420,7 @@ impl ResourceAllocator {
             .sort_by(|reg1, reg2| reg2.mem_size.cmp(&reg1.mem_size));
 
         needed_mem = self.requested_mem as i64;
-        for (_, region) in self.mem_regions.iter().enumerate() {
+        for region in self.mem_regions.iter() {
             if needed_mem <= 0 {
                 break;
             }
@@ -434,7 +434,7 @@ impl ResourceAllocator {
         self.mem_regions.drain(split_index..);
 
         // Generate a summary of the allocated memory.
-        for (_, region) in self.mem_regions.iter().enumerate() {
+        for region in self.mem_regions.iter() {
             if let Some(page_count) = allocated_pages.get_mut(&region.mem_size) {
                 *page_count += 1;
             } else {

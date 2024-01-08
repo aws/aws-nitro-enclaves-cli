@@ -240,7 +240,7 @@ mod tests {
     /// expected ones.
     #[test]
     fn test_enclaveprocsock_init() {
-        let socket = EnclaveProcSock::new(&DUMMY_ENCLAVE_ID.to_string());
+        let socket = EnclaveProcSock::new(DUMMY_ENCLAVE_ID);
 
         assert!(socket.is_ok());
 
@@ -260,7 +260,7 @@ mod tests {
     /// trigger a `socket.requested_remove` change.
     #[test]
     fn test_start_monitoring() {
-        let socket = EnclaveProcSock::new(&DUMMY_ENCLAVE_ID.to_string());
+        let socket = EnclaveProcSock::new(DUMMY_ENCLAVE_ID);
 
         assert!(socket.is_ok());
 
@@ -289,7 +289,7 @@ mod tests {
     /// that the listener thread joins.
     #[test]
     fn test_close() {
-        let socket = EnclaveProcSock::new(&DUMMY_ENCLAVE_ID.to_string());
+        let socket = EnclaveProcSock::new(DUMMY_ENCLAVE_ID);
 
         assert!(socket.is_ok());
 

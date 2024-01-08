@@ -12,7 +12,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "terminate-enclave"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -20,7 +20,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "terminate-enclave", "--enclave-id"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -33,7 +33,7 @@ mod test_nitro_cli_args {
             "i-1234_enc123",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -47,7 +47,7 @@ mod test_nitro_cli_args {
             "135",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -60,7 +60,7 @@ mod test_nitro_cli_args {
             "testName",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -68,7 +68,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "terminate-enclave", "--enclave-name"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -82,7 +82,7 @@ mod test_nitro_cli_args {
             "name2",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -90,7 +90,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "describe-enclaves"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -98,7 +98,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "describe-enclaves", "--metadata"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "describe-eif", "--eif-path", "dir/image.eif"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -114,7 +114,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "describe-eif", "--eif-path"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -122,7 +122,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "console"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -130,7 +130,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "console", "--enclave-id"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -138,7 +138,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "console", "--enclave-id", "i-1234_enc123"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -152,7 +152,7 @@ mod test_nitro_cli_args {
             "135",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "console", "--enclave-name", "testName"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -168,7 +168,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "console", "--enclave-name"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -176,7 +176,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "console", "--enclave-name", "name1", "name2"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -191,7 +191,7 @@ mod test_nitro_cli_args {
             "10",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -206,7 +206,7 @@ mod test_nitro_cli_args {
             "10",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -220,7 +220,7 @@ mod test_nitro_cli_args {
             "--disconnect-timeout",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -228,7 +228,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "build-enclave", "--output-file", "image.eif"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -243,7 +243,7 @@ mod test_nitro_cli_args {
             "image.eif",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod test_nitro_cli_args {
             "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -273,7 +273,7 @@ mod test_nitro_cli_args {
             "image.eif",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -294,7 +294,7 @@ mod test_nitro_cli_args {
             "key.pem",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod test_nitro_cli_args {
             "meta.json",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -339,7 +339,7 @@ mod test_nitro_cli_args {
             "--metadata",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -360,7 +360,7 @@ mod test_nitro_cli_args {
             "--debug-mode",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -378,7 +378,7 @@ mod test_nitro_cli_args {
             "--debug-mode",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -397,7 +397,7 @@ mod test_nitro_cli_args {
             "--debug-mode",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -418,7 +418,7 @@ mod test_nitro_cli_args {
             "--debug-mode",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -436,7 +436,7 @@ mod test_nitro_cli_args {
             "--debug-mode",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -452,7 +452,7 @@ mod test_nitro_cli_args {
             "dir/image.eif",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -470,7 +470,7 @@ mod test_nitro_cli_args {
             "--enclave-cid",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -491,7 +491,7 @@ mod test_nitro_cli_args {
             "123",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -506,7 +506,7 @@ mod test_nitro_cli_args {
             "512",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -523,7 +523,7 @@ mod test_nitro_cli_args {
             "--eif-path",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -531,7 +531,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "run-enclave", "--config"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -545,7 +545,7 @@ mod test_nitro_cli_args {
             "config2.json",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -564,7 +564,7 @@ mod test_nitro_cli_args {
             "dir/image.eif",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -587,7 +587,7 @@ mod test_nitro_cli_args {
             "testName",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 
     #[test]
@@ -609,7 +609,7 @@ mod test_nitro_cli_args {
             "--enclave-name",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -617,7 +617,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "pcr", "--input"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -625,7 +625,7 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "pcr", "--signing-certificate"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -640,7 +640,7 @@ mod test_nitro_cli_args {
             "test.bin",
         ];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), true)
+        assert!(app.get_matches_from_safe(args).is_err())
     }
 
     #[test]
@@ -648,6 +648,6 @@ mod test_nitro_cli_args {
         let app = create_app!();
         let args = vec!["nitro cli", "pcr", "--signing-certificate", "cert.pem"];
 
-        assert_eq!(app.get_matches_from_safe(args).is_err(), false)
+        assert!(app.get_matches_from_safe(args).is_ok())
     }
 }

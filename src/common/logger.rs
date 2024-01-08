@@ -300,7 +300,7 @@ mod tests {
             let _ = fs::remove_dir_all(tmp_log_dir);
         } else {
             // Only remove the log file
-            let _ = fs::remove_file(&format!("{}/{}", tmp_log_dir, &LOG_FILE_NAME));
+            let _ = fs::remove_file(format!("{}/{}", tmp_log_dir, &LOG_FILE_NAME));
         }
 
         // Reset old environment variable value if necessary
@@ -324,19 +324,19 @@ mod tests {
         let _ = fs::create_dir(tmp_log_dir);
 
         let log_writer = EnclaveProcLogWriter::new().unwrap();
-        let _ = log_writer.update_logger_id("new-logger-id").unwrap();
+        log_writer.update_logger_id("new-logger-id").unwrap();
         let lock_result = log_writer.logger_id.lock();
 
         assert!(lock_result.unwrap().eq("new-logger-id"));
 
-        let _ = log_writer.update_logger_id("").unwrap();
+        log_writer.update_logger_id("").unwrap();
 
         if !path_existed {
             // Remove whole `tmp_log_dir` if necessary
             let _ = fs::remove_dir_all(tmp_log_dir);
         } else {
             // Only remove the log file
-            let _ = fs::remove_file(&format!("{}/{}", tmp_log_dir, &LOG_FILE_NAME));
+            let _ = fs::remove_file(format!("{}/{}", tmp_log_dir, &LOG_FILE_NAME));
         }
 
         // Reset old environment variable value if necessary

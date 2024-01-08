@@ -573,7 +573,7 @@ mod tests {
     const TMP_DIR_STR: &str = "./tmp_sock_dir";
 
     fn unset_envvar(varname: &String) {
-        let _ = unsafe {
+        unsafe {
             libc::unsetenv(varname.as_ptr() as *const c_char);
         };
     }

@@ -393,7 +393,7 @@ mod tests {
                 &mut cli_evt,
             );
 
-            assert_eq!(result.is_err(), true);
+            assert!(result.is_err());
         }
     }
 

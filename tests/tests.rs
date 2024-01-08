@@ -86,7 +86,7 @@ mod tests {
             metadata: None,
         };
 
-        assert_eq!(build_enclaves(args).is_err(), true);
+        assert!(build_enclaves(args).is_err());
     }
 
     #[test]
@@ -410,7 +410,7 @@ mod tests {
         setup_env();
         let req_enclave_cid = args.enclave_cid;
         let req_mem_size = args.memory_mib;
-        let req_nr_cpus: u64 = args.cpu_count.unwrap().try_into().unwrap();
+        let req_nr_cpus: u64 = args.cpu_count.unwrap().into();
         let debug_mode = args.debug_mode;
         let mut enclave_manager = run_enclaves(&args, None)
             .expect("Run enclaves failed")
@@ -445,7 +445,7 @@ mod tests {
         let contents = String::from_utf8(buffer).unwrap();
         let boot = contents.contains("nsm: loading out-of-tree module");
 
-        assert_eq!(boot, true);
+        assert!(boot);
 
         let info = get_enclave_describe_info(&enclave_manager, false).unwrap();
         let replies: Vec<EnclaveDescribeInfo> = vec![info];
@@ -571,7 +571,7 @@ mod tests {
         let replies: Vec<EnclaveDescribeInfo> = vec![info];
         let _reply = &replies[0];
 
-        assert_eq!(enclave_console(enclave_cid, None).is_err(), true);
+        assert!(enclave_console(enclave_cid, None).is_err());
 
         terminate_enclaves(&mut enclave_manager, None).expect("Terminate enclaves failed");
     }
@@ -981,7 +981,7 @@ mod tests {
         let eif_info = describe_eif(args.output).unwrap();
 
         assert_eq!(eif_info.version, 4);
-        assert_eq!(eif_info.is_signed, false);
+        assert!(!eif_info.is_signed);
         assert!(eif_info.cert_info.is_none());
         assert!(eif_info.crc_check);
         assert!(eif_info.sign_check.is_none());
@@ -1023,7 +1023,7 @@ mod tests {
         let eif_info = describe_eif(args.output).unwrap();
 
         assert_eq!(eif_info.version, 4);
-        assert_eq!(eif_info.is_signed, true);
+        assert!(eif_info.is_signed);
         assert!(eif_info.cert_info.is_some());
         assert!(eif_info.crc_check);
         assert!(eif_info.sign_check.unwrap());

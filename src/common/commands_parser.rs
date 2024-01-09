@@ -583,10 +583,12 @@ mod tests {
 
     /// Parse the path of the JSON config file
     fn parse_config_file(args: &ArgMatches) -> NitroCliResult<String> {
-        let config_file = args.value_of("config").ok_or(new_nitro_cli_failure!(
-            "`config` argument not found",
-            NitroCliErrorEnum::MissingArgument
-        ))?;
+        let config_file = args.value_of("config").ok_or_else(|| {
+            new_nitro_cli_failure!(
+                "`config` argument not found",
+                NitroCliErrorEnum::MissingArgument
+            )
+        })?;
         Ok(config_file.to_string())
     }
 

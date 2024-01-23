@@ -440,6 +440,7 @@ pub fn terminate_all_enclaves() -> NitroCliResult<()> {
         failed_connections.len() + err_socket_files,
         false,
         vec![0, libc::EACCES],
+        true,
     )
     .map_err(|e| e.add_subaction("Failed to handle all enclave processes replies".to_string()))
     .map(|_| ())

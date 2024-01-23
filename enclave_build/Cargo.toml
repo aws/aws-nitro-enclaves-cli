@@ -10,7 +10,7 @@ rust-version = "1.60"
 [dependencies]
 clap = "3.2"
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.8"
+serde_yaml = "0.9"
 serde_json = "1.0"
 shiplift = "0.7"
 tempfile = "3.5.0"

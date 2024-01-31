@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.2.2
+Version:    1.2.3
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,16 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Wed Jan 31 2024 Costin Lupu <lvpv@amazon.com> - 1.2.3-0
+- Dependencies updates: base64 bindgen chrono env_logger flexi_logger futures
+  idna inotify libc log nix num-traits openssl page_size rand rustix serde
+  serde_json serde_yaml shlex signal-hook tempfile tokio url vmm-sys-util vsock
+- Fix clippy errors and warnings after updates
+- Added dependabot support
+- Improve help text of the memory argument
+- Use public containers in tests
+- Update and refactor run_tests.sh
+
 * Tue Mar 07 2023 Petre Eftime <epetre@amazon.com> - 1.2.2-0
 - update third party crates license file
 - update clap

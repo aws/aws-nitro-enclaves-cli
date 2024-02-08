@@ -69,3 +69,9 @@ jobs:
           echo "license_changed=YES" >> $GITHUB_OUTPUT
         fi
 
+  pr-integration-testing-approval:
+    name: Approval for PR integration testing
+    runs-on: linux
+    environment: pr-integration-testing-approval
+    steps:
+    - run: echo "PR integration testing approved"

@@ -58,7 +58,7 @@ contains an `EifSectionType`. You can find more details about these
 headers in the [eif-defs](https://github.com/aws/aws-nitro-enclaves-image-format/) crate.
 
 2. For each PCR Signature use the public key from the signing
-certificate to decrypt the payload from the `COSESign1` object
+certificate to verify the payload from the `COSESign1` object
 (this can be done using the following crate:
 [aws-nitro-enclaves-cose](https://github.com/awslabs/aws-nitro-enclaves-cose))
 and check that the PCR's value is the same as the one computed by

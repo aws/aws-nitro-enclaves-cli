@@ -100,3 +100,10 @@ systemctl enable nitro-enclaves-vsock-proxy.service
 The service files can be found in `service` directory. The proxy is ran using the default configuration
 from `/etc/nitro_enclaves/vsock-proxy.yaml`, on local port 8000 and the AWS KMS endpoint corresponding to
 the region of the instance.
+
+You can use the following command to check the vsock proxy logs to diagnose connectivity issues.
+```
+journalctl -eu nitro-enclaves-vsock-proxy.service
+```
+To enable more detailed logging output, set the `RUST_LOG` environment variable to the `trace` log level in
+the service file (e.g.`/usr/lib/systemd/system/nitro-enclaves-vsock-proxy.service`).

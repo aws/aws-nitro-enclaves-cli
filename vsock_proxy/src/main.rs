@@ -10,7 +10,7 @@ use clap::{App, AppSettings, Arg};
 use env_logger::init;
 use log::info;
 
-use vsock_proxy::starter::{Proxy, VsockProxyResult};
+use vsock_proxy::{starter::{Proxy, VsockProxyResult}, IpAddrType};
 
 fn main() -> VsockProxyResult<()> {
     init();
@@ -75,8 +75,14 @@ fn main() -> VsockProxyResult<()> {
         .parse::<u32>()
         .map_err(|_| "Local port is not valid")?;
 
-    let only_4 = matches.is_present("ipv4");
-    let only_6 = matches.is_present("ipv6");
+    let ipv4_only = matches.is_present("ipv4");
+    let ipv6_only = matches.is_present("ipv6");
+    let ip_addr_type : IpAddrType = match (ipv4_only, ipv6_only) {
+        (true, false) => IpAddrType::IPAddrV4Only,
+        (false, true) => IpAddrType::IPAddrV6Only,
+        _ => IpAddrType::IPAddrMixed,
+    };
+
     let remote_addr = matches
         .value_of("remote_addr")
         // This argument is required, so clap ensures it's available
@@ -106,8 +112,7 @@ fn main() -> VsockProxyResult<()> {
         remote_port,
         num_workers,
         config_file,
-        only_4,
-        only_6,
+        ip_addr_type
     )
     .map_err(|err| format!("Could not create proxy: {}", err))?;
 

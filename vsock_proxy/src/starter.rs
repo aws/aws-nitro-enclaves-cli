@@ -18,6 +18,8 @@ use threadpool::ThreadPool;
 use vsock::{VsockAddr, VsockListener};
 use yaml_rust::YamlLoader;
 
+use crate::IpAddrType;
+
 const BUFF_SIZE: usize = 8192;
 pub const VSOCK_PROXY_CID: u32 = 3;
 pub const VSOCK_PROXY_PORT: u32 = 8000;
@@ -30,8 +32,7 @@ pub fn check_allowlist(
     remote_host: &str,
     remote_port: u16,
     config_file: Option<&str>,
-    only_4: bool,
-    only_6: bool,
+    ip_addr_type: IpAddrType,
 ) -> VsockProxyResult<IpAddr> {
     if let Some(config_file) = config_file {
         let mut f = File::open(config_file).map_err(|_| "Could not open the file")?;
@@ -46,7 +47,7 @@ pub fn check_allowlist(
             .ok_or("No allowlist field")?;
 
         // Obtain the remote server's IP address.
-        let mut addrs = Proxy::parse_addr(remote_host, only_4, only_6)
+        let mut addrs = Proxy::parse_addr(remote_host, ip_addr_type)
             .map_err(|err| format!("Could not parse remote address: {}", err))?;
         let remote_addr = *addrs.first().ok_or("No IP address found")?;
 
@@ -69,7 +70,7 @@ pub fn check_allowlist(
             }
 
             // If hostname matching failed, attempt to match against IPs.
-            addrs = Proxy::parse_addr(addr, only_4, only_6)?;
+            addrs = Proxy::parse_addr(addr, ip_addr_type)?;
             for addr in addrs.into_iter() {
                 if addr == remote_addr {
                     info!("Matched with host IP \"{}\" and port \"{}\"", addr, port);
@@ -97,14 +98,13 @@ impl Proxy {
         remote_port: u16,
         num_workers: usize,
         config_file: Option<&str>,
-        only_4: bool,
-        only_6: bool,
+        ip_addr_type: IpAddrType
     ) -> VsockProxyResult<Self> {
         if num_workers == 0 {
             return Err("Number of workers must not be 0".to_string());
         }
         info!("Checking allowlist configuration");
-        let remote_addr = check_allowlist(remote_host, remote_port, config_file, only_4, only_6)
+        let remote_addr = check_allowlist(remote_host, remote_port, config_file, ip_addr_type)
             .map_err(|err| format!("Error at checking the allowlist: {}", err))?;
         let pool = ThreadPool::new(num_workers);
         let sock_type = SockType::Stream;
@@ -123,7 +123,7 @@ impl Proxy {
     }
 
     /// Resolve a DNS name (IDNA format) into an IP address (v4 or v6)
-    pub fn parse_addr(addr: &str, only_4: bool, only_6: bool) -> VsockProxyResult<Vec<IpAddr>> {
+    pub fn parse_addr(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<IpAddr>> {
         // IDNA parsing
         let addr = domain_to_ascii(addr).map_err(|_| "Could not parse domain name")?;
 
@@ -142,16 +142,16 @@ impl Proxy {
         };
 
         // If there is no restriction, choose randomly
-        if !only_4 && !only_6 {
+        if IpAddrType::IPAddrMixed == ip_addr_type {
             return Ok(ips.into_iter().collect());
         }
 
         // Split the IPs in v4 and v6
         let (ips_v4, ips_v6): (Vec<_>, Vec<_>) = ips.into_iter().partition(IpAddr::is_ipv4);
 
-        if only_4 && !ips_v4.is_empty() {
+        if IpAddrType::IPAddrV4Only == ip_addr_type && !ips_v4.is_empty() {
             Ok(ips_v4.into_iter().collect())
-        } else if only_6 && !ips_v6.is_empty() {
+        } else if IpAddrType::IPAddrV6Only == ip_addr_type && !ips_v6.is_empty() {
             Ok(ips_v6.into_iter().collect())
         } else {
             Err("No accepted IP was found".to_string())

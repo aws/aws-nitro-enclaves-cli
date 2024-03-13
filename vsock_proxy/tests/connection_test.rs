@@ -29,7 +29,7 @@ fn test_tcp_connection() {
             - {address: 127.0.0.1, port: 9000}",
     )
     .unwrap();
-    let proxy = Proxy::new(
+    let mut proxy = Proxy::new(
         vsock_proxy::proxy::VSOCK_PROXY_PORT,
         addr,
         9000,

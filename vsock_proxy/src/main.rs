@@ -10,7 +10,7 @@ use clap::{App, AppSettings, Arg};
 use env_logger::init;
 use log::info;
 
-use vsock_proxy::starter::{Proxy, VsockProxyResult};
+use vsock_proxy::{proxy::{check_allowlist, Proxy}, IpAddrType, VsockProxyResult};
 
 fn main() -> VsockProxyResult<()> {
     init();
@@ -75,8 +75,14 @@ fn main() -> VsockProxyResult<()> {
         .parse::<u32>()
         .map_err(|_| "Local port is not valid")?;
 
-    let only_4 = matches.is_present("ipv4");
-    let only_6 = matches.is_present("ipv6");
+    let ipv4_only = matches.is_present("ipv4");
+    let ipv6_only = matches.is_present("ipv6");
+    let ip_addr_type : IpAddrType = match (ipv4_only, ipv6_only) {
+        (true, false) => IpAddrType::IPAddrV4Only,
+        (false, true) => IpAddrType::IPAddrV6Only,
+        _ => IpAddrType::IPAddrMixed,
+    };
+
     let remote_addr = matches
         .value_of("remote_addr")
         // This argument is required, so clap ensures it's available
@@ -98,16 +104,22 @@ fn main() -> VsockProxyResult<()> {
         .parse::<usize>()
         .map_err(|_| "Number of workers is not valid")?;
 
-    let config_file = matches.value_of("config_file");
+    if num_workers == 0 {
+        return Err("Number of workers must not be 0".to_string());
+    }
 
-    let proxy = Proxy::new(
+    info!("Checking allowlist configuration");
+    let config_file = matches.value_of("config_file");
+    let remote_host = String::from(remote_addr);
+    let _ = check_allowlist(&remote_host, remote_port, config_file, ip_addr_type)
+        .map_err(|err| format!("Error at checking the allowlist: {}", err))?;
+
+    let mut proxy = Proxy::new(
         local_port,
-        remote_addr,
+        remote_host,
         remote_port,
         num_workers,
-        config_file,
-        only_4,
-        only_6,
+        ip_addr_type
     )
     .map_err(|err| format!("Could not create proxy: {}", err))?;
 

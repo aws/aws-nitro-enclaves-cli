@@ -1,3 +1,5 @@
+#[allow(non_local_definitions)]
+
 pub mod command_parser;
 pub mod protocol_helpers;
 pub mod utils;

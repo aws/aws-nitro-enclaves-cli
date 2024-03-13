@@ -10,7 +10,7 @@ use clap::{App, AppSettings, Arg};
 use env_logger::init;
 use log::info;
 
-use vsock_proxy::{starter::Proxy, IpAddrType, VsockProxyResult};
+use vsock_proxy::{proxy::Proxy, IpAddrType, VsockProxyResult};
 
 fn main() -> VsockProxyResult<()> {
     init();

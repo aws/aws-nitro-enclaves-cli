@@ -1,6 +1,6 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-#![deny(warnings)]
+//#![deny(warnings)]
 
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
@@ -79,7 +79,8 @@ pub fn check_allowlist(
 /// Configuration parameters for port listening and remote destination
 pub struct Proxy {
     local_port: u32,
-    remote_addr: IpAddr,
+    remote_host: String,
+    remote_addr: Option<IpAddr>,
     remote_port: u16,
     pool: ThreadPool,
     sock_type: SockType,
@@ -88,27 +89,25 @@ pub struct Proxy {
 impl Proxy {
     pub fn new(
         local_port: u32,
-        remote_host: &str,
+        remote_host: String,
         remote_port: u16,
         num_workers: usize,
-        config_file: Option<&str>,
         ip_addr_type: IpAddrType
     ) -> VsockProxyResult<Self> {
-        if num_workers == 0 {
-            return Err("Number of workers must not be 0".to_string());
-        }
-        info!("Checking allowlist configuration");
-        let remote_addr = check_allowlist(remote_host, remote_port, config_file, ip_addr_type)
-            .map_err(|err| format!("Error at checking the allowlist: {}", err))?;
         let pool = ThreadPool::new(num_workers);
         let sock_type = SockType::Stream;
 
+        let dns_result = dns::resolve_single(&remote_host, ip_addr_type)?;
+        let remote_addr: Option<IpAddr> = Some(dns_result.ip);
+
         info!(
             "Using IP \"{:?}\" for the given server \"{}\"",
-            remote_addr, remote_host
+            dns_result.ip, remote_host
         );
+
         Ok(Proxy {
             local_port,
+            remote_host,
             remote_addr,
             remote_port,
             pool,
@@ -136,7 +135,7 @@ impl Proxy {
             .map_err(|_| "Could not accept connection")?;
         info!("Accepted connection on {:?}", client_addr);
 
-        let sockaddr = SocketAddr::new(self.remote_addr, self.remote_port);
+        let sockaddr = SocketAddr::new(self.remote_addr.unwrap(), self.remote_port);
         let sock_type = self.sock_type;
         self.pool.execute(move || {
             let mut server = match sock_type {

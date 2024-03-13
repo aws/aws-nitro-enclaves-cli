@@ -31,10 +31,9 @@ fn test_tcp_connection() {
     .unwrap();
     let proxy = Proxy::new(
         vsock_proxy::proxy::VSOCK_PROXY_PORT,
-        &addr,
+        addr,
         9000,
         2,
-        file.path().to_str(),
         IpAddrType::IPAddrMixed,
     )
     .unwrap();

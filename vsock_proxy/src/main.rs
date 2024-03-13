@@ -10,7 +10,7 @@ use clap::{App, AppSettings, Arg};
 use env_logger::init;
 use log::info;
 
-use vsock_proxy::{proxy::Proxy, IpAddrType, VsockProxyResult};
+use vsock_proxy::{proxy::{check_allowlist, Proxy}, IpAddrType, VsockProxyResult};
 
 fn main() -> VsockProxyResult<()> {
     init();
@@ -104,14 +104,21 @@ fn main() -> VsockProxyResult<()> {
         .parse::<usize>()
         .map_err(|_| "Number of workers is not valid")?;
 
+    if num_workers == 0 {
+        return Err("Number of workers must not be 0".to_string());
+    }
+
+    info!("Checking allowlist configuration");
     let config_file = matches.value_of("config_file");
+    let remote_host = String::from(remote_addr);
+    let _ = check_allowlist(&remote_host, remote_port, config_file, ip_addr_type)
+        .map_err(|err| format!("Error at checking the allowlist: {}", err))?;
 
     let proxy = Proxy::new(
         local_port,
-        remote_addr,
+        remote_host,
         remote_port,
         num_workers,
-        config_file,
         ip_addr_type
     )
     .map_err(|err| format!("Could not create proxy: {}", err))?;

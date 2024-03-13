@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod starter;
+pub mod dns;
+
+use std::net::IpAddr;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum IpAddrType {
@@ -12,3 +15,13 @@ pub enum IpAddrType {
     /// Allows both IP4 and IP6 addresses
     IPAddrMixed
 }
+
+pub struct DnsResolveResult {
+    ///Resolved address
+    ip: IpAddr,
+    ///DNS TTL value
+    ttl: u32
+}
+
+/// The most common result type provided by VsockProxy operations.
+pub type VsockProxyResult<T> = Result<T, String>;

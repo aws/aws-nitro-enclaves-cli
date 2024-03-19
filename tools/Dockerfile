@@ -30,7 +30,7 @@ RUN cd /tmp/openssl_src/openssl-${OPENSSL_VERSION} &&  \
 	make install_sw
 
 # Setup the right rust ver
-ENV RUST_VERSION=1.60.0
+ENV RUST_VERSION=1.68.2
 RUN  source $HOME/.cargo/env && \
 	ARCH=$(uname -m) && \
 	rustup toolchain install ${RUST_VERSION}-${ARCH}-unknown-linux-gnu && \

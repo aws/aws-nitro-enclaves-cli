@@ -3,11 +3,13 @@
 
 use crate::docker::DockerError::CredentialsError;
 use base64::{engine::general_purpose, Engine as _};
+use bollard::auth::DockerCredentials;
+use bollard::image::{BuildImageOptions, CreateImageOptions};
+use bollard::Docker;
+use flate2::{write::GzEncoder, Compression};
 use futures::stream::StreamExt;
 use log::{debug, error, info};
 use serde_json::{json, Value};
-use shiplift::RegistryAuth;
-use shiplift::{BuildOptions, Docker, PullOptions};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -21,6 +23,7 @@ pub const DOCKER_ARCH_AMD64: &str = "amd64";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DockerError {
+    ConnectionError,
     BuildError,
     InspectError,
     PullError,
@@ -38,20 +41,25 @@ pub struct DockerUtil {
 
 impl DockerUtil {
     /// Constructor that takes as argument a tag for the docker image to be used
-    pub fn new(docker_image: String) -> Self {
+    pub fn new(docker_image: String) -> Result<Self, DockerError> {
         let mut docker_image = docker_image;
 
         if !docker_image.contains(':') {
             docker_image.push_str(":latest");
         }
 
-        DockerUtil {
-            // DOCKER_HOST environment variable is parsed inside
-            // if docker daemon address needs to be substituted.
-            // By default it tries to connect to 'unix:///var/run/docker.sock'
-            docker: Docker::new(),
+        // DOCKER_HOST environment variable is parsed inside
+        // if docker daemon address needs to be substituted.
+        // By default, it tries to connect to 'unix:///var/run/docker.sock'
+        let docker = Docker::connect_with_defaults().map_err(|e| {
+            error!("{:?}", e);
+            DockerError::ConnectionError
+        })?;
+
+        Ok(DockerUtil {
+            docker,
             docker_image,
-        }
+        })
     }
 
     /// Returns the credentials by reading ${HOME}/.docker/config.json or ${DOCKER_CONFIG}
@@ -60,7 +68,7 @@ impl DockerUtil {
     /// we are parsing it correctly, so the parsing mechanism had been infered by
     /// reading a config.json created by:
     //         Docker version 19.03.2
-    fn get_credentials(&self) -> Result<RegistryAuth, DockerError> {
+    fn get_credentials(&self) -> Result<DockerCredentials, DockerError> {
         let image = self.docker_image.clone();
         let host = if let Ok(uri) = Url::parse(&image) {
             uri.host().map(|s| s.to_string())
@@ -109,10 +117,11 @@ impl DockerUtil {
                     if let Some(index) = decoded.rfind(':') {
                         let (user, after_user) = decoded.split_at(index);
                         let (_, password) = after_user.split_at(1);
-                        return Ok(RegistryAuth::builder()
-                            .username(user)
-                            .password(password)
-                            .build());
+                        return Ok(DockerCredentials {
+                            username: Some(user.to_string()),
+                            password: Some(password.to_string()),
+                            ..Default::default()
+                        });
                     }
                 }
             }
@@ -160,46 +169,40 @@ impl DockerUtil {
         let act = async {
             // Check if the Docker image is locally available.
             // If available, early exit.
-            if self
-                .docker
-                .images()
-                .get(&self.docker_image)
-                .inspect()
-                .await
-                .is_ok()
-            {
+            if self.docker.inspect_image(&self.docker_image).await.is_ok() {
                 eprintln!("Using the locally available Docker image...");
                 return Ok(());
             }
 
-            let mut pull_options_builder = PullOptions::builder();
-            pull_options_builder.image(&self.docker_image);
+            let create_image_options = CreateImageOptions {
+                from_image: self.docker_image.clone(),
+                ..Default::default()
+            };
 
-            match self.get_credentials() {
-                Ok(auth) => {
-                    pull_options_builder.auth(auth);
-                }
+            let credentials = match self.get_credentials() {
+                Ok(auth) => Some(auth),
                 // It is not mandatory to have the credentials set, but this is
                 // the most likely reason for failure when pulling, so log the
                 // error.
                 Err(err) => {
                     debug!("WARNING!! Credential could not be set {:?}", err);
+                    None
                 }
             };
 
-            let mut stream = self.docker.images().pull(&pull_options_builder.build());
+            let mut stream =
+                self.docker
+                    .create_image(Some(create_image_options), None, credentials);
 
             loop {
                 if let Some(item) = stream.next().await {
                     match item {
                         Ok(output) => {
-                            let msg = &output;
-
-                            if let Some(err_msg) = msg.get("error") {
-                                error!("{:?}", err_msg.clone());
+                            if let Some(err_msg) = &output.error {
+                                error!("{:?}", err_msg);
                                 break Err(DockerError::PullError);
                             } else {
-                                info!("{}", msg);
+                                info!("{:?}", output);
                             }
                         }
                         Err(e) => {
@@ -221,24 +224,36 @@ impl DockerUtil {
     /// Build an image locally, with the tag provided in constructor, using a
     /// directory that contains a Dockerfile
     pub fn build_image(&self, dockerfile_dir: String) -> Result<(), DockerError> {
-        let act = async {
-            let mut stream = self.docker.images().build(
-                &BuildOptions::builder(dockerfile_dir)
-                    .tag(self.docker_image.clone())
-                    .build(),
+        let mut archive = tar::Builder::new(GzEncoder::new(Vec::default(), Compression::best()));
+        archive.append_dir_all(".", &dockerfile_dir).map_err(|e| {
+            error!("{:?}", e);
+            DockerError::BuildError
+        })?;
+        let bytes = archive.into_inner().and_then(|c| c.finish()).map_err(|e| {
+            error!("{:?}", e);
+            DockerError::BuildError
+        })?;
+
+        let act = async move {
+            let mut stream = self.docker.build_image(
+                BuildImageOptions {
+                    dockerfile: "Dockerfile".to_string(),
+                    t: self.docker_image.clone(),
+                    ..Default::default()
+                },
+                None,
+                Some(bytes.into()),
             );
 
             loop {
                 if let Some(item) = stream.next().await {
                     match item {
                         Ok(output) => {
-                            let msg = &output;
-
-                            if let Some(err_msg) = msg.get("error") {
+                            if let Some(err_msg) = &output.error {
                                 error!("{:?}", err_msg.clone());
                                 break Err(DockerError::BuildError);
                             } else {
-                                info!("{}", msg);
+                                info!("{:?}", output);
                             }
                         }
                         Err(e) => {
@@ -260,7 +275,7 @@ impl DockerUtil {
     /// Inspect docker image and return its description as a json String
     pub fn inspect_image(&self) -> Result<serde_json::Value, DockerError> {
         let act = async {
-            match self.docker.images().get(&self.docker_image).inspect().await {
+            match self.docker.inspect_image(&self.docker_image).await {
                 Ok(image) => Ok(json!(image)),
                 Err(e) => {
                     error!("{:?}", e);
@@ -276,8 +291,11 @@ impl DockerUtil {
     fn extract_image(&self) -> Result<(Vec<String>, Vec<String>), DockerError> {
         // First try to find CMD parameters (together with potential ENV bindings)
         let act_cmd = async {
-            match self.docker.images().get(&self.docker_image).inspect().await {
-                Ok(image) => image.config.cmd.ok_or(DockerError::UnsupportedEntryPoint),
+            match self.docker.inspect_image(&self.docker_image).await {
+                Ok(image) => image
+                    .config
+                    .and_then(|c| c.cmd)
+                    .ok_or(DockerError::UnsupportedEntryPoint),
                 Err(e) => {
                     error!("{:?}", e);
                     Err(DockerError::InspectError)
@@ -285,8 +303,11 @@ impl DockerUtil {
             }
         };
         let act_env = async {
-            match self.docker.images().get(&self.docker_image).inspect().await {
-                Ok(image) => image.config.env.ok_or(DockerError::UnsupportedEntryPoint),
+            match self.docker.inspect_image(&self.docker_image).await {
+                Ok(image) => image
+                    .config
+                    .and_then(|c| c.env)
+                    .ok_or(DockerError::UnsupportedEntryPoint),
                 Err(e) => {
                     error!("{:?}", e);
                     Err(DockerError::InspectError)
@@ -304,10 +325,10 @@ impl DockerUtil {
         // If no CMD instructions are found, try to locate an ENTRYPOINT command
         if check_cmd_runtime.is_err() || check_env_runtime.is_err() {
             let act_entrypoint = async {
-                match self.docker.images().get(&self.docker_image).inspect().await {
+                match self.docker.inspect_image(&self.docker_image).await {
                     Ok(image) => image
                         .config
-                        .entrypoint
+                        .and_then(|c| c.entrypoint)
                         .ok_or(DockerError::UnsupportedEntryPoint),
                     Err(e) => {
                         error!("{:?}", e);
@@ -325,10 +346,15 @@ impl DockerUtil {
             }
 
             let act = async {
-                match self.docker.images().get(&self.docker_image).inspect().await {
+                match self.docker.inspect_image(&self.docker_image).await {
                     Ok(image) => Ok((
-                        image.config.entrypoint.unwrap(),
-                        image.config.env.ok_or_else(Vec::<String>::new).unwrap(),
+                        image.config.clone().unwrap().entrypoint.unwrap(),
+                        image
+                            .config
+                            .unwrap()
+                            .env
+                            .ok_or_else(Vec::<String>::new)
+                            .unwrap(),
                     )),
                     Err(e) => {
                         error!("{:?}", e);
@@ -343,8 +369,11 @@ impl DockerUtil {
         }
 
         let act = async {
-            match self.docker.images().get(&self.docker_image).inspect().await {
-                Ok(image) => Ok((image.config.cmd.unwrap(), image.config.env.unwrap())),
+            match self.docker.inspect_image(&self.docker_image).await {
+                Ok(image) => Ok((
+                    image.config.clone().unwrap().cmd.unwrap(),
+                    image.config.unwrap().env.unwrap(),
+                )),
                 Err(e) => {
                     error!("{:?}", e);
                     Err(DockerError::InspectError)
@@ -372,8 +401,8 @@ impl DockerUtil {
     /// Fetch architecture information from an image
     pub fn architecture(&self) -> Result<String, DockerError> {
         let arch = async {
-            match self.docker.images().get(&self.docker_image).inspect().await {
-                Ok(image) => Ok(image.architecture),
+            match self.docker.inspect_image(&self.docker_image).await {
+                Ok(image) => Ok(image.architecture.unwrap_or_default()),
                 Err(e) => {
                     error!("{:?}", e);
                     Err(DockerError::InspectError)

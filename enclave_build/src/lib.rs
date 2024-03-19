@@ -74,7 +74,10 @@ impl<'a> Docker2Eif<'a> {
         metadata_path: Option<String>,
         build_info: EifBuildInfo,
     ) -> Result<Self, Docker2EifError> {
-        let docker = DockerUtil::new(docker_image.clone());
+        let docker = DockerUtil::new(docker_image.clone()).map_err(|e| {
+            eprintln!("Docker error: {e:?}");
+            Docker2EifError::DockerError
+        })?;
 
         if !Path::new(&init_path).is_file() {
             return Err(Docker2EifError::InitPathError);

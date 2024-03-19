@@ -18,7 +18,7 @@ jobs:
     steps:
       # Clone the repository and check if THIRD_PARTY_LICENSES_RUST_CRATES.html
       # is up-to-date.
-      - uses: actions/checkout@v3.5.0
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - run: cargo install --locked --version "~0.5" cargo-about

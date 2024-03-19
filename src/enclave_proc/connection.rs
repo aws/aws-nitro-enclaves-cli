@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
-use std::string::ToString;
 use std::sync::{Arc, Mutex};
 
 use crate::common::{receive_from_stream, write_u64_le};

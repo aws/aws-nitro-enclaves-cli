@@ -4,7 +4,7 @@ version = "1.2.3"
 authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
 edition = "2018"
 license = "Apache-2.0"
-rust-version = "1.60"
+rust-version = "1.68"
 
 [dependencies]
 serde = { version = ">=1.0", features = ["derive"] }

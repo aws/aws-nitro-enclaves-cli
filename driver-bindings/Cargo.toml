@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
 edition = "2018"
 description = "Rust FFI bindings to Linux Nitro Enclaves driver generated using bindgen."
-rust-version = "1.60"
+rust-version = "1.68"

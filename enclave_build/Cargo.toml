@@ -8,11 +8,11 @@ rust-version = "1.68"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bollard = "0.16.0"
 clap = "3.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 serde_json = "1.0"
-shiplift = "0.7"
 tempfile = "3.5.0"
 tokio = { version = "1.27", features = ["rt-multi-thread"] }
 base64 = "0.21"
@@ -22,3 +22,5 @@ sha2 = "0.9.5"
 futures = "0.3.28"
 
 aws-nitro-enclaves-image-format = "0.2"
+tar = "0.4.40"
+flate2 = "1.0.28"

@@ -11,7 +11,6 @@ use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
 use libc::c_int;
 use log::{debug, info};
 use std::collections::BTreeMap;
-use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::Error;
@@ -109,8 +108,9 @@ pub struct MemoryRegion {
 }
 
 /// The state an enclave may be in.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum EnclaveState {
+    #[default]
     /// The enclave is not running (it's either not started or has been terminated).
     Empty,
     /// The enclave is running.
@@ -177,12 +177,6 @@ impl ToString for EnclaveState {
             EnclaveState::Terminating => "TERMINATING",
         }
         .to_string()
-    }
-}
-
-impl Default for EnclaveState {
-    fn default() -> Self {
-        EnclaveState::Empty
     }
 }
 

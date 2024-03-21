@@ -177,7 +177,9 @@ impl DockerUtil {
             return Ok(());
         }
 
-        let act = async {
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+
+        runtime.block_on(async {
             let create_image_options = CreateImageOptions {
                 from_image: self.docker_image.clone(),
                 ..Default::default()
@@ -218,11 +220,7 @@ impl DockerUtil {
                     break Ok(());
                 }
             }
-        };
-
-        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
-
-        runtime.block_on(act)
+        })
     }
 
     fn build_tarball(dockerfile_dir: String) -> Result<Vec<u8>, DockerError> {
@@ -243,7 +241,9 @@ impl DockerUtil {
     /// Build an image locally, with the tag provided in constructor, using a
     /// directory that contains a Dockerfile
     pub fn build_image(&self, dockerfile_dir: String) -> Result<(), DockerError> {
-        let act = async move {
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+
+        runtime.block_on(async move {
             let mut stream = self.docker.build_image(
                 BuildImageOptions {
                     dockerfile: "Dockerfile".to_string(),
@@ -274,11 +274,7 @@ impl DockerUtil {
                     break Ok(());
                 }
             }
-        };
-
-        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
-
-        runtime.block_on(act)
+        })
     }
 
     fn inspect(&self) -> Result<ImageInspect, DockerError> {

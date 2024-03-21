@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::docker::DockerError::CredentialsError;
+use crate::utils::handle_stream_output;
 use base64::{engine::general_purpose, Engine as _};
 use bollard::auth::DockerCredentials;
 use bollard::image::{BuildImageOptions, CreateImageOptions};
 use bollard::secret::ImageInspect;
 use bollard::Docker;
 use flate2::{write::GzEncoder, Compression};
-use futures::stream::StreamExt;
-use log::{debug, error, info};
+use log::{debug, error};
 use serde_json::{json, Value};
 use std::fs::File;
 use std::io::Write;
@@ -196,30 +196,11 @@ impl DockerUtil {
                 }
             };
 
-            let mut stream =
-                self.docker
-                    .create_image(Some(create_image_options), None, credentials);
+            let stream = self
+                .docker
+                .create_image(Some(create_image_options), None, credentials);
 
-            loop {
-                if let Some(item) = stream.next().await {
-                    match item {
-                        Ok(output) => {
-                            if let Some(err_msg) = &output.error {
-                                error!("{:?}", err_msg);
-                                break Err(DockerError::PullError);
-                            } else {
-                                info!("{:?}", output);
-                            }
-                        }
-                        Err(e) => {
-                            error!("{:?}", e);
-                            break Err(DockerError::PullError);
-                        }
-                    }
-                } else {
-                    break Ok(());
-                }
-            }
+            handle_stream_output(stream, DockerError::PullError).await
         })
     }
 
@@ -244,7 +225,7 @@ impl DockerUtil {
         let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
 
         runtime.block_on(async move {
-            let mut stream = self.docker.build_image(
+            let stream = self.docker.build_image(
                 BuildImageOptions {
                     dockerfile: "Dockerfile".to_string(),
                     t: self.docker_image.clone(),
@@ -254,26 +235,7 @@ impl DockerUtil {
                 Some(Self::build_tarball(dockerfile_dir)?.into()),
             );
 
-            loop {
-                if let Some(item) = stream.next().await {
-                    match item {
-                        Ok(output) => {
-                            if let Some(err_msg) = &output.error {
-                                error!("{:?}", err_msg.clone());
-                                break Err(DockerError::BuildError);
-                            } else {
-                                info!("{:?}", output);
-                            }
-                        }
-                        Err(e) => {
-                            error!("{:?}", e);
-                            break Err(DockerError::BuildError);
-                        }
-                    }
-                } else {
-                    break Ok(());
-                }
-            }
+            handle_stream_output(stream, DockerError::BuildError).await
         })
     }
 

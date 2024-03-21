@@ -63,6 +63,20 @@ impl DockerUtil {
         })
     }
 
+    fn parse_docker_host(docker_image: &str) -> Option<String> {
+        if let Ok(uri) = Url::parse(docker_image) {
+            uri.host().map(|s| s.to_string())
+        } else {
+            // Some Docker URIs don't have the protocol included, so just use
+            // a dummy one to trick Url that it's a properly defined Uri.
+            let uri = format!("dummy://{docker_image}");
+            if let Ok(uri) = Url::parse(&uri) {
+                uri.host().map(|s| s.to_string())
+            } else {
+                None
+            }
+        }
+    }
     /// Returns the credentials by reading ${HOME}/.docker/config.json or ${DOCKER_CONFIG}
     ///
     /// config.json doesn't seem to have a schema that we could use to validate
@@ -70,60 +84,49 @@ impl DockerUtil {
     /// reading a config.json created by:
     //         Docker version 19.03.2
     fn get_credentials(&self) -> Result<DockerCredentials, DockerError> {
-        let image = self.docker_image.clone();
-        let host = if let Ok(uri) = Url::parse(&image) {
-            uri.host().map(|s| s.to_string())
-        } else {
-            // Some Docker URIs don't have the protocol included, so just use
-            // a dummy one to trick Url that it's a properly defined Uri.
-            let uri = format!("dummy://{image}");
-            if let Ok(uri) = Url::parse(&uri) {
-                uri.host().map(|s| s.to_string())
-            } else {
-                None
-            }
+        let host = match Self::parse_docker_host(&self.docker_image) {
+            Some(host) => host,
+            None => return Err(CredentialsError("Invalid docker image URI!".to_string())),
         };
 
-        if let Some(registry_domain) = host {
-            let config_file = self.get_config_file()?;
+        let config_file = self.get_config_file()?;
 
-            let config_json: serde_json::Value = serde_json::from_reader(&config_file)
-                .map_err(|err| CredentialsError(format!("JSON was not well-formatted: {err}")))?;
+        let config_json: serde_json::Value = serde_json::from_reader(&config_file)
+            .map_err(|err| CredentialsError(format!("JSON was not well-formatted: {err}")))?;
 
-            let auths = config_json.get("auths").ok_or_else(|| {
-                CredentialsError("Could not find auths key in config JSON".to_string())
-            })?;
+        let auths = config_json.get("auths").ok_or_else(|| {
+            CredentialsError("Could not find auths key in config JSON".to_string())
+        })?;
 
-            if let Value::Object(auths) = auths {
-                for (registry_name, registry_auths) in auths.iter() {
-                    if !registry_name.to_string().contains(&registry_domain) {
-                        continue;
-                    }
+        if let Value::Object(auths) = auths {
+            for (registry_name, registry_auths) in auths.iter() {
+                if !registry_name.to_string().contains(&host) {
+                    continue;
+                }
 
-                    let auth = registry_auths
-                        .get("auth")
-                        .ok_or_else(|| {
-                            CredentialsError("Could not find auth key in config JSON".to_string())
-                        })?
-                        .to_string();
+                let auth = registry_auths
+                    .get("auth")
+                    .ok_or_else(|| {
+                        CredentialsError("Could not find auth key in config JSON".to_string())
+                    })?
+                    .to_string();
 
-                    let auth = auth.replace('"', "");
-                    let decoded = general_purpose::STANDARD.decode(auth).map_err(|err| {
-                        CredentialsError(format!("Invalid Base64 encoding for auth: {err}"))
-                    })?;
-                    let decoded = std::str::from_utf8(&decoded).map_err(|err| {
-                        CredentialsError(format!("Invalid utf8 encoding for auth: {err}"))
-                    })?;
+                let auth = auth.replace('"', "");
+                let decoded = general_purpose::STANDARD.decode(auth).map_err(|err| {
+                    CredentialsError(format!("Invalid Base64 encoding for auth: {err}"))
+                })?;
+                let decoded = std::str::from_utf8(&decoded).map_err(|err| {
+                    CredentialsError(format!("Invalid utf8 encoding for auth: {err}"))
+                })?;
 
-                    if let Some(index) = decoded.rfind(':') {
-                        let (user, after_user) = decoded.split_at(index);
-                        let (_, password) = after_user.split_at(1);
-                        return Ok(DockerCredentials {
-                            username: Some(user.to_string()),
-                            password: Some(password.to_string()),
-                            ..Default::default()
-                        });
-                    }
+                if let Some(index) = decoded.rfind(':') {
+                    let (user, after_user) = decoded.split_at(index);
+                    let (_, password) = after_user.split_at(1);
+                    return Ok(DockerCredentials {
+                        username: Some(user.to_string()),
+                        password: Some(password.to_string()),
+                        ..Default::default()
+                    });
                 }
             }
         }

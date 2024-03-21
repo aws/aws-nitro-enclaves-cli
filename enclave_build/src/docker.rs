@@ -225,19 +225,24 @@ impl DockerUtil {
         runtime.block_on(act)
     }
 
-    /// Build an image locally, with the tag provided in constructor, using a
-    /// directory that contains a Dockerfile
-    pub fn build_image(&self, dockerfile_dir: String) -> Result<(), DockerError> {
-        let mut archive = tar::Builder::new(GzEncoder::new(Vec::default(), Compression::best()));
+    fn build_tarball(dockerfile_dir: String) -> Result<Vec<u8>, DockerError> {
+        let encoder = GzEncoder::new(Vec::default(), Compression::best());
+        let mut archive = tar::Builder::new(encoder);
+
         archive.append_dir_all(".", &dockerfile_dir).map_err(|e| {
             error!("{:?}", e);
             DockerError::BuildError
         })?;
-        let bytes = archive.into_inner().and_then(|c| c.finish()).map_err(|e| {
+
+        archive.into_inner().and_then(|c| c.finish()).map_err(|e| {
             error!("{:?}", e);
             DockerError::BuildError
-        })?;
+        })
+    }
 
+    /// Build an image locally, with the tag provided in constructor, using a
+    /// directory that contains a Dockerfile
+    pub fn build_image(&self, dockerfile_dir: String) -> Result<(), DockerError> {
         let act = async move {
             let mut stream = self.docker.build_image(
                 BuildImageOptions {
@@ -246,7 +251,7 @@ impl DockerUtil {
                     ..Default::default()
                 },
                 None,
-                Some(bytes.into()),
+                Some(Self::build_tarball(dockerfile_dir)?.into()),
             );
 
             loop {

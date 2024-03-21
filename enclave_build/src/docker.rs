@@ -5,6 +5,7 @@ use crate::docker::DockerError::CredentialsError;
 use base64::{engine::general_purpose, Engine as _};
 use bollard::auth::DockerCredentials;
 use bollard::image::{BuildImageOptions, CreateImageOptions};
+use bollard::secret::ImageInspect;
 use bollard::Docker;
 use flate2::{write::GzEncoder, Compression};
 use futures::stream::StreamExt;
@@ -166,14 +167,14 @@ impl DockerUtil {
 
     /// Pull the image, with the tag provided in constructor, from the Docker registry
     pub fn pull_image(&self) -> Result<(), DockerError> {
-        let act = async {
-            // Check if the Docker image is locally available.
-            // If available, early exit.
-            if self.docker.inspect_image(&self.docker_image).await.is_ok() {
-                eprintln!("Using the locally available Docker image...");
-                return Ok(());
-            }
+        // Check if the Docker image is locally available.
+        // If available, early exit.
+        if self.inspect().is_ok() {
+            eprintln!("Using the locally available Docker image...");
+            return Ok(());
+        }
 
+        let act = async {
             let create_image_options = CreateImageOptions {
                 from_image: self.docker_image.clone(),
                 ..Default::default()
@@ -272,118 +273,49 @@ impl DockerUtil {
         runtime.block_on(act)
     }
 
-    /// Inspect docker image and return its description as a json String
-    pub fn inspect_image(&self) -> Result<serde_json::Value, DockerError> {
-        let act = async {
-            match self.docker.inspect_image(&self.docker_image).await {
-                Ok(image) => Ok(json!(image)),
+    fn inspect(&self) -> Result<ImageInspect, DockerError> {
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+        let image_future = self.docker.inspect_image(&self.docker_image);
+
+        runtime.block_on(async {
+            match image_future.await {
+                Ok(image) => Ok(image),
                 Err(e) => {
                     error!("{:?}", e);
                     Err(DockerError::InspectError)
                 }
             }
-        };
+        })
+    }
 
-        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
-        runtime.block_on(act)
+    /// Inspect docker image and return its description as a json String
+    pub fn inspect_image(&self) -> Result<serde_json::Value, DockerError> {
+        match self.inspect() {
+            Ok(image) => Ok(json!(image)),
+            Err(e) => {
+                error!("{:?}", e);
+                Err(DockerError::InspectError)
+            }
+        }
     }
 
     fn extract_image(&self) -> Result<(Vec<String>, Vec<String>), DockerError> {
         // First try to find CMD parameters (together with potential ENV bindings)
-        let act_cmd = async {
-            match self.docker.inspect_image(&self.docker_image).await {
-                Ok(image) => image
-                    .config
-                    .and_then(|c| c.cmd)
-                    .ok_or(DockerError::UnsupportedEntryPoint),
-                Err(e) => {
-                    error!("{:?}", e);
-                    Err(DockerError::InspectError)
-                }
-            }
-        };
-        let act_env = async {
-            match self.docker.inspect_image(&self.docker_image).await {
-                Ok(image) => image
-                    .config
-                    .and_then(|c| c.env)
-                    .ok_or(DockerError::UnsupportedEntryPoint),
-                Err(e) => {
-                    error!("{:?}", e);
-                    Err(DockerError::InspectError)
-                }
-            }
-        };
+        let image = self.inspect()?;
+        let config = image.config.ok_or(DockerError::UnsupportedEntryPoint)?;
 
-        let check_cmd_runtime = Runtime::new()
-            .map_err(|_| DockerError::RuntimeError)?
-            .block_on(act_cmd);
-        let check_env_runtime = Runtime::new()
-            .map_err(|_| DockerError::RuntimeError)?
-            .block_on(act_env);
-
-        // If no CMD instructions are found, try to locate an ENTRYPOINT command
-        if check_cmd_runtime.is_err() || check_env_runtime.is_err() {
-            let act_entrypoint = async {
-                match self.docker.inspect_image(&self.docker_image).await {
-                    Ok(image) => image
-                        .config
-                        .and_then(|c| c.entrypoint)
-                        .ok_or(DockerError::UnsupportedEntryPoint),
-                    Err(e) => {
-                        error!("{:?}", e);
-                        Err(DockerError::InspectError)
-                    }
-                }
-            };
-
-            let check_entrypoint_runtime = Runtime::new()
-                .map_err(|_| DockerError::RuntimeError)?
-                .block_on(act_entrypoint);
-
-            if check_entrypoint_runtime.is_err() {
-                return Err(DockerError::UnsupportedEntryPoint);
-            }
-
-            let act = async {
-                match self.docker.inspect_image(&self.docker_image).await {
-                    Ok(image) => Ok((
-                        image.config.clone().unwrap().entrypoint.unwrap(),
-                        image
-                            .config
-                            .unwrap()
-                            .env
-                            .ok_or_else(Vec::<String>::new)
-                            .unwrap(),
-                    )),
-                    Err(e) => {
-                        error!("{:?}", e);
-                        Err(DockerError::InspectError)
-                    }
-                }
-            };
-
-            let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
-
-            return runtime.block_on(act);
+        if let Some(cmd) = &config.cmd {
+            let env = config.env.unwrap_or_default();
+            return Ok((cmd.clone(), env));
         }
 
-        let act = async {
-            match self.docker.inspect_image(&self.docker_image).await {
-                Ok(image) => Ok((
-                    image.config.clone().unwrap().cmd.unwrap(),
-                    image.config.unwrap().env.unwrap(),
-                )),
-                Err(e) => {
-                    error!("{:?}", e);
-                    Err(DockerError::InspectError)
-                }
-            }
-        };
+        // If no CMD instructions are found, try to locate an ENTRYPOINT command
+        if let Some(entrypoint) = &config.entrypoint {
+            let env = config.env.unwrap_or_default();
+            return Ok((entrypoint.clone(), env));
+        }
 
-        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
-
-        runtime.block_on(act)
+        Err(DockerError::UnsupportedEntryPoint)
     }
 
     /// The main function of this struct. This needs to be called in order to
@@ -400,19 +332,8 @@ impl DockerUtil {
 
     /// Fetch architecture information from an image
     pub fn architecture(&self) -> Result<String, DockerError> {
-        let arch = async {
-            match self.docker.inspect_image(&self.docker_image).await {
-                Ok(image) => Ok(image.architecture.unwrap_or_default()),
-                Err(e) => {
-                    error!("{:?}", e);
-                    Err(DockerError::InspectError)
-                }
-            }
-        };
-
-        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
-
-        runtime.block_on(arch)
+        let image = self.inspect()?;
+        Ok(image.architecture.unwrap_or_default())
     }
 }
 

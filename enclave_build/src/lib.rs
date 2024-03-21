@@ -7,6 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 mod docker;
+mod utils;
 mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
@@ -74,7 +75,10 @@ impl<'a> Docker2Eif<'a> {
         metadata_path: Option<String>,
         build_info: EifBuildInfo,
     ) -> Result<Self, Docker2EifError> {
-        let docker = DockerUtil::new(docker_image.clone());
+        let docker = DockerUtil::new(docker_image.clone()).map_err(|e| {
+            eprintln!("Docker error: {e:?}");
+            Docker2EifError::DockerError
+        })?;
 
         if !Path::new(&init_path).is_file() {
             return Err(Docker2EifError::InitPathError);

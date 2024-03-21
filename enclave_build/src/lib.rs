@@ -7,6 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 mod docker;
+mod utils;
 mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};

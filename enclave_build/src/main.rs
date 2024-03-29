@@ -144,6 +144,7 @@ fn main() {
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(output)
         .expect("Failed to create output file");
 

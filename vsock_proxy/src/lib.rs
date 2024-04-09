@@ -1,8 +1,8 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod proxy;
 pub mod dns;
+pub mod proxy;
 
 use std::net::IpAddr;
 
@@ -13,14 +13,14 @@ pub enum IpAddrType {
     /// Only allows IP6 addresses
     IPAddrV6Only,
     /// Allows both IP4 and IP6 addresses
-    IPAddrMixed
+    IPAddrMixed,
 }
 
 pub struct DnsResolveResult {
     ///Resolved address
     pub ip: IpAddr,
     ///DNS TTL value
-    pub ttl: u32
+    pub ttl: u32,
 }
 
 /// The most common result type provided by VsockProxy operations.

@@ -64,9 +64,9 @@ pub fn check_allowlist(
             }
 
             // If hostname matching failed, attempt to match against IPs.
-            let addrs = dns::resolve(addr, ip_addr_type)?;
-            for addr in addrs.into_iter() {
-                if addr == remote_addr {
+            let rresults = dns::resolve(addr, ip_addr_type)?;
+            for rresult in rresults.into_iter() {
+                if rresult.ip == remote_addr {
                     info!("Matched with host IP \"{}\" and port \"{}\"", addr, port);
                     return Ok(remote_addr);
                 }

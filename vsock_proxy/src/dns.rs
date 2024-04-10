@@ -1,13 +1,13 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
 ///
-use dns_lookup::lookup_host;
+use hickory_resolver::config::*;
+use hickory_resolver::Resolver;
 use idna::domain_to_ascii;
-use std::net::IpAddr;
 
 use crate::{DnsResolveResult, IpAddrType, VsockProxyResult};
 
@@ -18,35 +18,43 @@ pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<Dns
 
     // DNS lookup
     // It results in a vector of IPs (V4 and V6)
-    let ips = lookup_host(&addr).map_err(|_| "DNS lookup failed!")?;
+    let resolver = Resolver::new(ResolverConfig::default(), ResolverOpts::default())
+        .map_err(|_| "Error while initializing DNS resolver!")?;
 
-    if ips.is_empty() {
+    let rresults: Vec<DnsResolveResult> = resolver
+        .lookup_ip(addr)
+        .map_err(|_| "DNS lookup failed!")?
+        .as_lookup()
+        .records()
+        .iter()
+        .filter_map(|record| {
+            if let Some(rdata) = record.data() {
+                if let Some(ip) = rdata.ip_addr() {
+                    let ttl = record.ttl();
+                    return Some(DnsResolveResult { ip, ttl });
+                }
+            }
+            None
+        })
+        .collect();
+
+    if rresults.is_empty() {
         return Err("DNS lookup returned no IP addresses!".into());
     }
 
-    let ttl = 60; //TODO: update hardcoded value
-
     // If there is no restriction, choose randomly
     if IpAddrType::IPAddrMixed == ip_addr_type {
-        return Ok(ips
-            .into_iter()
-            .map(|ip| DnsResolveResult { ip, ttl })
-            .collect());
+        return Ok(rresults);
     }
 
-    // Split the IPs in v4 and v6
-    let (ips_v4, ips_v6): (Vec<_>, Vec<_>) = ips.into_iter().partition(IpAddr::is_ipv4);
+    //Partition the resolution results into groups that use IPv4 or IPv6 addresses.
+    let (rresults_with_ipv4, rresults_with_ipv6): (Vec<_>, Vec<_>) =
+        rresults.into_iter().partition(|result| result.ip.is_ipv4());
 
-    if IpAddrType::IPAddrV4Only == ip_addr_type && !ips_v4.is_empty() {
-        Ok(ips_v4
-            .into_iter()
-            .map(|ip| DnsResolveResult { ip, ttl })
-            .collect())
-    } else if IpAddrType::IPAddrV6Only == ip_addr_type && !ips_v6.is_empty() {
-        Ok(ips_v6
-            .into_iter()
-            .map(|ip| DnsResolveResult { ip, ttl })
-            .collect())
+    if IpAddrType::IPAddrV4Only == ip_addr_type && !rresults_with_ipv4.is_empty() {
+        Ok(rresults_with_ipv4)
+    } else if IpAddrType::IPAddrV6Only == ip_addr_type && !rresults_with_ipv6.is_empty() {
+        Ok(rresults_with_ipv6)
     } else {
         Err("No accepted IP was found.".to_string())
     }
@@ -60,4 +68,87 @@ pub fn resolve_single(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<
         .first()
         .cloned()
         .ok_or_else(|| format!("Unable to resolve the DNS name: {}", addr))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use ctor::ctor;
+    use std::env;
+    use std::sync::Once;
+
+    static TEST_INIT: Once = Once::new();
+
+    static mut INVALID_TEST_DOMAIN: &'static str = "invalid-domain";
+    static mut IPV4_ONLY_TEST_DOMAIN: &'static str = "v4.ipv6test.app";
+    static mut IPV6_ONLY_TEST_DOMAIN: &'static str = "v6.ipv6test.app";
+    static mut DUAL_IP_TEST_DOMAIN: &'static str = "ipv6test.app";
+
+    #[test]
+    #[ctor]
+    fn init() {
+        // *** To use nonlocal domain names, set TEST_NONLOCAL_DOMAINS variable. ***
+        // *** TEST_NONLOCAL_DOMAINS=1 cargo test                                ***
+        TEST_INIT.call_once(|| {
+            if env::var_os("TEST_NONLOCAL_DOMAINS").is_none() {
+                eprintln!("[warn] dns: using 'localhost' for testing.");
+                unsafe {
+                    IPV4_ONLY_TEST_DOMAIN = "localhost";
+                    IPV6_ONLY_TEST_DOMAIN = "::1";
+                    DUAL_IP_TEST_DOMAIN = "localhost";
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn test_resolve_valid_domain() {
+        let domain = unsafe { IPV4_ONLY_TEST_DOMAIN };
+        let rresults = resolve(domain, IpAddrType::IPAddrMixed).unwrap();
+        assert!(!rresults.is_empty());
+    }
+
+    #[test]
+    fn test_resolve_valid_dual_ip_domain() {
+        let domain = unsafe { DUAL_IP_TEST_DOMAIN };
+        let rresults = resolve(domain, IpAddrType::IPAddrMixed).unwrap();
+        assert!(!rresults.is_empty());
+    }
+
+    #[test]
+    fn test_resolve_invalid_domain() {
+        let domain = unsafe { INVALID_TEST_DOMAIN };
+        let rresults = resolve(domain, IpAddrType::IPAddrMixed);
+        assert!(rresults.is_err() && rresults.err().unwrap().eq("DNS lookup failed!"));
+    }
+
+    #[test]
+    fn test_resolve_ipv4_only() {
+        let domain = unsafe { IPV4_ONLY_TEST_DOMAIN };
+        let rresults = resolve(domain, IpAddrType::IPAddrV4Only).unwrap();
+        assert!(rresults.iter().all(|item| item.ip.is_ipv4()));
+    }
+
+    #[test]
+    fn test_resolve_ipv6_only() {
+        let domain = unsafe { IPV6_ONLY_TEST_DOMAIN };
+        let rresults = resolve(domain, IpAddrType::IPAddrV6Only).unwrap();
+        assert!(rresults.iter().all(|item| item.ip.is_ipv6()));
+    }
+
+    #[test]
+    fn test_resolve_no_accepted_ip() {
+        let domain = unsafe { IPV4_ONLY_TEST_DOMAIN };
+        let rresults = resolve(domain, IpAddrType::IPAddrV6Only);
+        assert!(rresults.is_err() && rresults.err().unwrap().eq("No accepted IP was found."));
+    }
+
+    #[test]
+    fn test_resolve_single_address() {
+        let domain = unsafe { IPV4_ONLY_TEST_DOMAIN };
+        let rresult = resolve_single(domain, IpAddrType::IPAddrMixed).unwrap();
+        assert!(rresult.ip.is_ipv4());
+        assert!(rresult.ttl != 0);
+    }
 }

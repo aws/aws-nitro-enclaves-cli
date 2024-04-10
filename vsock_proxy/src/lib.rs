@@ -16,6 +16,7 @@ pub enum IpAddrType {
     IPAddrMixed,
 }
 
+#[derive(Copy, Clone)]
 pub struct DnsResolveResult {
     ///Resolved address
     pub ip: IpAddr,

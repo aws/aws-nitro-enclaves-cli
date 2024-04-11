@@ -1,11 +1,11 @@
-// Copyright 2019-2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-#![deny(warnings)]
+//#![deny(warnings)]
 
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
 use chrono::{DateTime, Duration, Utc};
-use log::{info, warn};
+use log::info;
 use nix::sys::select::{select, FdSet};
 use nix::sys::socket::SockType;
 use std::fs::File;
@@ -64,20 +64,11 @@ pub fn check_allowlist(
             }
 
             // If hostname matching failed, attempt to match against IPs.
-            let rresults = dns::resolve(addr, ip_addr_type);
-
-            let remote_addr_matched = rresults
-                .into_iter()
-                .flatten()
-                .find(|rresult| rresult.ip == remote_addr)
-                .map(|_| remote_addr);
-
-            match remote_addr_matched {
-                Some(addr) => {
+            let rresults = dns::resolve(addr, ip_addr_type)?;
+            for rresult in rresults.into_iter() {
+                if rresult.ip == remote_addr {
                     info!("Matched with host IP \"{}\" and port \"{}\"", addr, port);
-                }
-                None => {
-                    warn!("Unable to resolve allow listed host: {:?}.", remote_host);
+                    return Ok(remote_addr);
                 }
             }
         }

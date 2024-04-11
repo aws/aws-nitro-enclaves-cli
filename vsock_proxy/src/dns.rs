@@ -1,13 +1,13 @@
-// Copyright 2019-2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
 ///
-use hickory_resolver::config::*;
-use hickory_resolver::Resolver;
+use dns_lookup::lookup_host;
 use idna::domain_to_ascii;
+use std::net::IpAddr;
 
 use crate::{DnsResolveResult, IpAddrType, VsockProxyResult};
 
@@ -18,43 +18,35 @@ pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<Dns
 
     // DNS lookup
     // It results in a vector of IPs (V4 and V6)
-    let resolver = Resolver::new(ResolverConfig::default(), ResolverOpts::default())
-        .map_err(|_| "Error while initializing DNS resolver!")?;
+    let ips = lookup_host(&addr).map_err(|_| "DNS lookup failed!")?;
 
-    let rresults: Vec<DnsResolveResult> = resolver
-        .lookup_ip(addr)
-        .map_err(|_| "DNS lookup failed!")?
-        .as_lookup()
-        .records()
-        .iter()
-        .filter_map(|record| {
-            if let Some(rdata) = record.data() {
-                if let Some(ip) = rdata.ip_addr() {
-                    let ttl = record.ttl();
-                    return Some(DnsResolveResult { ip, ttl });
-                }
-            }
-            None
-        })
-        .collect();
-
-    if rresults.is_empty() {
+    if ips.is_empty() {
         return Err("DNS lookup returned no IP addresses!".into());
     }
 
+    let ttl = 60; //TODO: update hardcoded value
+
     // If there is no restriction, choose randomly
     if IpAddrType::IPAddrMixed == ip_addr_type {
-        return Ok(rresults);
+        return Ok(ips
+            .into_iter()
+            .map(|ip| DnsResolveResult { ip, ttl })
+            .collect());
     }
 
-    //Partition the resolution results into groups that use IPv4 or IPv6 addresses.
-    let (rresults_with_ipv4, rresults_with_ipv6): (Vec<_>, Vec<_>) =
-        rresults.into_iter().partition(|result| result.ip.is_ipv4());
+    // Split the IPs in v4 and v6
+    let (ips_v4, ips_v6): (Vec<_>, Vec<_>) = ips.into_iter().partition(IpAddr::is_ipv4);
 
-    if IpAddrType::IPAddrV4Only == ip_addr_type && !rresults_with_ipv4.is_empty() {
-        Ok(rresults_with_ipv4)
-    } else if IpAddrType::IPAddrV6Only == ip_addr_type && !rresults_with_ipv6.is_empty() {
-        Ok(rresults_with_ipv6)
+    if IpAddrType::IPAddrV4Only == ip_addr_type && !ips_v4.is_empty() {
+        Ok(ips_v4
+            .into_iter()
+            .map(|ip| DnsResolveResult { ip, ttl })
+            .collect())
+    } else if IpAddrType::IPAddrV6Only == ip_addr_type && !ips_v6.is_empty() {
+        Ok(ips_v6
+            .into_iter()
+            .map(|ip| DnsResolveResult { ip, ttl })
+            .collect())
     } else {
         Err("No accepted IP was found.".to_string())
     }
@@ -75,8 +67,8 @@ mod tests {
     use super::*;
 
     use ctor::ctor;
-    use std::env;
     use std::sync::Once;
+    use std::env;
 
     static TEST_INIT: Once = Once::new();
 

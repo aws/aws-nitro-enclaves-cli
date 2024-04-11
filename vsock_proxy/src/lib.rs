@@ -1,4 +1,4 @@
-// Copyright 2019-2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod dns;
@@ -16,7 +16,7 @@ pub enum IpAddrType {
     IPAddrMixed,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct DnsResolveResult {
     ///Resolved address
     pub ip: IpAddr,

@@ -5,6 +5,8 @@
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
 ///
+use dns_lookup::lookup_host;
+use idna::domain_to_ascii;
 use log::info;
 use nix::sys::select::{select, FdSet};
 use nix::sys::socket::SockType;
@@ -16,11 +18,14 @@ use threadpool::ThreadPool;
 use vsock::{VsockAddr, VsockListener};
 use yaml_rust::YamlLoader;
 
-use crate::{dns, IpAddrType, VsockProxyResult};
+use crate::IpAddrType;
 
 const BUFF_SIZE: usize = 8192;
 pub const VSOCK_PROXY_CID: u32 = 3;
 pub const VSOCK_PROXY_PORT: u32 = 8000;
+
+/// The most common result type provided by VsockProxy operations.
+pub type VsockProxyResult<T> = Result<T, String>;
 
 /// Checks if the forwarded server is allowed, providing its IP on success.
 pub fn check_allowlist(
@@ -42,8 +47,9 @@ pub fn check_allowlist(
             .ok_or("No allowlist field")?;
 
         // Obtain the remote server's IP address.
-        let dns_result = dns::resolve_single(remote_host, ip_addr_type)?;
-        let remote_addr = dns_result.ip;
+        let mut addrs = Proxy::parse_addr(remote_host, ip_addr_type)
+            .map_err(|err| format!("Could not parse remote address: {}", err))?;
+        let remote_addr = *addrs.first().ok_or("No IP address found")?;
 
         for raw_service in services {
             let addr = raw_service["address"].as_str().ok_or("No address field")?;
@@ -64,7 +70,7 @@ pub fn check_allowlist(
             }
 
             // If hostname matching failed, attempt to match against IPs.
-            let addrs = dns::resolve(addr, ip_addr_type)?;
+            addrs = Proxy::parse_addr(addr, ip_addr_type)?;
             for addr in addrs.into_iter() {
                 if addr == remote_addr {
                     info!("Matched with host IP \"{}\" and port \"{}\"", addr, port);
@@ -114,6 +120,42 @@ impl Proxy {
             pool,
             sock_type,
         })
+    }
+
+    /// Resolve a DNS name (IDNA format) into an IP address (v4 or v6)
+    pub fn parse_addr(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<IpAddr>> {
+        // IDNA parsing
+        let addr = domain_to_ascii(addr).map_err(|_| "Could not parse domain name")?;
+
+        // DNS lookup
+        // It results in a vector of IPs (V4 and V6)
+        let ips = match lookup_host(&addr) {
+            Err(_) => {
+                return Ok(vec![]);
+            }
+            Ok(v) => {
+                if v.is_empty() {
+                    return Ok(v);
+                }
+                v
+            }
+        };
+
+        // If there is no restriction, choose randomly
+        if IpAddrType::IPAddrMixed == ip_addr_type {
+            return Ok(ips.into_iter().collect());
+        }
+
+        // Split the IPs in v4 and v6
+        let (ips_v4, ips_v6): (Vec<_>, Vec<_>) = ips.into_iter().partition(IpAddr::is_ipv4);
+
+        if IpAddrType::IPAddrV4Only == ip_addr_type && !ips_v4.is_empty() {
+            Ok(ips_v4.into_iter().collect())
+        } else if IpAddrType::IPAddrV6Only == ip_addr_type && !ips_v6.is_empty() {
+            Ok(ips_v6.into_iter().collect())
+        } else {
+            Err("No accepted IP was found".to_string())
+        }
     }
 
     /// Creates a listening socket

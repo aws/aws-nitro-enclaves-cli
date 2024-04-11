@@ -1,6 +1,6 @@
 [package]
 name = "vsock-proxy"
-version = "1.0.0"
+version = "0.1.0"
 authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
 edition = "2018"
 rust-version = "1.68"

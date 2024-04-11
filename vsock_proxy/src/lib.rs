@@ -1,7 +1,7 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod proxy;
+pub mod starter;
 pub mod dns;
 
 use std::net::IpAddr;

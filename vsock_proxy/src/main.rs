@@ -114,7 +114,7 @@ fn main() -> VsockProxyResult<()> {
     let _ = check_allowlist(&remote_host, remote_port, config_file, ip_addr_type)
         .map_err(|err| format!("Error at checking the allowlist: {}", err))?;
 
-    let mut proxy = Proxy::new(
+    let proxy = Proxy::new(
         local_port,
         remote_host,
         remote_port,

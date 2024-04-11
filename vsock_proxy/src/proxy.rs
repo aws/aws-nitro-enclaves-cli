@@ -4,7 +4,7 @@
 
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
-use chrono::{DateTime, Duration, Utc};
+///
 use log::info;
 use nix::sys::select::{select, FdSet};
 use nix::sys::socket::SockType;
@@ -82,11 +82,8 @@ pub struct Proxy {
     remote_host: String,
     remote_addr: Option<IpAddr>,
     remote_port: u16,
-    dns_resolve_date: Option<DateTime<Utc>>,
-    dns_refresh_interval: Option<Duration>,
     pool: ThreadPool,
     sock_type: SockType,
-    ip_addr_type: IpAddrType,
 }
 
 impl Proxy {
@@ -95,24 +92,26 @@ impl Proxy {
         remote_host: String,
         remote_port: u16,
         num_workers: usize,
-        ip_addr_type: IpAddrType,
+        ip_addr_type: IpAddrType
     ) -> VsockProxyResult<Self> {
         let pool = ThreadPool::new(num_workers);
         let sock_type = SockType::Stream;
-        let remote_addr: Option<IpAddr> = None;
-        let dns_resolve_date: Option<DateTime<Utc>> = None;
-        let dns_refresh_interval: Option<Duration> = None;
+
+        let dns_result = dns::resolve_single(&remote_host, ip_addr_type)?;
+        let remote_addr: Option<IpAddr> = Some(dns_result.ip);
+
+        info!(
+            "Using IP \"{:?}\" for the given server \"{}\"",
+            dns_result.ip, remote_host
+        );
 
         Ok(Proxy {
             local_port,
             remote_host,
             remote_addr,
             remote_port,
-            dns_resolve_date,
-            dns_refresh_interval,
             pool,
             sock_type,
-            ip_addr_type,
         })
     }
 
@@ -130,32 +129,11 @@ impl Proxy {
     /// Accepts an incoming connection coming on listener and handles it on a
     /// different thread
     /// Returns the handle for the new thread or the appropriate error
-    pub fn sock_accept(&mut self, listener: &VsockListener) -> VsockProxyResult<()> {
+    pub fn sock_accept(&self, listener: &VsockListener) -> VsockProxyResult<()> {
         let (mut client, client_addr) = listener
             .accept()
             .map_err(|_| "Could not accept connection")?;
         info!("Accepted connection on {:?}", client_addr);
-
-        let needs_resolve =
-            |d: DateTime<Utc>, i: Duration| (Utc::now() - d + Duration::seconds(2)) > i;
-
-        if self.dns_resolve_date.is_none()
-            || needs_resolve(
-                self.dns_resolve_date.unwrap(),
-                self.dns_refresh_interval.unwrap(),
-            )
-        {
-            info!("Resolving hostname: {}.", self.remote_host);
-            let result = dns::resolve_single(&self.remote_host, self.ip_addr_type)?;
-            self.dns_resolve_date = Some(Utc::now());
-            self.dns_refresh_interval = Some(Duration::seconds(result.ttl as i64));
-            self.remote_addr = Some(result.ip);
-
-            info!(
-                "Using IP \"{:?}\" for the given server \"{}\". (TTL: {} secs)",
-                result.ip, self.remote_host, result.ttl
-            );
-        }
 
         let sockaddr = SocketAddr::new(self.remote_addr.unwrap(), self.remote_port);
         let sock_type = self.sock_type;

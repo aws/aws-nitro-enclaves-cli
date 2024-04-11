@@ -4,6 +4,7 @@
 
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
+use chrono::{DateTime, Duration, Utc};
 use log::{info, warn};
 use nix::sys::select::{select, FdSet};
 use nix::sys::socket::SockType;
@@ -15,7 +16,6 @@ use threadpool::ThreadPool;
 use vsock::{VsockAddr, VsockListener};
 use yaml_rust::YamlLoader;
 
-use crate::dns::DnsResolutionInfo;
 use crate::{dns, IpAddrType, VsockProxyResult};
 
 const BUFF_SIZE: usize = 8192;
@@ -43,7 +43,7 @@ pub fn check_allowlist(
 
         // Obtain the remote server's IP address.
         let dns_result = dns::resolve_single(remote_host, ip_addr_type)?;
-        let remote_addr = dns_result.ip_addr();
+        let remote_addr = dns_result.ip;
 
         for raw_service in services {
             let addr = raw_service["address"].as_str().ok_or("No address field")?;
@@ -69,7 +69,7 @@ pub fn check_allowlist(
             let remote_addr_matched = rresults
                 .into_iter()
                 .flatten()
-                .find(|rresult| rresult.ip_addr() == remote_addr)
+                .find(|rresult| rresult.ip == remote_addr)
                 .map(|_| remote_addr);
 
             match remote_addr_matched {
@@ -89,8 +89,10 @@ pub fn check_allowlist(
 pub struct Proxy {
     local_port: u32,
     remote_host: String,
+    remote_addr: Option<IpAddr>,
     remote_port: u16,
-    dns_resolution_info: Option<DnsResolutionInfo>,
+    dns_resolve_date: Option<DateTime<Utc>>,
+    dns_refresh_interval: Option<Duration>,
     pool: ThreadPool,
     sock_type: SockType,
     ip_addr_type: IpAddrType,
@@ -106,13 +108,17 @@ impl Proxy {
     ) -> VsockProxyResult<Self> {
         let pool = ThreadPool::new(num_workers);
         let sock_type = SockType::Stream;
-        let dns_resolution_info: Option<DnsResolutionInfo> = None;
+        let remote_addr: Option<IpAddr> = None;
+        let dns_resolve_date: Option<DateTime<Utc>> = None;
+        let dns_refresh_interval: Option<Duration> = None;
 
         Ok(Proxy {
             local_port,
             remote_host,
+            remote_addr,
             remote_port,
-            dns_resolution_info,
+            dns_resolve_date,
+            dns_refresh_interval,
             pool,
             sock_type,
             ip_addr_type,
@@ -139,31 +145,28 @@ impl Proxy {
             .map_err(|_| "Could not accept connection")?;
         info!("Accepted connection on {:?}", client_addr);
 
-        let dns_needs_resolution = self
-            .dns_resolution_info
-            .map_or(true, |info| info.is_expired());
+        let needs_resolve =
+            |d: DateTime<Utc>, i: Duration| (Utc::now() - d + Duration::seconds(2)) > i;
 
-        let remote_addr = if dns_needs_resolution {
+        if self.dns_resolve_date.is_none()
+            || needs_resolve(
+                self.dns_resolve_date.unwrap(),
+                self.dns_refresh_interval.unwrap(),
+            )
+        {
             info!("Resolving hostname: {}.", self.remote_host);
-
-            let dns_resolution = dns::resolve_single(&self.remote_host, self.ip_addr_type)?;
+            let result = dns::resolve_single(&self.remote_host, self.ip_addr_type)?;
+            self.dns_resolve_date = Some(Utc::now());
+            self.dns_refresh_interval = Some(Duration::seconds(result.ttl as i64));
+            self.remote_addr = Some(result.ip);
 
             info!(
                 "Using IP \"{:?}\" for the given server \"{}\". (TTL: {} secs)",
-                dns_resolution.ip_addr(),
-                self.remote_host,
-                dns_resolution.ttl().num_seconds()
+                result.ip, self.remote_host, result.ttl
             );
+        }
 
-            self.dns_resolution_info = Some(dns_resolution);
-            dns_resolution.ip_addr()
-        } else {
-            self.dns_resolution_info
-                .ok_or("DNS resolution failed!")?
-                .ip_addr()
-        };
-
-        let sockaddr = SocketAddr::new(remote_addr, self.remote_port);
+        let sockaddr = SocketAddr::new(self.remote_addr.unwrap(), self.remote_port);
         let sock_type = self.sock_type;
         self.pool.execute(move || {
             let mut server = match sock_type {

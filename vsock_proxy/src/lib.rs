@@ -18,9 +18,9 @@ pub enum IpAddrType {
 
 pub struct DnsResolveResult {
     ///Resolved address
-    pub ip: IpAddr,
+    ip: IpAddr,
     ///DNS TTL value
-    pub ttl: u32
+    ttl: u32
 }
 
 /// The most common result type provided by VsockProxy operations.

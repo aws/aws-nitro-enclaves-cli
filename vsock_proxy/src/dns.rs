@@ -1,18 +1,53 @@
 // Copyright 2019-2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 #![deny(warnings)]
 
-/// Contains code for Proxy, a library used for translating vsock traffic to
-/// TCP traffic
-///
+use std::net::IpAddr;
+
+use chrono::{DateTime, Duration, Utc};
 use hickory_resolver::config::*;
 use hickory_resolver::Resolver;
 use idna::domain_to_ascii;
 
-use crate::{DnsResolveResult, IpAddrType, VsockProxyResult};
+use crate::{IpAddrType, VsockProxyResult};
+
+/// `DnsResolutionInfo` represents DNS resolution information, including the resolved
+/// IP address, TTL value and last resolution time.
+#[derive(Copy, Clone, Debug)]
+pub struct DnsResolutionInfo {
+    /// The IP address that the hostname was resolved to.
+    ip_addr: IpAddr,
+    /// The configured duration after which the DNS resolution should be refreshed.
+    ttl: Duration,
+    /// The timestamp representing the last time the DNS resolution was performed.
+    last_dns_resolution_time: DateTime<Utc>,
+}
+
+impl DnsResolutionInfo {
+    pub fn is_expired(&self) -> bool {
+        Utc::now() > self.last_dns_resolution_time + self.ttl
+    }
+
+    fn new(new_ip_addr: IpAddr, new_ttl: Duration) -> Self {
+        DnsResolutionInfo {
+            ip_addr: new_ip_addr,
+            ttl: new_ttl,
+            last_dns_resolution_time: Utc::now(),
+        }
+    }
+
+    pub fn ip_addr(&self) -> IpAddr {
+        self.ip_addr
+    }
+
+    pub fn ttl(&self) -> Duration {
+        self.ttl
+    }
+}
 
 /// Resolve a DNS name (IDNA format) into multiple IP addresses (v4 or v6)
-pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<DnsResolveResult>> {
+pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<DnsResolutionInfo>> {
     // IDNA parsing
     let addr = domain_to_ascii(addr).map_err(|_| "Could not parse domain name")?;
 
@@ -21,7 +56,7 @@ pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<Dns
     let resolver = Resolver::new(ResolverConfig::default(), ResolverOpts::default())
         .map_err(|_| "Error while initializing DNS resolver!")?;
 
-    let rresults: Vec<DnsResolveResult> = resolver
+    let rresults: Vec<DnsResolutionInfo> = resolver
         .lookup_ip(addr)
         .map_err(|_| "DNS lookup failed!")?
         .as_lookup()
@@ -29,9 +64,9 @@ pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<Dns
         .iter()
         .filter_map(|record| {
             if let Some(rdata) = record.data() {
-                if let Some(ip) = rdata.ip_addr() {
-                    let ttl = record.ttl();
-                    return Some(DnsResolveResult { ip, ttl });
+                if let Some(ip_addr) = rdata.ip_addr() {
+                    let ttl = Duration::seconds(record.ttl() as i64);
+                    return Some(DnsResolutionInfo::new(ip_addr, ttl));
                 }
             }
             None
@@ -48,8 +83,9 @@ pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<Dns
     }
 
     //Partition the resolution results into groups that use IPv4 or IPv6 addresses.
-    let (rresults_with_ipv4, rresults_with_ipv6): (Vec<_>, Vec<_>) =
-        rresults.into_iter().partition(|result| result.ip.is_ipv4());
+    let (rresults_with_ipv4, rresults_with_ipv6): (Vec<_>, Vec<_>) = rresults
+        .into_iter()
+        .partition(|result| result.ip_addr().is_ipv4());
 
     if IpAddrType::IPAddrV4Only == ip_addr_type && !rresults_with_ipv4.is_empty() {
         Ok(rresults_with_ipv4)
@@ -61,7 +97,7 @@ pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<Dns
 }
 
 /// Resolve a DNS name (IDNA format) into a single address with a TTL value
-pub fn resolve_single(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<DnsResolveResult> {
+pub fn resolve_single(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<DnsResolutionInfo> {
     let rresults = resolve(addr, ip_addr_type)?;
     // Return the first resolved IP address and its TTL value.
     rresults
@@ -127,14 +163,14 @@ mod tests {
     fn test_resolve_ipv4_only() {
         let domain = unsafe { IPV4_ONLY_TEST_DOMAIN };
         let rresults = resolve(domain, IpAddrType::IPAddrV4Only).unwrap();
-        assert!(rresults.iter().all(|item| item.ip.is_ipv4()));
+        assert!(rresults.iter().all(|item| item.ip_addr().is_ipv4()));
     }
 
     #[test]
     fn test_resolve_ipv6_only() {
         let domain = unsafe { IPV6_ONLY_TEST_DOMAIN };
         let rresults = resolve(domain, IpAddrType::IPAddrV6Only).unwrap();
-        assert!(rresults.iter().all(|item| item.ip.is_ipv6()));
+        assert!(rresults.iter().all(|item| item.ip_addr().is_ipv6()));
     }
 
     #[test]
@@ -148,7 +184,7 @@ mod tests {
     fn test_resolve_single_address() {
         let domain = unsafe { IPV4_ONLY_TEST_DOMAIN };
         let rresult = resolve_single(domain, IpAddrType::IPAddrMixed).unwrap();
-        assert!(rresult.ip.is_ipv4());
-        assert!(rresult.ttl != 0);
+        assert!(rresult.ip_addr().is_ipv4());
+        assert!(rresult.ttl != Duration::seconds(0));
     }
 }

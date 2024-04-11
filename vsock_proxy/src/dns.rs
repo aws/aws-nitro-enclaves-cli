@@ -9,7 +9,7 @@ use dns_lookup::lookup_host;
 use idna::domain_to_ascii;
 use std::net::IpAddr;
 
-use crate::{DnsResolveResult, IpAddrType, VsockProxyResult};
+use crate::{IpAddrType, VsockProxyResult, DnsResolveResult};
 
 /// Resolve a DNS name (IDNA format) into multiple IP addresses (v4 or v6)
 pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<IpAddr>> {
@@ -55,5 +55,8 @@ pub fn resolve_single(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<
     let ip = *addrs.first().ok_or("No IP address found")?;
     let ttl = 60; // IMPORTANT TODO: Obtain this value dynamically
 
-    Ok(DnsResolveResult { ip, ttl })
+    Ok(DnsResolveResult {
+        ip,
+        ttl
+    })   
 }

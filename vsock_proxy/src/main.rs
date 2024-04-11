@@ -10,10 +10,7 @@ use clap::{App, AppSettings, Arg};
 use env_logger::init;
 use log::info;
 
-use vsock_proxy::{
-    proxy::{check_allowlist, Proxy},
-    IpAddrType, VsockProxyResult,
-};
+use vsock_proxy::{proxy::{check_allowlist, Proxy}, IpAddrType, VsockProxyResult};
 
 fn main() -> VsockProxyResult<()> {
     init();
@@ -80,7 +77,7 @@ fn main() -> VsockProxyResult<()> {
 
     let ipv4_only = matches.is_present("ipv4");
     let ipv6_only = matches.is_present("ipv6");
-    let ip_addr_type: IpAddrType = match (ipv4_only, ipv6_only) {
+    let ip_addr_type : IpAddrType = match (ipv4_only, ipv6_only) {
         (true, false) => IpAddrType::IPAddrV4Only,
         (false, true) => IpAddrType::IPAddrV6Only,
         _ => IpAddrType::IPAddrMixed,
@@ -122,7 +119,7 @@ fn main() -> VsockProxyResult<()> {
         remote_host,
         remote_port,
         num_workers,
-        ip_addr_type,
+        ip_addr_type
     )
     .map_err(|err| format!("Could not create proxy: {}", err))?;
 

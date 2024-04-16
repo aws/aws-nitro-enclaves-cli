@@ -1,4 +1,4 @@
-# Copyright 2020-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2020-2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 %define ne_name nitro_enclaves
@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.2.3
+Version:    1.3.0
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,45 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Tue Apr 16 2024 Erdem Meydanli <meydanli@amazon.com> - 1.3.0-0
++ This release focuses on resolving two critical issues:
+the vsock-proxy DNS lookup limitation (#553) and the compatibility
+problem with Docker versions 25 and later (#591). Furthermore, it
+updates several important crate dependencies to their latest versions.
+- cargo: Update cargo.lock to eliminate build failures
+- build(deps): bump base64 from 0.21.4 to 0.22.0
+- build(deps): bump tokio from 1.28.2 to 1.32.0
+- fix(deps): downgrade crate versions due to compatibility issues
+- version: Release vsock_proxy v1.0.0
+- vsock_proxy: Introduce DnsResolutionInfo type
+- vsock_proxy: add tests
+- vsock_proxy: change function's signature
+- clippy/cargo: resolve build errors and warnings
+- vsock_proxy: Perform DNS resolution after the expiration of the TTL
+- vsock_proxy: Handle allowlisting out of Proxy
+- vsock_proxy: rename starter.rs
+- vsock_proxy: Refactor DNS-related functionality
+- vsock_proxy: refactor
+- cargo: Upgrade num-derive to v0.4
+- enclave_build: Extract stream output handling
+- enclave_build: Refactor docker.rs for consistent Runtime creation
+- enclave_build: Extract build_tarball method
+- enclave_build: Extract parse_docker_host method
+- enclave_build: Extract inspect method
+- enclave_build: Add more tests
+- fix: Switch to bollard for docker API interaction
+- ci: use cargo-about v0.5.0
+- ci: disable automatic license file generation
+- enclave_build: fix clippy failure
+- build(deps): bump inotify from 0.10.0 to 0.10.2
+- build(deps): bump dns-lookup from 1.0.8 to 2.0.3
+- vsock_proxy: set log level to warn
+- github: update the action version
+- clippy: eliminate warnings & errors
+- rust: msrv version bump
+- build(deps): bump mio from 0.8.6 to 0.8.11
+- docs: Correct image signing manual
+
 * Wed Jan 31 2024 Costin Lupu <lvpv@amazon.com> - 1.2.3-0
 - Dependencies updates: base64 bindgen chrono env_logger flexi_logger futures
   idna inotify libc log nix num-traits openssl page_size rand rustix serde

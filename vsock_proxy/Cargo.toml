@@ -17,7 +17,7 @@ log = "0.4"
 nix = "0.26"
 yaml-rust = "0.4.3"
 threadpool = "1.7.1"
-vsock = "0.3"
+vsock = "0.5"
 
 [dev-dependencies]
 ctor = "0.2.7"

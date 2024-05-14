@@ -263,7 +263,7 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
     };
 
     // Check if signature section is present
-    if measurements.get(&"PCR8".to_string()).is_some() {
+    if measurements.contains_key("PCR8") {
         let cert_info = eif_reader
             .get_certificate_info(measurements)
             .map_err(|err| {

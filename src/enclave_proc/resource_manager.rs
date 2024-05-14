@@ -169,14 +169,13 @@ pub struct EnclaveManager {
     enclave_handle: Arc<Mutex<EnclaveHandle>>,
 }
 
-impl ToString for EnclaveState {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for EnclaveState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EnclaveState::Empty => "EMPTY",
-            EnclaveState::Running => "RUNNING",
-            EnclaveState::Terminating => "TERMINATING",
+            EnclaveState::Empty => write!(f, "EMPTY"),
+            EnclaveState::Running => write!(f, "RUNNING"),
+            EnclaveState::Terminating => write!(f, "TERMINATING"),
         }
-        .to_string()
     }
 }
 

@@ -39,9 +39,9 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     mod sample_docker_pcrs {
         /// PCR0
-        pub const IMAGE_PCR: &str = "7f3287dd1c4dbc49513abfaabc7f6afe79ab8269743c0c4ee55bb9e92d4f0a36f0cae7c0356d0bfec78b59b4d20c689c";
+        pub const IMAGE_PCR: &str = "6be47f8386175bc4853c3b821f9e6fa6f65f8bd73492d1df99ba9dd0d734e11c8941e7415d9167f7d0ea6991790566a7";
         /// PCR1
-        pub const KERNEL_PCR: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f";
+        pub const KERNEL_PCR: &str = "0343b056cd8485ca7890ddd833476d78460aed2aa161548e4e26bedf321726696257d623e8805f3f605946b3d8b0c6aa";
         /// PCR2
         pub const APP_PCR: &str = "dd61366a5424eea46f60c4e9d59e6c645a46420ccf962550ee1f3c109d230f88ec23667617aeaac425a1f50fe8e384d7";
     }
@@ -49,9 +49,9 @@ mod tests {
     #[cfg(target_arch = "aarch64")]
     mod sample_docker_pcrs {
         /// PCR0
-        pub const IMAGE_PCR: &str = "b32a774b09fff4324a6405dacf3f5aa462a75e554e3a563ee64708abd585456bb480fdf70b2e2c2ab9ec205717bc690e";
+        pub const IMAGE_PCR: &str = "fb36ba25ea45c9ce31af266023f8ce55485c6f37c3ad95b08dd32600da7606e5f55ffb050a2ad4732cfc48f5ef9c0e84";
         /// PCR1
-        pub const KERNEL_PCR: &str = "5d3938eb05288e20a981038b1861062ff4174884968a39aee5982b312894e60561883576cc7381d1a7d05b809936bd16";
+        pub const KERNEL_PCR: &str = "745004eab9a0fb4a67973b261c6e7fa5418dc870292927591574385649338e54686cdeb659f3c6c2e72ba11aba2158a8";
         /// PCR2
         pub const APP_PCR: &str = "9397173aa14e47fe087e8aeb63928a233db048e290830de6ce2041f4580f83b599c48432467601bed8a4883e9d94ff10";
     }

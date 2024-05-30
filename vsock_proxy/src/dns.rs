@@ -6,7 +6,6 @@
 use std::net::IpAddr;
 
 use chrono::{DateTime, Duration, Utc};
-use hickory_resolver::config::*;
 use hickory_resolver::Resolver;
 use idna::domain_to_ascii;
 
@@ -51,11 +50,12 @@ pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<Dns
     // IDNA parsing
     let addr = domain_to_ascii(addr).map_err(|_| "Could not parse domain name")?;
 
+    // Initialize a DNS resolver using the system's configured nameservers.
+    let resolver = Resolver::from_system_conf()
+        .map_err(|_| "Error while initializing DNS resolver!".to_string())?;
+
     // DNS lookup
     // It results in a vector of IPs (V4 and V6)
-    let resolver = Resolver::new(ResolverConfig::default(), ResolverOpts::default())
-        .map_err(|_| "Error while initializing DNS resolver!")?;
-
     let rresults: Vec<DnsResolutionInfo> = resolver
         .lookup_ip(addr)
         .map_err(|_| "DNS lookup failed!")?

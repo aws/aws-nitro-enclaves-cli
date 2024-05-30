@@ -12,6 +12,7 @@ struct BootstrapRamfsTemplate {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CustomerRamfsTemplate {
+    prefix: String,
     init: Vec<String>,
     files: (
         DirTemplate,
@@ -102,6 +103,7 @@ impl YamlGenerator {
 
     pub fn get_customer_ramfs(&self) -> Result<NamedTempFile, YamlGeneratorError> {
         let ramfs = CustomerRamfsTemplate {
+            prefix: "rootfs/".to_string(),
             init: vec![self.docker_image.clone()],
             // Each directory must stay under rootfs, as expected by init
             files: (
@@ -204,6 +206,7 @@ mod tests {
         assert_eq!(
             customer_data,
             "---\
+             \nprefix: rootfs/\
              \ninit:\
              \n  - docker_image\
              \nfiles:\

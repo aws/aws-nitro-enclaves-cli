@@ -225,10 +225,11 @@ impl<'a> Docker2Eif<'a> {
         let output = Command::new(&self.linuxkit_path)
             .args([
                 "build",
-                "-name",
+                "--name",
                 &bootstrap_ramfs,
-                "-format",
-                "kernel+initrd",
+                "--format",
+                "kernel+initrd-nogz",
+                "--no-sbom",
                 ramfs_config_file.path().to_str().unwrap(),
             ])
             .output()
@@ -245,13 +246,12 @@ impl<'a> Docker2Eif<'a> {
         let output = Command::new(&self.linuxkit_path)
             .args([
                 "build",
-                "-docker",
-                "-name",
+                "--docker",
+                "--name",
                 &customer_ramfs,
-                "-format",
-                "kernel+initrd",
-                "-prefix",
-                "rootfs/",
+                "--format",
+                "kernel+initrd-nogz",
+                "--no-sbom",
                 ramfs_with_rootfs_config_file.path().to_str().unwrap(),
             ])
             .output()

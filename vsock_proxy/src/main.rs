@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2019-2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(warnings)]
 
@@ -6,7 +6,7 @@
 /// Example of usage:
 /// vsock-proxy 8000 127.0.0.1 9000
 ///
-use clap::{App, AppSettings, Arg};
+use clap::{App, Arg};
 use env_logger::init;
 use log::info;
 
@@ -20,7 +20,7 @@ fn main() -> VsockProxyResult<()> {
 
     let matches = App::new("Vsock-TCP proxy")
         .about("Vsock-TCP proxy")
-        .setting(AppSettings::DisableVersion)
+        .version(env!("CARGO_PKG_VERSION"))
         .arg(
             Arg::with_name("ipv4")
                 .short('4')

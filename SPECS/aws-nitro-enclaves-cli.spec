@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.3.0
+Version:    1.3.1
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,12 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Mon Jun 3 2024 Erdem Meydanli <meydanli@amazon.com> - 1.3.1-0
+- vsock-proxy: Bump version to 1.0.1
+- vsock_proxy: Use system-configured nameservers for DNS resolution
+- Update init blob to support user namespaces
+- clippy: resolve build errors for Rust 1.78
+
 * Tue Apr 16 2024 Erdem Meydanli <meydanli@amazon.com> - 1.3.0-0
 + This release focuses on resolving two critical issues:
 the vsock-proxy DNS lookup limitation (#553) and the compatibility

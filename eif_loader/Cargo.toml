@@ -9,7 +9,7 @@ rust-version = "1.68"
 
 [dependencies]
 aws-nitro-enclaves-image-format = "0.2"
-nix = "0.26"
+nix = "0.28"
 libc = "0.2"
 vsock = "0.3"
 

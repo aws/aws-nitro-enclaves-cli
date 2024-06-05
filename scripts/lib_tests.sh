@@ -13,6 +13,33 @@ export NITRO_CLI_ARTIFACTS="$SCRIPTDIR/../build"
 ARCH="$(uname -m)"
 AWS_ACCOUNT_ID=667861386598
 
+check_dependencies() {
+	# check we are root
+	if [ "${EUID}" -ne 0 ]
+	then
+		echo "The testing requires the capabilities to load and unload kernel modules. Please run as root."
+		exit 1
+	fi
+
+	# Check that docker is available
+	if ! type docker; then
+		echo "Could not find docker installed. Please ensure you have docker installed and reachable through your PATH."
+		exit 1
+	fi
+
+	# ...and usable
+	if ! docker ps; then
+		echo "Docker seems to be not functional. Please ensure docker can be used by $USER."
+		exit 1
+	fi
+
+	# The testing relies on pytest-3 for orchestration. Ensure we have that installed.
+	if ! type pytest-3; then
+		echo "Could not find pytest-3 installed. Please ensure you have pytest-3 installed and reachable through your PATH."
+		exit 1
+	fi
+}
+
 test_start() {
 	TEST_SUITES_TOTAL=$((TEST_SUITES_TOTAL + 1))
 }

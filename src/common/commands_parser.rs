@@ -403,7 +403,7 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
             ));
         }
 
-        if enclave_cid == u32::max_value() as u64 {
+        if enclave_cid == u32::MAX as u64 {
             return Err(new_nitro_cli_failure!(
                 &format!(
                     "CID {} is a well-known CID, not to be used for enclaves",
@@ -425,7 +425,7 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
         }
 
         // 64-bit CIDs are not yet supported for the vsock device.
-        if enclave_cid > u32::max_value() as u64 {
+        if enclave_cid > u32::MAX as u64 {
             return Err(new_nitro_cli_failure!(
                 &format!(
                     "CID {} is higher than the maximum supported (u32 max) for a vsock device",

@@ -310,9 +310,9 @@ install-tools:
 
 .PHONY: install
 install: install-tools nitro_enclaves
-	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves
+	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(shell uname -r)/extra/nitro_enclaves
 	$(INSTALL) -D -m 0755 drivers/virt/nitro_enclaves/nitro_enclaves.ko \
-               ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves/nitro_enclaves.ko
+               ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(shell uname -r)/extra/nitro_enclaves/nitro_enclaves.ko
 	$(INSTALL) -D -m 0644 bootstrap/env.sh ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-env.sh
 	$(INSTALL) -D -m 0755 bootstrap/nitro-cli-config ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-config
 	sed -i "2 a NITRO_CLI_INSTALL_DIR=\$${NITRO_CLI_INSTALL_DIR:-$$(readlink -f ${NITRO_CLI_INSTALL_DIR})}" \
@@ -330,7 +330,7 @@ uninstall:
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/vsock-proxy.yaml
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/allocator.yaml
-	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(uname -r)/extra/nitro_enclaves
+	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(shell uname -r)/extra/nitro_enclaves
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-env.sh
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-config
 

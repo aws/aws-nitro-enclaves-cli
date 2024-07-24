@@ -23,7 +23,7 @@ driver-bindings = { path = "./driver-bindings" }
 aws-nitro-enclaves-image-format = "0.2"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
-openssl = "0.10"
+openssl = "0.10.66"
 vsock = "0.3"
 vmm-sys-util = "0.12.1"
 sha2 = "0.9.5"

@@ -108,6 +108,8 @@ pub struct BuildEnclavesArgs {
     pub signing_certificate: Option<String>,
     /// The path to the private key for signed enclaves.
     pub private_key: Option<String>,
+    /// The path to the signature for signed enclaves.
+    pub signature: Option<String>,
     /// The name of the enclave image.
     pub img_name: Option<String>,
     /// The version of the enclave image.
@@ -121,16 +123,24 @@ impl BuildEnclavesArgs {
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
         let signing_certificate = parse_signing_certificate(args);
         let private_key = parse_private_key(args);
+        let signature = parse_signature(args);
 
-        match (&signing_certificate, &private_key) {
-            (Some(_), None) => {
+        match (&signing_certificate, &private_key, &signature) {
+            (Some(_), None, None) => {
                 return Err(new_nitro_cli_failure!(
-                    "`private-key` argument not found",
+                    "`private-key` or `signature` argument not found",
                     NitroCliErrorEnum::MissingArgument
                 )
-                .add_info(vec!["private-key"]))
+                .add_info(vec!["private-key", "signature"]))
             }
-            (None, Some(_)) => {
+            (None, Some(_), _) => {
+                return Err(new_nitro_cli_failure!(
+                    "`signing-certificate` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["signing-certificate"]))
+            }
+            (None, _, Some(_)) => {
                 return Err(new_nitro_cli_failure!(
                     "`signing-certificate` argument not found",
                     NitroCliErrorEnum::MissingArgument
@@ -158,9 +168,84 @@ impl BuildEnclavesArgs {
             })?,
             signing_certificate,
             private_key,
+            signature,
             img_name: parse_image_name(args),
             img_version: parse_image_version(args),
             metadata: parse_metadata(args),
+        })
+    }
+}
+
+/// The arguments used by the `measure-enclave` command.
+#[derive(Debug, Clone)]
+pub struct MeasureEnclavesArgs {
+    /// The URI to the Docker image.
+    pub docker_uri: String,
+    /// The directory containing the Docker image.
+    pub docker_dir: Option<String>,
+    /// The name of the enclave image.
+    pub img_name: Option<String>,
+    /// The version of the enclave image.
+    pub img_version: Option<String>,
+    /// The path to custom metadata JSON file
+    pub metadata: Option<String>,
+}
+
+impl MeasureEnclavesArgs {
+    /// Construct a new `MeasureEnclavesArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        Ok(MeasureEnclavesArgs {
+            docker_uri: parse_docker_tag(args).ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`docker-uri` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["docker-uri"])
+            })?,
+            docker_dir: parse_docker_dir(args),
+            img_name: parse_image_name(args),
+            img_version: parse_image_version(args),
+            metadata: parse_metadata(args),
+        })
+    }
+}
+
+/// The arguments used by the `sign-pcr` command.
+#[derive(Debug, Clone)]
+pub struct SignPcrsArgs {
+    /// PCR0 in hex format
+    pub pcr0: String,
+    /// The path to the private key for signed enclaves.
+    pub private_key: String,
+    /// The path where the signature file will be written to.
+    pub output: String,
+}
+
+impl SignPcrsArgs {
+    /// Construct a new `BuildEnclavesArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        Ok(SignPcrsArgs {
+            pcr0: parse_pcr0(args).ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`pcr0` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["pcr0"])
+            })?,
+            private_key: parse_private_key(args).ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`private-key` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["private-key"])
+            })?,
+            output: parse_output(args).ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`output` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+                .add_info(vec!["output"])
+            })?,
         })
     }
 }
@@ -548,6 +633,14 @@ fn parse_signing_certificate(args: &ArgMatches) -> Option<String> {
 
 fn parse_private_key(args: &ArgMatches) -> Option<String> {
     args.value_of("private-key").map(|val| val.to_string())
+}
+
+fn parse_signature(args: &ArgMatches) -> Option<String> {
+    args.value_of("signature").map(|val| val.to_string())
+}
+
+fn parse_pcr0(args: &ArgMatches) -> Option<String> {
+    args.value_of("pcr0").map(|val| val.to_string())
 }
 
 fn parse_image_name(args: &ArgMatches) -> Option<String> {

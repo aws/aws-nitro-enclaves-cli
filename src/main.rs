@@ -13,8 +13,8 @@ use log::info;
 use std::os::unix::net::UnixStream;
 
 use nitro_cli::common::commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, DescribeEnclavesArgs, EmptyArgs, ExplainArgs, PcrArgs,
-    RunEnclavesArgs, TerminateEnclavesArgs,
+    BuildEnclavesArgs, ConsoleArgs, DescribeEnclavesArgs, EmptyArgs, ExplainArgs,
+    MeasureEnclavesArgs, PcrArgs, RunEnclavesArgs, SignPcrsArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::common::document_errors::explain_error;
 use nitro_cli::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
@@ -29,7 +29,8 @@ use nitro_cli::enclave_proc_comm::{
 };
 use nitro_cli::{
     build_enclaves, console_enclaves, create_app, describe_eif, get_all_enclave_names,
-    get_file_pcr, new_enclave_name, new_nitro_cli_failure, terminate_all_enclaves,
+    get_file_pcr, measure_enclaves, new_enclave_name, new_nitro_cli_failure, sign_pcrs,
+    terminate_all_enclaves,
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
@@ -38,6 +39,8 @@ const DESCRIBE_EIF_STR: &str = "Describe EIF";
 const TERMINATE_ENCLAVE_STR: &str = "Terminate Enclave";
 const TERMINATE_ALL_ENCLAVES_STR: &str = "Terminate All Enclaves";
 const BUILD_ENCLAVE_STR: &str = "Build Enclave";
+const MEASURE_ENCLAVE_STR: &str = "Measure Enclave";
+const SIGN_PCR_STR: &str = "Sign PCR";
 const ENCLAVE_CONSOLE_STR: &str = "Enclave Console";
 const EXPLAIN_ERR_STR: &str = "Explain Error";
 const NEW_NAME_STR: &str = "New Enclave Name";
@@ -224,6 +227,36 @@ fn main() {
                 .map_err(|e| {
                     e.add_subaction("Failed to build enclave".to_string())
                         .set_action(BUILD_ENCLAVE_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+        }
+        Some(("measure-enclave", args)) => {
+            let measure_args = MeasureEnclavesArgs::new_with(args)
+                .map_err(|e| {
+                    e.add_subaction("Failed to construct MeasureEnclave arguments".to_string())
+                        .set_action(MEASURE_ENCLAVE_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+
+            measure_enclaves(measure_args)
+                .map_err(|e| {
+                    e.add_subaction("Failed to measure enclave".to_string())
+                        .set_action(MEASURE_ENCLAVE_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+        }
+        Some(("sign-pcr0", args)) => {
+            let sign_args = SignPcrsArgs::new_with(args)
+                .map_err(|e| {
+                    e.add_subaction("Failed to construct SignPcr0 arguments".to_string())
+                        .set_action(SIGN_PCR_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+
+            sign_pcrs(sign_args)
+                .map_err(|e| {
+                    e.add_subaction("Failed to sign PCR".to_string())
+                        .set_action(SIGN_PCR_STR.to_string())
                 })
                 .ok_or_exit_with_errno(None);
         }

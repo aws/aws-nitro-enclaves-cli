@@ -87,6 +87,12 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("signature")
+                .long("signature")
+                .help("Specify signature in hex format")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("build")
                 .short('b')
                 .long("build")
@@ -136,6 +142,7 @@ fn main() {
     let private_key = matches
         .value_of("private_certificate")
         .map(|val| val.to_string());
+    let signature = matches.value_of("signature").map(|val| val.to_string());
     let img_name = matches.value_of("image_name").map(|val| val.to_string());
     let img_version = matches.value_of("image_version").map(|val| val.to_string());
     let metadata = matches.value_of("metadata").map(|val| val.to_string());
@@ -155,10 +162,11 @@ fn main() {
         kernel_img_path.to_string(),
         cmdline.to_string(),
         linuxkit_path.to_string(),
-        &mut output,
+        Some(&mut output),
         ".".to_string(),
         &signing_certificate,
         &private_key,
+        &signature,
         img_name,
         img_version,
         metadata,

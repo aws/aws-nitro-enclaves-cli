@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.3.2
+Version:    1.3.3
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,10 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Thu Sep 5 2024 Leonard Foerster <foersleo@amazon.com> - 1.3.3-0
+- blobs: Update linuxkit to version 1.5.0
+- Update sources for 1.3.2 release
+
 * Wed Jul 24 2024 Eugene Koira <eugkoira@amazon.com> - 1.3.2-0
 - nitro-cli: Update enclave boot timeout based on allocated memory
 - clippy: resolve build errors for Rust 1.79

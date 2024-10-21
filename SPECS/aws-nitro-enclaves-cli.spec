@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.3.3
+Version:    1.3.4
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,9 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Mon Oct 21 2024 Leonard Foerster <foersleo@amazon.com> - 1.3.4-0
+- blobs: Update linuxkit to version 1.5.2
+
 * Thu Sep 5 2024 Leonard Foerster <foersleo@amazon.com> - 1.3.3-0
 - blobs: Update linuxkit to version 1.5.0
 - Update sources for 1.3.2 release

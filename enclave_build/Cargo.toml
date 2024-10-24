@@ -8,7 +8,7 @@ rust-version = "1.68"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bollard = "0.16.0"
+bollard = { version = "0.16.0", features = ["ssl"] }
 clap = "3.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"

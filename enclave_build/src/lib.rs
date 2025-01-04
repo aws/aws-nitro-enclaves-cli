@@ -5,6 +5,7 @@
 use std::fs::File;
 use std::path::Path;
 use std::process::Command;
+use std::str;
 
 mod docker;
 mod utils;
@@ -12,7 +13,9 @@ mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
 use aws_nitro_enclaves_image_format::utils::identity::parse_custom_metadata;
-use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignEnclaveInfo};
+use aws_nitro_enclaves_image_format::utils::{
+    EifBuilder, PcrSigner, PrivateKeyPcrSigner, SignaturePcrSigner,
+};
 use docker::DockerUtil;
 use serde_json::json;
 use sha2::Digest;
@@ -30,8 +33,8 @@ pub struct Docker2Eif<'a> {
     cmdline: String,
     linuxkit_path: String,
     artifacts_prefix: String,
-    output: &'a mut File,
-    sign_info: Option<SignEnclaveInfo>,
+    output: Option<&'a mut File>,
+    sign_info: Option<Box<dyn PcrSigner>>,
     img_name: Option<String>,
     img_version: Option<String>,
     metadata_path: Option<String>,
@@ -66,10 +69,11 @@ impl<'a> Docker2Eif<'a> {
         kernel_img_path: String,
         cmdline: String,
         linuxkit_path: String,
-        output: &'a mut File,
+        output: Option<&'a mut File>,
         artifacts_prefix: String,
         certificate_path: &Option<String>,
         key_path: &Option<String>,
+        sig_path: &Option<String>,
         img_name: Option<String>,
         img_version: Option<String>,
         metadata_path: Option<String>,
@@ -98,12 +102,16 @@ impl<'a> Docker2Eif<'a> {
             }
         }
 
-        let sign_info = match (certificate_path, key_path) {
-            (None, None) => None,
-            (Some(cert_path), Some(key_path)) => Some(
-                SignEnclaveInfo::new(cert_path, key_path)
+        let sign_info: Option<Box<dyn PcrSigner>> = match (certificate_path, key_path, sig_path) {
+            (None, None, None) => None,
+            (Some(cert_path), Some(key_path), None) => Some(Box::new(
+                PrivateKeyPcrSigner::new(cert_path, key_path)
                     .map_err(|err| Docker2EifError::SignImageError(format!("{err:?}")))?,
-            ),
+            )),
+            (Some(cert_path), None, Some(sig_path)) => Some(Box::new(
+                SignaturePcrSigner::new(cert_path, sig_path)
+                    .map_err(|err| Docker2EifError::SignImageError(format!("{err:?}")))?,
+            )),
             _ => return Err(Docker2EifError::SignArgsError),
         };
 
@@ -278,7 +286,7 @@ impl<'a> Docker2Eif<'a> {
         let mut build = EifBuilder::new(
             Path::new(&self.kernel_img_path),
             self.cmdline.clone(),
-            self.sign_info.clone(),
+            self.sign_info.take(),
             sha2::Sha384::new(),
             flags,
             self.generate_identity_info()?,
@@ -291,6 +299,9 @@ impl<'a> Docker2Eif<'a> {
         build.add_ramdisk(Path::new(&bootstrap_ramfs));
         build.add_ramdisk(Path::new(&customer_ramfs));
 
-        Ok(build.write_to(self.output))
+        match self.output.as_mut() {
+            Some(output_file) => Ok(build.write_to(output_file)),
+            None => Ok(build.get_measurements()),
+        }
     }
 }

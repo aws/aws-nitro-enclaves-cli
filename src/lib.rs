@@ -16,7 +16,9 @@ pub mod enclave_proc_comm;
 pub mod utils;
 
 use aws_nitro_enclaves_image_format::defs::eif_hasher::EifHasher;
+use aws_nitro_enclaves_image_format::defs::PcrInfo;
 use aws_nitro_enclaves_image_format::utils::eif_reader::EifReader;
+use aws_nitro_enclaves_image_format::utils::PcrCoseSign1;
 use aws_nitro_enclaves_image_format::{generate_build_info, utils::get_pcrs};
 use log::{debug, info};
 use sha2::{Digest, Sha384};
@@ -27,7 +29,9 @@ use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use common::commands_parser::{BuildEnclavesArgs, EmptyArgs, RunEnclavesArgs};
+use common::commands_parser::{
+    BuildEnclavesArgs, EmptyArgs, MeasureEnclavesArgs, RunEnclavesArgs, SignPcrsArgs,
+};
 use common::json_output::{
     EifDescribeInfo, EnclaveBuildInfo, EnclaveTerminateInfo, MetadataDescribeInfo,
 };
@@ -58,11 +62,36 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
         &args.output,
         &args.signing_certificate,
         &args.private_key,
+        &args.signature,
         &args.img_name,
         &args.img_version,
         &args.metadata,
     )
     .map_err(|e| e.add_subaction("Failed to build EIF from docker".to_string()))?;
+    Ok(())
+}
+
+/// Generate enclave measurements with the provided arguments.
+pub fn measure_enclaves(args: MeasureEnclavesArgs) -> NitroCliResult<()> {
+    debug!("measure_enclaves");
+    eprintln!("Start generating the Enclave Measurements...");
+    measure_from_docker(
+        &args.docker_uri,
+        &args.docker_dir,
+        &args.img_name,
+        &args.img_version,
+        &args.metadata,
+    )
+    .map_err(|e| e.add_subaction("Failed to build EIF from docker".to_string()))?;
+    Ok(())
+}
+
+/// Generate signature with the provided arguments.
+pub fn sign_pcrs(args: SignPcrsArgs) -> NitroCliResult<()> {
+    debug!("sign_pcrs");
+    eprintln!("Start generating the signature from PCR0 ...");
+    sign_from_pcr0(&args.pcr0, &args.private_key, &args.output)
+        .map_err(|e| e.add_subaction("Failed to generate signature from PCR0".to_string()))?;
     Ok(())
 }
 
@@ -73,6 +102,7 @@ pub fn build_from_docker(
     output_path: &str,
     signing_certificate: &Option<String>,
     private_key: &Option<String>,
+    signature: &Option<String>,
     img_name: &Option<String>,
     img_version: &Option<String>,
     metadata_path: &Option<String>,
@@ -132,10 +162,11 @@ pub fn build_from_docker(
         kernel_path,
         cmdline.trim().to_string(),
         format!("{}/linuxkit", blobs_path),
-        &mut file_output,
+        Some(&mut file_output),
         artifacts_path()?,
         signing_certificate,
         private_key,
+        signature,
         img_name.clone(),
         img_version.clone(),
         metadata_path.clone(),
@@ -183,6 +214,152 @@ pub fn build_from_docker(
     );
 
     Ok((file_output, measurements))
+}
+
+/// Generate enclave measurements from a Docker image.
+pub fn measure_from_docker(
+    docker_uri: &str,
+    docker_dir: &Option<String>,
+    img_name: &Option<String>,
+    img_version: &Option<String>,
+    metadata_path: &Option<String>,
+) -> NitroCliResult<BTreeMap<String, String>> {
+    let blobs_path =
+        blobs_path().map_err(|e| e.add_subaction("Failed to retrieve blobs path".to_string()))?;
+    let cmdline_file_path = format!("{}/cmdline", blobs_path);
+    let mut cmdline_file = File::open(cmdline_file_path.clone()).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Could not open kernel command line file: {:?}", e),
+            NitroCliErrorEnum::FileOperationFailure
+        )
+        .add_info(vec![&cmdline_file_path, "Open"])
+    })?;
+
+    let mut cmdline = String::new();
+    cmdline_file.read_to_string(&mut cmdline).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to read kernel command line: {:?}", e),
+            NitroCliErrorEnum::FileOperationFailure
+        )
+        .add_info(vec![&cmdline_file_path, "Read"])
+    })?;
+
+    let kernel_image_name = match std::env::consts::ARCH {
+        "aarch64" => "Image",
+        "x86_64" => "bzImage",
+        _ => "undefined",
+    };
+
+    let kernel_path = format!("{}/{}", blobs_path, kernel_image_name);
+    let build_info = generate_build_info!(&format!("{}.config", kernel_path)).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Could not generate build info: {:?}", e),
+            NitroCliErrorEnum::EifBuildingError
+        )
+    })?;
+
+    let mut docker2eif = enclave_build::Docker2Eif::new(
+        docker_uri.to_string(),
+        format!("{}/init", blobs_path),
+        format!("{}/nsm.ko", blobs_path),
+        kernel_path,
+        cmdline.trim().to_string(),
+        format!("{}/linuxkit", blobs_path),
+        None,
+        artifacts_path()?,
+        &None,
+        &None,
+        &None,
+        img_name.clone(),
+        img_version.clone(),
+        metadata_path.clone(),
+        build_info,
+    )
+    .map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Failed to create EIF image: {:?}", err),
+            NitroCliErrorEnum::EifBuildingError
+        )
+    })?;
+
+    if let Some(docker_dir) = docker_dir {
+        docker2eif
+            .build_docker_image(docker_dir.clone())
+            .map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to build docker image: {:?}", err),
+                    NitroCliErrorEnum::DockerImageBuildError
+                )
+            })?;
+    } else {
+        docker2eif.pull_docker_image().map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to pull docker image: {:?}", err),
+                NitroCliErrorEnum::DockerImagePullError
+            )
+        })?;
+    }
+    let measurements = docker2eif.create().map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Failed to create EIF image: {:?}", err),
+            NitroCliErrorEnum::EifBuildingError
+        )
+    })?;
+    eprintln!("Enclave Measurements successfully created.");
+
+    let info = EnclaveBuildInfo::new(measurements.clone());
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&info).map_err(|err| new_nitro_cli_failure!(
+            &format!("Failed to display EnclaveBuild data: {:?}", err),
+            NitroCliErrorEnum::SerdeError
+        ))?
+    );
+
+    Ok(measurements)
+}
+
+/// Generate signature from PCR0.
+pub fn sign_from_pcr0(pcr0: &str, key_path: &str, output_path: &str) -> NitroCliResult<()> {
+    let pcr_info = PcrInfo::new(
+        0,
+        hex::decode(pcr0).map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to decode PCR0: {:?}", err),
+                NitroCliErrorEnum::InvalidArgument
+            )
+        })?,
+    );
+    let pcr_cose_sign1 = PcrCoseSign1::new(key_path).map_err(|err| {
+        new_nitro_cli_failure!(
+            &format!("Failed to read private key: {:?}", err),
+            NitroCliErrorEnum::InvalidArgument
+        )
+    })?;
+    let mut file_output = OpenOptions::new()
+        .read(true)
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(output_path)
+        .map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Could not create output file: {:?}", e),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+            .add_info(vec![output_path, "Open"])
+        })?;
+
+    pcr_cose_sign1
+        .write_signature(&pcr_info, &mut file_output)
+        .map_err(|err| {
+            new_nitro_cli_failure!(
+                &format!("Failed to write signature to file: {:?}", err),
+                NitroCliErrorEnum::SignatureWriteOutputError
+            )
+        })?;
+    eprintln!("PCR0 signature successfully generated.");
+    Ok(())
 }
 
 /// Creates new enclave name
@@ -743,6 +920,12 @@ macro_rules! create_app {
                             .takes_value(true),
                     )
                     .arg(
+                        Arg::with_name("signature")
+                            .long("signature")
+                            .help("Local path to COSE_Sign1 signature.")
+                            .takes_value(true),
+                    )
+                    .arg(
                         Arg::with_name("image_name")
                             .long("name")
                             .help("Name for enclave image")
@@ -760,6 +943,90 @@ macro_rules! create_app {
                             .help("Path to JSON containing the custom metadata provided by the user.")
                             .takes_value(true),
                     ),
+            )
+            .subcommand(
+                SubCommand::with_name("measure-enclave")
+                    .about("Measures an enclave image")
+                    .arg(
+                        Arg::with_name("docker-uri")
+                            .long("docker-uri")
+                            .help(
+                                "Uri pointing to an existing docker container or to be created  \
+                                 locally when docker-dir is present",
+                            )
+                            .required(true)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("docker-dir")
+                            .long("docker-dir")
+                            .help("Local path to a directory containing a Dockerfile")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("output-file")
+                            .long("output-file")
+                            .help("Location where the Enclave Image should be saved")
+                            .group("action")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("signing-certificate")
+                            .long("signing-certificate")
+                            .help("Local path to developer's X509 signing certificate.")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("private-key")
+                            .long("private-key")
+                            .help("Local path to developer's Eliptic Curve private key.")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("image_name")
+                            .long("name")
+                            .help("Name for enclave image")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("image_version")
+                            .long("version")
+                            .help("Version of the enclave image")
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("metadata")
+                            .long("metadata")
+                            .help("Path to JSON containing the custom metadata provided by the user.")
+                            .takes_value(true),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("sign-pcr0")
+                    .about("Signs PCR0")
+                    .arg(
+                        Arg::with_name("pcr0")
+                            .long("pcr0")
+                            .help(
+                                "PCR0 in hex format",
+                            )
+                            .required(true)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("private-key")
+                            .long("private-key")
+                            .help("Local path to developer's Eliptic Curve private key.")
+                            .required(true)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::with_name("output-file")
+                            .long("output-file")
+                            .help("Location where the signature should be saved")
+                            .required(true)
+                            .takes_value(true),
+                    )
             )
             .subcommand(
                 SubCommand::with_name("describe-eif")

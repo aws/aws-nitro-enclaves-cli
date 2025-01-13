@@ -20,7 +20,7 @@ page_size = "0.6"
 signal-hook = "0.3"
 ciborium = "0.2"
 driver-bindings = { path = "./driver-bindings" }
-aws-nitro-enclaves-image-format = "0.2"
+aws-nitro-enclaves-image-format = "0.4"
 eif_loader = { path = "./eif_loader" }
 enclave_build = { path = "./enclave_build" }
 openssl = "0.10.66"

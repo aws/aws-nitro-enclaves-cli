@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod test_nitro_cli_args {
-    use clap::{Arg, Command};
+    use clap::{Arg, ArgGroup, Command};
     use nitro_cli::create_app;
 
     #[test]

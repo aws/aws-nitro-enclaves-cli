@@ -58,6 +58,8 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
         &args.output,
         &args.signing_certificate,
         &args.private_key,
+        &args.kms_key_id,
+        &args.kms_key_region,
         &args.img_name,
         &args.img_version,
         &args.metadata,
@@ -73,6 +75,8 @@ pub fn build_from_docker(
     output_path: &str,
     signing_certificate: &Option<String>,
     private_key: &Option<String>,
+    kms_key_id: &Option<String>,
+    kms_key_region: &Option<String>,
     img_name: &Option<String>,
     img_version: &Option<String>,
     metadata_path: &Option<String>,
@@ -136,6 +140,8 @@ pub fn build_from_docker(
         artifacts_path()?,
         signing_certificate,
         private_key,
+        kms_key_id,
+        kms_key_region,
         img_name.clone(),
         img_version.clone(),
         metadata_path.clone(),
@@ -713,6 +719,23 @@ macro_rules! create_app {
                         Arg::new("private-key")
                             .long("private-key")
                             .help("Local path to developer's Eliptic Curve private key."),
+                    )
+                    .arg(
+                        Arg::new("kms-key-id")
+                            .long("kms-key-id")
+                            .help("Specify unique id of the KMS key")
+                    )
+                    .arg(
+                        Arg::new("kms-key-region")
+                            .long("kms-key-region")
+                            .help("Specify region in which the KMS key resides")
+                            .requires("kms-key-id")
+                    )
+                    .group(
+                        ArgGroup::new("signing-key")
+                            .args(&["kms-key-id", "private-key"])
+                            .multiple(false)
+                            .requires("signing-certificate")
                     )
                     .arg(
                         Arg::new("image_name")

@@ -12,7 +12,9 @@ mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
 use aws_nitro_enclaves_image_format::utils::identity::parse_custom_metadata;
-use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignEnclaveInfo};
+use aws_nitro_enclaves_image_format::utils::{
+    EifBuilder, SignKeyData, SignKeyDataInfo, SignKeyInfo,
+};
 use docker::DockerUtil;
 use serde_json::json;
 use sha2::Digest;
@@ -31,7 +33,7 @@ pub struct Docker2Eif<'a> {
     linuxkit_path: String,
     artifacts_prefix: String,
     output: &'a mut File,
-    sign_info: Option<SignEnclaveInfo>,
+    sign_info: Option<SignKeyData>,
     img_name: Option<String>,
     img_version: Option<String>,
     metadata_path: Option<String>,
@@ -70,6 +72,8 @@ impl<'a> Docker2Eif<'a> {
         artifacts_prefix: String,
         certificate_path: &Option<String>,
         key_path: &Option<String>,
+        kms_key_id: &Option<String>,
+        kms_key_region: &Option<String>,
         img_name: Option<String>,
         img_version: Option<String>,
         metadata_path: Option<String>,
@@ -98,14 +102,30 @@ impl<'a> Docker2Eif<'a> {
             }
         }
 
-        let sign_info = match (certificate_path, key_path) {
+        let sign_key_info = match (kms_key_id, key_path) {
             (None, None) => None,
-            (Some(cert_path), Some(key_path)) => Some(
-                SignEnclaveInfo::new(cert_path, key_path)
-                    .map_err(|err| Docker2EifError::SignImageError(format!("{err:?}")))?,
-            ),
+            (Some(kms_id), None) => Some(SignKeyInfo::KmsKeyInfo {
+                id: kms_id.into(),
+                region: kms_key_region.clone(),
+            }),
+            (None, Some(key_path)) => Some(SignKeyInfo::LocalPrivateKeyInfo {
+                path: key_path.into(),
+            }),
             _ => return Err(Docker2EifError::SignArgsError),
         };
+
+        let sign_info = sign_key_info
+            .map(|key_info| {
+                SignKeyData::new(&SignKeyDataInfo {
+                    cert_path: certificate_path
+                        .as_ref()
+                        .ok_or(Docker2EifError::SignArgsError)?
+                        .into(),
+                    key_info,
+                })
+                .map_err(|_| Docker2EifError::SignArgsError)
+            })
+            .transpose()?;
 
         Ok(Docker2Eif {
             docker_image,
@@ -275,10 +295,15 @@ impl<'a> Docker2Eif<'a> {
             _ => return Err(Docker2EifError::UnsupportedArchError),
         };
 
+        // We cannot clone `sign_info` because it might contain a KmsKey object
+        // which is not copyable. Since `create` is the last method called, we can
+        // move it out of the struct.
+        let sign_info = self.sign_info.take();
+
         let mut build = EifBuilder::new(
             Path::new(&self.kernel_img_path),
             self.cmdline.clone(),
-            self.sign_info.clone(),
+            sign_info,
             sha2::Sha384::new(),
             flags,
             self.generate_identity_info()?,

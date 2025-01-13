@@ -108,6 +108,10 @@ pub struct BuildEnclavesArgs {
     pub signing_certificate: Option<String>,
     /// The path to the private key for signed enclaves.
     pub private_key: Option<String>,
+    /// ID of the KMS key for signed enclaves.
+    pub kms_key_id: Option<String>,
+    /// Region of the KMS key for signed enclaves.
+    pub kms_key_region: Option<String>,
     /// The name of the enclave image.
     pub img_name: Option<String>,
     /// The version of the enclave image.
@@ -119,27 +123,6 @@ pub struct BuildEnclavesArgs {
 impl BuildEnclavesArgs {
     /// Construct a new `BuildEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        let signing_certificate = parse_signing_certificate(args);
-        let private_key = parse_private_key(args);
-
-        match (&signing_certificate, &private_key) {
-            (Some(_), None) => {
-                return Err(new_nitro_cli_failure!(
-                    "`private-key` argument not found",
-                    NitroCliErrorEnum::MissingArgument
-                )
-                .add_info(vec!["private-key"]))
-            }
-            (None, Some(_)) => {
-                return Err(new_nitro_cli_failure!(
-                    "`signing-certificate` argument not found",
-                    NitroCliErrorEnum::MissingArgument
-                )
-                .add_info(vec!["signing-certificate"]))
-            }
-            _ => (),
-        };
-
         Ok(BuildEnclavesArgs {
             docker_uri: parse_docker_tag(args).ok_or_else(|| {
                 new_nitro_cli_failure!(
@@ -156,8 +139,10 @@ impl BuildEnclavesArgs {
                 )
                 .add_info(vec!["output"])
             })?,
-            signing_certificate,
-            private_key,
+            signing_certificate: parse_signing_certificate(args),
+            private_key: parse_private_key(args),
+            kms_key_id: parse_kms_key_id(args),
+            kms_key_region: parse_kms_key_region(args),
             img_name: parse_image_name(args),
             img_version: parse_image_version(args),
             metadata: parse_metadata(args),
@@ -543,6 +528,14 @@ fn parse_private_key(args: &ArgMatches) -> Option<String> {
     args.get_one::<String>("private-key").map(String::from)
 }
 
+fn parse_kms_key_id(args: &ArgMatches) -> Option<String> {
+    args.get_one::<String>("kms-key-id").map(String::from)
+}
+
+fn parse_kms_key_region(args: &ArgMatches) -> Option<String> {
+    args.get_one::<String>("kms-key-region").map(String::from)
+}
+
 fn parse_image_name(args: &ArgMatches) -> Option<String> {
     args.get_one::<String>("image_name").map(String::from)
 }
@@ -572,7 +565,7 @@ mod tests {
     use crate::common::construct_error_message;
     use crate::create_app;
 
-    use clap::{Arg, Command};
+    use clap::{Arg, ArgGroup, Command};
 
     /// Parse the path of the JSON config file
     fn parse_config_file(args: &ArgMatches) -> NitroCliResult<String> {

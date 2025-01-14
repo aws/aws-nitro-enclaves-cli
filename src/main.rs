@@ -8,7 +8,7 @@
 
 extern crate lazy_static;
 
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{Arg, Command};
 use log::info;
 use std::os::unix::net::UnixStream;
 
@@ -45,11 +45,11 @@ const FILE_PCR_STR: &str = "File PCR";
 
 /// *Nitro CLI* application entry point.
 fn main() {
-    let version_str: String = env!("CARGO_PKG_VERSION").to_string();
+    let version_str = env!("CARGO_PKG_VERSION");
 
     // Command-line specification for the Nitro CLI.
     let mut app = create_app!();
-    app = app.version(&*version_str);
+    app = app.version(version_str);
     let args = app.get_matches();
     let logger = logger::init_logger()
         .map_err(|e| e.set_action("Logger initialization".to_string()))
@@ -136,7 +136,7 @@ fn main() {
             }
         }
         Some(("terminate-enclave", args)) => {
-            if args.is_present("all") {
+            if args.get_flag("all") {
                 terminate_all_enclaves()
                     .map_err(|e| {
                         e.add_subaction("Failed to terminate all running enclaves".to_string())
@@ -229,8 +229,8 @@ fn main() {
         }
         Some(("describe-eif", args)) => {
             let eif_path = args
-                .value_of("eif-path")
-                .map(|val| val.to_string())
+                .get_one::<String>("eif-path")
+                .map(String::from)
                 .unwrap();
             describe_eif(eif_path)
                 .map_err(|e| {

@@ -6,7 +6,7 @@
 /// Example of usage:
 /// vsock-proxy 8000 127.0.0.1 9000
 ///
-use clap::{App, Arg};
+use clap::{Arg, ArgAction, Command};
 use env_logger::init;
 use log::info;
 
@@ -18,68 +18,64 @@ use vsock_proxy::{
 fn main() -> VsockProxyResult<()> {
     init();
 
-    let matches = App::new("Vsock-TCP proxy")
+    let matches = Command::new("Vsock-TCP proxy")
         .about("Vsock-TCP proxy")
         .version(env!("CARGO_PKG_VERSION"))
         .arg(
-            Arg::with_name("ipv4")
+            Arg::new("ipv4")
                 .short('4')
                 .long("ipv4")
                 .help("Force the proxy to use IPv4 addresses only.")
-                .required(false),
+                .action(ArgAction::SetTrue),
         )
         .arg(
-            Arg::with_name("ipv6")
+            Arg::new("ipv6")
                 .short('6')
                 .long("ipv6")
                 .help("Force the proxy to use IPv6 addresses only.")
-                .required(false)
+                .action(ArgAction::SetTrue)
                 .conflicts_with("ipv4"),
         )
         .arg(
-            Arg::with_name("workers")
+            Arg::new("workers")
                 .short('w')
                 .long("num_workers")
                 .help("Set the maximum number of simultaneous\nconnections supported.")
-                .required(false)
-                .takes_value(true)
                 .default_value("4"),
         )
         .arg(
-            Arg::with_name("local_port")
+            Arg::new("local_port")
                 .help("Local Vsock port to listen for incoming connections.")
                 .required(true),
         )
         .arg(
-            Arg::with_name("remote_addr")
+            Arg::new("remote_addr")
                 .help("Address of the server to be proxyed.")
                 .required(true),
         )
         .arg(
-            Arg::with_name("remote_port")
+            Arg::new("remote_port")
                 .help("Remote TCP port of the server to be proxyed.")
                 .required(true),
         )
         .arg(
-            Arg::with_name("config_file")
+            Arg::new("config_file")
                 .long("config")
                 .help("YAML file containing the services that\ncan be forwarded.\n")
-                .required(false)
-                .takes_value(true)
                 .default_value("/etc/nitro_enclaves/vsock-proxy.yaml"),
         )
         .get_matches();
 
     let local_port = matches
-        .value_of("local_port")
+        .get_one::<String>("local_port")
         // This argument is required, so clap ensures it's available
         .unwrap();
     let local_port = local_port
         .parse::<u32>()
         .map_err(|_| "Local port is not valid")?;
 
-    let ipv4_only = matches.is_present("ipv4");
-    let ipv6_only = matches.is_present("ipv6");
+    let ipv4_only = matches.get_flag("ipv4");
+    let ipv6_only = matches.get_flag("ipv6");
     let ip_addr_type: IpAddrType = match (ipv4_only, ipv6_only) {
         (true, false) => IpAddrType::IPAddrV4Only,
         (false, true) => IpAddrType::IPAddrV6Only,
@@ -87,12 +83,12 @@ fn main() -> VsockProxyResult<()> {
     };
 
     let remote_addr = matches
-        .value_of("remote_addr")
+        .get_one::<String>("remote_addr")
         // This argument is required, so clap ensures it's available
         .unwrap();
 
     let remote_port = matches
-        .value_of("remote_port")
+        .get_one::<String>("remote_port")
         // This argument is required, so clap ensures it's available
         .unwrap();
     let remote_port = remote_port
@@ -100,7 +96,7 @@ fn main() -> VsockProxyResult<()> {
         .map_err(|_| "Remote port is not valid")?;
 
     let num_workers = matches
-        .value_of("workers")
+        .get_one::<String>("workers")
         // This argument has a default value, so it is available
         .unwrap();
     let num_workers = num_workers
@@ -112,10 +108,10 @@ fn main() -> VsockProxyResult<()> {
     }
 
     info!("Checking allowlist configuration");
-    let config_file = matches.value_of("config_file");
-    let remote_host = String::from(remote_addr);
-    let _ = check_allowlist(&remote_host, remote_port, config_file, ip_addr_type)
-        .map_err(|err| format!("Error at checking the allowlist: {}", err))?;
+    let config_file = matches.get_one::<String>("config_file").map(String::as_str);
+    let remote_host = remote_addr.to_string();
+    check_allowlist(&remote_host, remote_port, config_file, ip_addr_type)
+        .map_err(|err| format!("Error at checking the allowlist: {err}"))?;
 
     let mut proxy = Proxy::new(
         local_port,

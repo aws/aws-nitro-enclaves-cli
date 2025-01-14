@@ -80,40 +80,37 @@ impl CommandOutput {
 }
 
 fn parse_cid(args: &ArgMatches) -> Result<u32, String> {
-    let port = args.value_of("cid").ok_or("Could not find cid argument")?;
-    port.parse()
+    args.get_one::<String>("cid")
+        .ok_or("Could not find cid argument")?
+        .parse()
         .map_err(|_err| "cid is not a number".to_string())
 }
 
 fn parse_port(args: &ArgMatches) -> Result<u32, String> {
-    let port = args
-        .value_of("port")
-        .ok_or("Could not find port argument")?;
-    port.parse()
+    args.get_one::<String>("port")
+        .ok_or("Could not find port argument")?
+        .parse()
         .map_err(|_err| "port is not a number".to_string())
 }
 
 fn parse_command(args: &ArgMatches) -> Result<String, String> {
-    let command = args
-        .value_of("command")
-        .ok_or("Could not find command argument")?;
-    Ok(String::from(command))
+    args.get_one::<String>("command")
+        .map(String::from)
+        .ok_or_else(|| "Could not find command argument".to_string())
 }
 
 fn parse_no_wait(args: &ArgMatches) -> bool {
-    args.is_present("no-wait")
+    args.get_flag("no-wait")
 }
 
 fn parse_localfile(args: &ArgMatches) -> Result<String, String> {
-    let output = args
-        .value_of("localpath")
-        .ok_or("Could not find localpath")?;
-    Ok(String::from(output))
+    args.get_one::<String>("localpath")
+        .map(String::from)
+        .ok_or_else(|| "Could not find localpath".to_string())
 }
 
 fn parse_remotefile(args: &ArgMatches) -> Result<String, String> {
-    let output = args
-        .value_of("remotepath")
-        .ok_or("Could not find remotepath")?;
-    Ok(String::from(output))
+    args.get_one::<String>("remotepath")
+        .map(String::from)
+        .ok_or_else(|| "Could not find remotepath".to_string())
 }

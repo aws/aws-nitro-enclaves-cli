@@ -577,65 +577,54 @@ pub fn get_file_pcr(path: String, pcr_type: PcrType) -> NitroCliResult<BTreeMap<
 #[macro_export]
 macro_rules! create_app {
     () => {
-        App::new("Nitro CLI")
+        Command::new("Nitro CLI")
             .about("CLI for enclave lifetime management")
-            .setting(AppSettings::ArgRequiredElseHelp)
-            .version(env!("CARGO_PKG_VERSION"))
+            .arg_required_else_help(true)
             .subcommand(
-                SubCommand::with_name("run-enclave")
+                Command::new("run-enclave")
                     .about("Starts a new enclave")
                     .arg(
-                        Arg::with_name("cpu-ids")
+                        Arg::new("cpu-ids")
                             .long("cpu-ids")
                             .help("List of cpu-ids that will be provided to the enclave")
-                            .takes_value(true)
-                            .multiple(true)
-                            .min_values(1)
-                            .required_unless("cpu-count")
-                            .required_unless("config")
-                            .conflicts_with("cpu-count")
-                            .conflicts_with("config"),
+                            .num_args(1..)
+                            .required_unless_present_any(["cpu-count", "config"])
+                            .conflicts_with_all(["cpu-count", "config"]),
                     )
                     .arg(
-                        Arg::with_name("cpu-count")
+                        Arg::new("cpu-count")
                             .long("cpu-count")
                             .help("Number of cpus")
-                            .takes_value(true)
-                            .required_unless("cpu-ids")
-                            .required_unless("config")
-                            .conflicts_with("cpu-ids")
-                            .conflicts_with("config"),
+                            .required_unless_present_any(["cpu-ids", "config"])
+                            .conflicts_with_all(["cpu-ids", "config"]),
                     )
                     .arg(
-                        Arg::with_name("memory")
+                        Arg::new("memory")
                             .long("memory")
                             .help(
                                 "Memory to allocate for the enclave in MB. Depending on the available \
                                 pages, more might be allocated."
                             )
-                            .required_unless("config")
-                            .takes_value(true)
+                            .required_unless_present("config")
                             .conflicts_with("config"),
                     )
                     .arg(
-                        Arg::with_name("eif-path")
+                        Arg::new("eif-path")
                             .long("eif-path")
                             .help("Path pointing to a prebuilt Eif image")
-                            .required_unless("config")
-                            .takes_value(true)
+                            .required_unless_present("config")
                             .conflicts_with("config"),
                     )
                     .arg(
-                        Arg::with_name("enclave-cid")
+                        Arg::new("enclave-cid")
                             .long("enclave-cid")
-                            .takes_value(true)
                             .help("CID to be used for the newly started enclave")
                             .conflicts_with("config"),
                     )
                     .arg(
-                        Arg::with_name("debug-mode")
+                        Arg::new("debug-mode")
                             .long("debug-mode")
-                            .takes_value(false)
+                            .action(clap::ArgAction::SetTrue)
                             .help(
                                 "Starts enclave in debug-mode. This makes the console of the enclave \
                                 available over vsock at CID: VMADDR_CID_HYPERVISOR (0), port: \
@@ -645,196 +634,169 @@ macro_rules! create_app {
                             .conflicts_with("config"),
                     )
                     .arg(
-                        Arg::with_name("attach-console")
+                        Arg::new("attach-console")
                             .long("attach-console")
-                            .takes_value(false)
+                            .action(clap::ArgAction::SetTrue)
                             .help(
                                 "Attach the enclave console immediately after starting the enclave. \
                                 (implies debug-mode)"
                             )
                     )
                     .arg(
-                        Arg::with_name("enclave-name")
+                        Arg::new("enclave-name")
                             .long("enclave-name")
-                            .takes_value(true)
                             .help("Custom name assigned to the enclave by the user")
-                            .required(false)
                             .conflicts_with("config"),
                     )
                     .arg(
-                        Arg::with_name("config")
+                        Arg::new("config")
                             .long("config")
-                            .takes_value(true)
                             .value_name("json-config")
                             .help("Config is used to read enclave settings from JSON file"),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("terminate-enclave")
+                Command::new("terminate-enclave")
                     .about("Terminates an enclave")
                     .arg(
-                        Arg::with_name("enclave-id")
+                        Arg::new("enclave-id")
                             .long("enclave-id")
-                            .takes_value(true)
                             .help("Enclave ID, used to uniquely identify an enclave")
-                            .required_unless("all")
-                            .required_unless("enclave-name")
-                            .conflicts_with("all")
-                            .conflicts_with("enclave-name"),
+                            .required_unless_present_any(["all", "enclave-name"])
+                            .conflicts_with_all(["all", "enclave-name"]),
                     )
                     .arg(
-                        Arg::with_name("all")
+                        Arg::new("all")
                             .long("all")
-                            .takes_value(false)
+                            .action(clap::ArgAction::SetTrue)
                             .help("Terminate all running enclave instances belonging to the current user")
-                            .required_unless("enclave-id")
-                            .required_unless("enclave-name")
-                            .conflicts_with("enclave-id")
-                            .conflicts_with("enclave-name"),
+                            .required_unless_present_any(["enclave-id", "enclave-name"])
+                            .conflicts_with_all(["enclave-id", "enclave-name"]),
                     )
                     .arg(
-                        Arg::with_name("enclave-name")
+                        Arg::new("enclave-name")
                             .long("enclave-name")
-                            .takes_value(true)
                             .help("Enclave name, used to uniquely identify an enclave")
-                            .required_unless("enclave-id")
-                            .required_unless("all")
-                            .conflicts_with("enclave-id")
-                            .conflicts_with("all"),
+                            .required_unless_present_any(["enclave-id", "all"])
+                            .conflicts_with_all(["enclave-id", "all"]),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("build-enclave")
+                Command::new("build-enclave")
                     .about("Builds an enclave image and saves it to a file")
                     .arg(
-                        Arg::with_name("docker-uri")
+                        Arg::new("docker-uri")
                             .long("docker-uri")
                             .help(
-                                "Uri pointing to an existing docker container or to be created  \
-                                 locally when docker-dir is present",
+                                "Uri pointing to an existing docker container or to be created \
+                                locally when docker-dir is present"
                             )
-                            .required(true)
-                            .takes_value(true),
+                            .required(true),
                     )
                     .arg(
-                        Arg::with_name("docker-dir")
+                        Arg::new("docker-dir")
                             .long("docker-dir")
-                            .help("Local path to a directory containing a Dockerfile")
-                            .takes_value(true),
+                            .help("Local path to a directory containing a Dockerfile"),
                     )
                     .arg(
-                        Arg::with_name("output-file")
+                        Arg::new("output-file")
                             .long("output-file")
                             .help("Location where the Enclave Image should be saved")
-                            .group("action")
-                            .required(true)
-                            .takes_value(true),
+                            .required(true),
                     )
                     .arg(
-                        Arg::with_name("signing-certificate")
+                        Arg::new("signing-certificate")
                             .long("signing-certificate")
-                            .help("Local path to developer's X509 signing certificate.")
-                            .takes_value(true),
+                            .help("Local path to developer's X509 signing certificate."),
                     )
                     .arg(
-                        Arg::with_name("private-key")
+                        Arg::new("private-key")
                             .long("private-key")
-                            .help("Local path to developer's Eliptic Curve private key.")
-                            .takes_value(true),
+                            .help("Local path to developer's Eliptic Curve private key."),
                     )
                     .arg(
-                        Arg::with_name("image_name")
+                        Arg::new("image_name")
                             .long("name")
-                            .help("Name for enclave image")
-                            .takes_value(true),
+                            .help("Name for enclave image"),
                     )
                     .arg(
-                        Arg::with_name("image_version")
+                        Arg::new("image_version")
                             .long("version")
-                            .help("Version of the enclave image")
-                            .takes_value(true),
+                            .help("Version of the enclave image"),
                     )
                     .arg(
-                        Arg::with_name("metadata")
+                        Arg::new("metadata")
                             .long("metadata")
-                            .help("Path to JSON containing the custom metadata provided by the user.")
-                            .takes_value(true),
+                            .help("Path to JSON containing the custom metadata provided by the user."),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("describe-eif")
+                Command::new("describe-eif")
                     .about("Returns information about the EIF found at a given path.")
                     .arg(
-                        Arg::with_name("eif-path")
+                        Arg::new("eif-path")
                             .long("eif-path")
                             .help("Path to the EIF to describe.")
-                            .required(true)
-                            .takes_value(true),
+                            .required(true),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("describe-enclaves")
+                Command::new("describe-enclaves")
                     .about("Returns a list of the running enclaves")
                     .arg(
-                        Arg::with_name("metadata")
+                        Arg::new("metadata")
                             .long("metadata")
                             .help("Adds EIF metadata of the current enclaves to the command output.")
+                            .action(clap::ArgAction::SetTrue)
                         ),
             )
             .subcommand(
-                SubCommand::with_name("console")
+                Command::new("console")
                     .about("Connect to the console of an enclave")
                     .arg(
-                        Arg::with_name("enclave-id")
+                        Arg::new("enclave-id")
                             .long("enclave-id")
-                            .takes_value(true)
                             .help("Enclave ID, used to uniquely identify an enclave")
-                            .required_unless("enclave-name")
+                            .required_unless_present("enclave-name")
                             .conflicts_with("enclave-name"),
                     )
                     .arg(
-                        Arg::with_name("disconnect-timeout")
+                        Arg::new("disconnect-timeout")
                             .long("disconnect-timeout")
-                            .takes_value(true)
-                            .help("The time in seconds after the console disconnects from the enclave")
-                            .required(false)
+                            .help("The time in seconds after the console disconnects from the enclave"),
                     )
                     .arg(
-                        Arg::with_name("enclave-name")
+                        Arg::new("enclave-name")
                             .long("enclave-name")
-                            .takes_value(true)
                             .help("Enclave name, used to uniquely identify an enclave")
-                            .required_unless("enclave-id")
+                            .required_unless_present("enclave-id")
                             .conflicts_with("enclave-id"),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("pcr")
+                Command::new("pcr")
                     .about("Return the PCR hash value of the given input")
                     .arg(
-                        Arg::with_name("signing-certificate")
+                        Arg::new("signing-certificate")
                             .long("signing-certificate")
-                            .takes_value(true)
                             .help("Takes the path to the '.pem' signing certificate and returns PCR8. Can be used to identify the certificate used to sign an EIF")
-                            .required_unless("input")
+                            .required_unless_present("input")
                             .conflicts_with("input"),
                     )
                     .arg(
-                        Arg::with_name("input")
+                        Arg::new("input")
                             .long("input")
-                            .takes_value(true)
                             .help("Given a path to a file, returns the PCR hash of the bytes it contains")
-                            .required_unless("signing-certificate")
+                            .required_unless_present("signing-certificate")
                             .conflicts_with("signing-certificate"),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("explain")
+                Command::new("explain")
                     .about("Display detailed information about an error returned by a misbehaving Nitro CLI command")
                     .arg(
-                        Arg::with_name("error-code")
+                        Arg::new("error-code")
                             .long("error-code")
-                            .takes_value(true)
                             .help("Error code, as returned by the misbehaving Nitro CLI command")
                             .required(true),
                     ),

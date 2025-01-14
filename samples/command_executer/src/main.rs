@@ -1,4 +1,4 @@
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{Arg, ArgAction, Command};
 
 use command_executer::command_parser::{FileArgs, ListenArgs, RunArgs};
 use command_executer::create_app;

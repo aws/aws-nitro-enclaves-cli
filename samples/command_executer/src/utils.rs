@@ -19,113 +19,66 @@ impl<T, E: std::fmt::Debug> ExitGracefully<T, E> for Result<T, E> {
 #[macro_export]
 macro_rules! create_app {
     () => {
-        App::new("Vsock Tool")
+        Command::new("Vsock Tool")
             .about("Tool that runs commands inside the enclave")
-            .setting(AppSettings::ArgRequiredElseHelp)
+            .arg_required_else_help(true)
             .version(env!("CARGO_PKG_VERSION"))
             .subcommand(
-                SubCommand::with_name("listen")
+                Command::new("listen")
                     .about("Listen on a given port")
-                    .arg(
-                        Arg::with_name("port")
-                            .long("port")
-                            .help("port")
-                            .takes_value(true)
-                            .required(true),
-                    ),
+                    .arg(Arg::new("port").long("port").help("port").required(true)),
             )
             .subcommand(
-                SubCommand::with_name("run")
+                Command::new("run")
                     .about("Run a command inside the enclave")
+                    .arg(Arg::new("port").long("port").help("port").required(true))
+                    .arg(Arg::new("cid").long("cid").help("cid").required(true))
                     .arg(
-                        Arg::with_name("port")
-                            .long("port")
-                            .help("port")
-                            .takes_value(true)
-                            .required(true),
-                    )
-                    .arg(
-                        Arg::with_name("cid")
-                            .long("cid")
-                            .help("cid")
-                            .takes_value(true)
-                            .required(true),
-                    )
-                    .arg(
-                        Arg::with_name("command")
+                        Arg::new("command")
                             .long("command")
                             .help("command")
-                            .takes_value(true)
                             .required(true),
                     )
                     .arg(
-                        Arg::with_name("no-wait")
+                        Arg::new("no-wait")
                             .long("no-wait")
                             .help("command-executer won't wait the command's result")
-                            .takes_value(false),
+                            .action(ArgAction::SetTrue),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("recv-file")
+                Command::new("recv-file")
                     .about("Receive a file from the enclave")
+                    .arg(Arg::new("port").long("port").help("port").required(true))
+                    .arg(Arg::new("cid").long("cid").help("cid").required(true))
                     .arg(
-                        Arg::with_name("port")
-                            .long("port")
-                            .help("port")
-                            .takes_value(true)
-                            .required(true),
-                    )
-                    .arg(
-                        Arg::with_name("cid")
-                            .long("cid")
-                            .help("cid")
-                            .takes_value(true)
-                            .required(true),
-                    )
-                    .arg(
-                        Arg::with_name("localpath")
+                        Arg::new("localpath")
                             .long("localpath")
                             .help("localpath")
-                            .takes_value(true)
                             .required(true),
                     )
                     .arg(
-                        Arg::with_name("remotepath")
+                        Arg::new("remotepath")
                             .long("remotepath")
                             .help("remotepath")
-                            .takes_value(true)
                             .required(true),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("send-file")
+                Command::new("send-file")
                     .about("Send a file to the enclave")
+                    .arg(Arg::new("port").long("port").help("port").required(true))
+                    .arg(Arg::new("cid").long("cid").help("cid").required(true))
                     .arg(
-                        Arg::with_name("port")
-                            .long("port")
-                            .help("port")
-                            .takes_value(true)
-                            .required(true),
-                    )
-                    .arg(
-                        Arg::with_name("cid")
-                            .long("cid")
-                            .help("cid")
-                            .takes_value(true)
-                            .required(true),
-                    )
-                    .arg(
-                        Arg::with_name("localpath")
+                        Arg::new("localpath")
                             .long("localpath")
                             .help("localpath")
-                            .takes_value(true)
                             .required(true),
                     )
                     .arg(
-                        Arg::with_name("remotepath")
+                        Arg::new("remotepath")
                             .long("remotepath")
                             .help("remotepath")
-                            .takes_value(true)
                             .required(true),
                     ),
             )

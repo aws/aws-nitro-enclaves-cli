@@ -32,12 +32,15 @@ RUN cd /tmp/openssl_src/openssl-${OPENSSL_VERSION} &&  \
 # Setup the right rust ver
 ENV RUST_VERSION=1.71.1
 RUN  source $HOME/.cargo/env && \
-	ARCH=$(uname -m) && \
-	rustup toolchain install ${RUST_VERSION}-${ARCH}-unknown-linux-gnu && \
-	rustup default ${RUST_VERSION}-${ARCH}-unknown-linux-gnu && \
-	rustup target add --toolchain ${RUST_VERSION} ${ARCH}-unknown-linux-musl && \
-	cargo install cargo-audit --version 0.17.6 --locked &&  \
-	cargo install cargo-about --version 0.5.6 --locked
+    ARCH=$(uname -m) && \
+    # Install and set 1.71.1 as default
+    rustup toolchain install ${RUST_VERSION}-${ARCH}-unknown-linux-gnu && \
+    rustup default ${RUST_VERSION}-${ARCH}-unknown-linux-gnu && \
+    rustup target add --toolchain ${RUST_VERSION} ${ARCH}-unknown-linux-musl && \
+    # Install stable toolchain (needed to run fresh cargo-about)
+    rustup toolchain install stable-${ARCH}-unknown-linux-gnu && \
+	cargo +stable install cargo-about --version 0.6.6 --locked && \
+    cargo install cargo-audit --version 0.17.6 --locked
 
 # Install docker for nitro-cli build-enclave runs
 RUN apt-get update && \

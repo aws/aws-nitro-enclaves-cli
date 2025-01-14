@@ -259,7 +259,7 @@ update-third-party-licenses-rust-crates-html: build-setup build-container
 		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
 		$(CONTAINER_TAG) bin/bash -c \
 			'source /root/.cargo/env && \
-			cargo about generate \
+			cargo +stable about generate \
 			--manifest-path=/nitro_src/Cargo.toml \
 			/nitro_src/about.hbs > /nitro_src/$(RUST_CRATES_LICENSE_FILE)'
 

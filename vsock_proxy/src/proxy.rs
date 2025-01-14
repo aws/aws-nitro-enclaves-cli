@@ -13,7 +13,7 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::os::unix::io::AsRawFd;
 use threadpool::ThreadPool;
 use vsock::{VsockAddr, VsockListener};
-use yaml_rust::YamlLoader;
+use yaml_rust2::YamlLoader;
 
 use crate::dns::DnsResolutionInfo;
 use crate::{dns, IpAddrType, VsockProxyResult};

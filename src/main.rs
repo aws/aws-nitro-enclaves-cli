@@ -14,7 +14,7 @@ use std::os::unix::net::UnixStream;
 
 use nitro_cli::common::commands_parser::{
     BuildEnclavesArgs, ConsoleArgs, DescribeEnclavesArgs, EmptyArgs, ExplainArgs, PcrArgs,
-    RunEnclavesArgs, TerminateEnclavesArgs,
+    RunEnclavesArgs, SignEifArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::common::document_errors::explain_error;
 use nitro_cli::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
@@ -29,7 +29,7 @@ use nitro_cli::enclave_proc_comm::{
 };
 use nitro_cli::{
     build_enclaves, console_enclaves, create_app, describe_eif, get_all_enclave_names,
-    get_file_pcr, new_enclave_name, new_nitro_cli_failure, terminate_all_enclaves,
+    get_file_pcr, new_enclave_name, new_nitro_cli_failure, sign_eif, terminate_all_enclaves,
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
@@ -42,6 +42,7 @@ const ENCLAVE_CONSOLE_STR: &str = "Enclave Console";
 const EXPLAIN_ERR_STR: &str = "Explain Error";
 const NEW_NAME_STR: &str = "New Enclave Name";
 const FILE_PCR_STR: &str = "File PCR";
+const SIGN_EIF_STR: &str = "Sign EIF";
 
 /// *Nitro CLI* application entry point.
 fn main() {
@@ -300,6 +301,20 @@ fn main() {
                 })
                 .ok_or_exit_with_errno(None);
             explain_error(explain_args.error_code_str);
+        }
+        Some(("sign-eif", args)) => {
+            let sign_args = SignEifArgs::new_with(args)
+                .map_err(|e| {
+                    e.add_subaction("Failed to construct SignEIF arguments".to_string())
+                        .set_action(SIGN_EIF_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+            sign_eif(sign_args)
+                .map_err(|e| {
+                    e.add_subaction("Failed to sign EIF".to_string())
+                        .set_action(SIGN_EIF_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
         }
         Some((&_, _)) | None => (),
     }

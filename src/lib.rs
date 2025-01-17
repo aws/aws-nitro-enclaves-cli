@@ -17,6 +17,8 @@ pub mod utils;
 
 use aws_nitro_enclaves_image_format::defs::eif_hasher::EifHasher;
 use aws_nitro_enclaves_image_format::utils::eif_reader::EifReader;
+use aws_nitro_enclaves_image_format::utils::eif_signer::EifSigner;
+use aws_nitro_enclaves_image_format::utils::SignKeyData;
 use aws_nitro_enclaves_image_format::{generate_build_info, utils::get_pcrs};
 use log::{debug, info};
 use sha2::{Digest, Sha384};
@@ -25,9 +27,9 @@ use std::convert::TryFrom;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use common::commands_parser::{BuildEnclavesArgs, EmptyArgs, RunEnclavesArgs};
+use common::commands_parser::{BuildEnclavesArgs, EmptyArgs, RunEnclavesArgs, SignEifArgs};
 use common::json_output::{
     EifDescribeInfo, EnclaveBuildInfo, EnclaveTerminateInfo, MetadataDescribeInfo,
 };
@@ -290,6 +292,62 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
     );
 
     Ok(info)
+}
+
+/// Signs EIF with the given key and certificate. If EIF already has a signature, it will be replaced.
+pub fn sign_eif(args: SignEifArgs) -> NitroCliResult<()> {
+    let sign_info = match (&args.private_key, &args.signing_certificate) {
+        (Some(key), Some(cert)) => SignKeyData::new(key, Path::new(&cert)).map_or_else(
+            |e| {
+                eprintln!("Could not read signing info: {:?}", e);
+                None
+            },
+            Some,
+        ),
+        _ => None,
+    };
+
+    let signer = EifSigner::new(sign_info).ok_or_else(|| {
+        new_nitro_cli_failure!(
+            format!("Failed to create EifSigner"),
+            NitroCliErrorEnum::EIFSigningError
+        )
+    })?;
+
+    signer.sign_image(&args.eif_path).map_err(|e| {
+        new_nitro_cli_failure!(
+            format!("Failed to sign image: {}", e),
+            NitroCliErrorEnum::EIFSigningError
+        )
+    })?;
+
+    eprintln!("Enclave Image successfully signed.");
+
+    let mut eif_reader = EifReader::from_eif(args.eif_path).map_err(|e| {
+        new_nitro_cli_failure!(
+            &format!("Failed to initialize EIF reader: {:?}", e),
+            NitroCliErrorEnum::EifParsingError
+        )
+    })?;
+    eif_reader
+        .get_measurements()
+        .map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to get PCR values: {:?}", e),
+                NitroCliErrorEnum::EifParsingError
+            )
+        })
+        .and_then(|measurements| {
+            let info = EnclaveBuildInfo::new(measurements);
+            let printed_info = serde_json::to_string_pretty(&info).map_err(|err| {
+                new_nitro_cli_failure!(
+                    &format!("Failed to display EnclaveBuild data: {:?}", err),
+                    NitroCliErrorEnum::SerdeError
+                )
+            })?;
+            println!("{}", printed_info);
+            Ok(())
+        })
 }
 
 /// Returns the value of the `NITRO_CLI_BLOBS` environment variable.
@@ -802,6 +860,27 @@ macro_rules! create_app {
                             .help("Error code, as returned by the misbehaving Nitro CLI command")
                             .required(true),
                     ),
+            )
+            .subcommand(
+                Command::new("sign-eif")
+                    .about("Sign EIF with the given key")
+                    .arg(
+                        Arg::new("eif-path")
+                            .long("eif-path")
+                            .help("Path pointing to a prebuilt Eif image")
+                    )
+                    .arg(
+                        Arg::new("signing-certificate")
+                            .long("signing-certificate")
+                            .help("Local path to developer's X509 signing certificate.")
+                            .requires("private-key"),
+                    )
+                    .arg(
+                        Arg::new("private-key")
+                            .long("private-key")
+                            .help("KMS key ARN or local path to developer's Eliptic Curve private key.")
+                            .requires("signing-certificate"),
+                    )
             )
     };
 }

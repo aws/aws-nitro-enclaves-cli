@@ -259,6 +259,32 @@ impl PcrArgs {
     }
 }
 
+/// The arguments used by `sign-eif` command
+#[derive(Debug, Clone)]
+pub struct SignEifArgs {
+    /// Path to the EIF file needed for signing
+    pub eif_path: String,
+    /// The path to the signing certificate for signed enclaves.
+    pub signing_certificate: Option<String>,
+    /// ARN of the KMS key or path to the local private key for signed enclaves.
+    pub private_key: Option<String>,
+}
+
+impl SignEifArgs {
+    /// Construct a new `SignEifArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        let signing_certificate = parse_signing_certificate(args);
+        let private_key = parse_private_key(args);
+
+        Ok(SignEifArgs {
+            eif_path: parse_eif_path(args)
+                .map_err(|e| e.add_subaction("Parse EIF path".to_string()))?,
+            signing_certificate,
+            private_key,
+        })
+    }
+}
+
 /// Parse file path to hash from the command-line arguments.
 fn parse_file_path(args: &ArgMatches, val_name: &str) -> NitroCliResult<String> {
     let path = args.get_one::<String>(val_name).ok_or_else(|| {

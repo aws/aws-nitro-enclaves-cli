@@ -179,6 +179,8 @@ pub enum NitroCliErrorEnum {
     EnclaveNamingError,
     /// Signature checker error
     EIFSignatureCheckerError,
+    /// Signing error
+    EIFSigningError,
 }
 
 impl Eq for NitroCliErrorEnum {}

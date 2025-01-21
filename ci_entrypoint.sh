@@ -43,13 +43,18 @@ then
         exit 1
 fi
 
+trap 'STATE="failure"; status_update' ERR
+
 STATE="pending"
 status_update
+
+echo "Running tests"
 
 set +e
 ./scripts/run_tests.sh 2>&1 | tee test_logs.out
 TEST_RESULTS=$?
-set -e
+
+echo "Finished running tests, uploading results to S3"
 
 aws s3 cp --content-type 'text/plain' test_logs.out s3://aws-nitro-enclaves-cli/${LOGS_PATH}
 
@@ -58,4 +63,8 @@ if [[ "${TEST_RESULTS}" != "0" ]];then
 	STATE="failure"
 fi
 
+echo "Updating job status to ${STATE}"
+
 status_update
+
+echo "Done"

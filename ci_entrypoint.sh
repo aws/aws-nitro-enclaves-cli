@@ -43,6 +43,16 @@ then
         exit 1
 fi
 
+# Get KMS key, region, and certificate for KMS tests
+export TEST_KMS_KEY_ARN=$(aws ssm get-parameter --name NITRO_CLI_CI_TEST_KMS_KEY_ARN --region us-east-1 | jq -r .Parameter.Value)
+if [[ $TEST_KMS_KEY_ARN == "" ]];
+then
+        echo "Invalid TEST_KMS_KEY_ARN"
+        exit 1
+fi
+export TEST_CERTIFICATE_PATH=$(pwd)/test_certificate.pem
+aws ssm get-parameter --name NITRO_CLI_CI_TEST_KMS_SIGNING_CERT --region us-east-1 | jq -r .Parameter.Value > $TEST_CERTIFICATE_PATH
+
 STATE="pending"
 status_update
 

@@ -8,7 +8,7 @@
 
 extern crate lazy_static;
 
-use clap::{Arg, ArgGroup, Command};
+use clap::{Arg, Command};
 use log::info;
 use std::os::unix::net::UnixStream;
 

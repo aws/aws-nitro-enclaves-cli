@@ -106,12 +106,8 @@ pub struct BuildEnclavesArgs {
     pub output: String,
     /// The path to the signing certificate for signed enclaves.
     pub signing_certificate: Option<String>,
-    /// The path to the private key for signed enclaves.
+    /// KMS key ARN or path to the private key for signed enclaves.
     pub private_key: Option<String>,
-    /// ID of the KMS key for signed enclaves.
-    pub kms_key_id: Option<String>,
-    /// Region of the KMS key for signed enclaves.
-    pub kms_key_region: Option<String>,
     /// The name of the enclave image.
     pub img_name: Option<String>,
     /// The version of the enclave image.
@@ -141,8 +137,6 @@ impl BuildEnclavesArgs {
             })?,
             signing_certificate: parse_signing_certificate(args),
             private_key: parse_private_key(args),
-            kms_key_id: parse_kms_key_id(args),
-            kms_key_region: parse_kms_key_region(args),
             img_name: parse_image_name(args),
             img_version: parse_image_version(args),
             metadata: parse_metadata(args),
@@ -528,14 +522,6 @@ fn parse_private_key(args: &ArgMatches) -> Option<String> {
     args.get_one::<String>("private-key").map(String::from)
 }
 
-fn parse_kms_key_id(args: &ArgMatches) -> Option<String> {
-    args.get_one::<String>("kms-key-id").map(String::from)
-}
-
-fn parse_kms_key_region(args: &ArgMatches) -> Option<String> {
-    args.get_one::<String>("kms-key-region").map(String::from)
-}
-
 fn parse_image_name(args: &ArgMatches) -> Option<String> {
     args.get_one::<String>("image_name").map(String::from)
 }
@@ -565,7 +551,7 @@ mod tests {
     use crate::common::construct_error_message;
     use crate::create_app;
 
-    use clap::{Arg, ArgGroup, Command};
+    use clap::{Arg, Command};
 
     /// Parse the path of the JSON config file
     fn parse_config_file(args: &ArgMatches) -> NitroCliResult<String> {

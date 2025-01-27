@@ -1,7 +1,7 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::{Arg, ArgAction, ArgGroup, Command};
+use clap::{Arg, ArgAction, Command};
 use std::fs::OpenOptions;
 
 use aws_nitro_enclaves_image_format::generate_build_info;
@@ -68,29 +68,14 @@ fn main() {
         .arg(
             Arg::new("signing-certificate")
                 .long("signing-certificate")
-                .help("Specify the path to the signing certificate"),
+                .help("Specify the path to the signing certificate")
+                .requires("private-key"),
         )
         .arg(
             Arg::new("private-key")
                 .long("private-key")
-                .help("Specify the path to the private-key"),
-        )
-        .arg(
-            Arg::new("kms-key-id")
-                .long("kms-key-id")
-                .help("Specify unique id of the KMS key")
-        )
-        .arg(
-            Arg::new("kms-key-region")
-                .long("kms-key-region")
-                .help("Specify region in which the KMS key resides")
-                .requires("kms-key-id")
-        )
-        .group(
-            ArgGroup::new("signing-key")
-                .args(["kms-key-id", "private-key"])
-                .multiple(false)
-                .requires("signing-certificate")
+                .help("Specify KMS key ARN or the path to the private key file")
+                .requires("signing-certificate"),
         )
         .arg(
             Arg::new("build")
@@ -139,10 +124,6 @@ fn main() {
     let img_name = matches.get_one::<String>("image_name").map(String::from);
     let img_version = matches.get_one::<String>("image_version").map(String::from);
     let metadata = matches.get_one::<String>("metadata").map(String::from);
-    let kms_key_id = matches.get_one::<String>("kms-key-id").map(String::from);
-    let kms_key_region = matches
-        .get_one::<String>("kms-key-region")
-        .map(String::from);
 
     let mut output = OpenOptions::new()
         .read(true)
@@ -163,8 +144,6 @@ fn main() {
         ".".to_string(),
         &signing_certificate,
         &private_key,
-        &kms_key_id,
-        &kms_key_region,
         img_name,
         img_version,
         metadata,

@@ -198,9 +198,9 @@ dependencies = [
 
 [[package]]
 name = "aws-nitro-enclaves-image-format"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6d27871fc99882b0af93d9adc405158073f48693a0eaeb31b5d083e61476717"
+checksum = "be2355fd67972562e7402384bf20c7d913070e4f0d0d1d722c4a3cbc3c977d6c"
 dependencies = [
  "aws-config",
  "aws-nitro-enclaves-cose",
@@ -215,6 +215,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "openssl",
+ "regex",
  "serde",
  "serde_cbor",
  "serde_json",

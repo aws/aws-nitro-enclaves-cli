@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod test_nitro_cli_args {
-    use clap::{Arg, ArgGroup, Command};
+    use clap::{Arg, Command};
     use nitro_cli::create_app;
 
     #[test]
@@ -298,7 +298,7 @@ mod test_nitro_cli_args {
     }
 
     #[test]
-    fn build_signed_enclave_correct_command_kms_key() {
+    fn build_signed_enclave_correct_command_kms_arn() {
         let app = create_app!();
         let args = vec![
             "nitro cli",
@@ -311,55 +311,11 @@ mod test_nitro_cli_args {
             "image.eif",
             "--signing-certificate",
             "cert.pem",
-            "--kms-key-id",
-            "key_id",
+            "--private-key",
+            "arn:aws:kms:us-west-2:111122223333:key/12345678-abcd-bcde-9876-ab0987654321",
         ];
 
         assert!(app.try_get_matches_from(args).is_ok())
-    }
-
-    #[test]
-    fn build_signed_enclave_correct_command_kms_key_and_region() {
-        let app = create_app!();
-        let args = vec![
-            "nitro cli",
-            "build-enclave",
-            "--docker-uri",
-            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
-            "--docker-dir",
-            "dir/",
-            "--output-file",
-            "image.eif",
-            "--signing-certificate",
-            "cert.pem",
-            "--kms-key-id",
-            "key_id",
-            "--kms-key-region",
-            "us-east-1",
-        ];
-
-        assert!(app.try_get_matches_from(args).is_ok())
-    }
-
-    #[test]
-    fn build_signed_enclave_no_key_and_kms_region() {
-        let app = create_app!();
-        let args = vec![
-            "nitro cli",
-            "build-enclave",
-            "--docker-uri",
-            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
-            "--docker-dir",
-            "dir/",
-            "--output-file",
-            "image.eif",
-            "--signing-certificate",
-            "cert.pem",
-            "--kms-key-region",
-            "us-east-1",
-        ];
-
-        assert!(app.try_get_matches_from(args).is_err())
     }
 
     #[test]
@@ -376,50 +332,6 @@ mod test_nitro_cli_args {
             "image.eif",
             "--private-key",
             "key.pem",
-        ];
-
-        assert!(app.try_get_matches_from(args).is_err())
-    }
-
-    #[test]
-    fn build_signed_enclave_both_local_and_kms_key() {
-        let app = create_app!();
-        let args = vec![
-            "nitro cli",
-            "build-enclave",
-            "--docker-uri",
-            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
-            "--docker-dir",
-            "dir/",
-            "--output-file",
-            "image.eif",
-            "--signing-certificate",
-            "cert.pem",
-            "--private-key",
-            "key.pem",
-            "--kms-key-id",
-            "key_id",
-        ];
-
-        assert!(app.try_get_matches_from(args).is_err())
-    }
-
-    #[test]
-    fn build_signed_enclave_both_local_and_kms_key_missing_certificate() {
-        let app = create_app!();
-        let args = vec![
-            "nitro cli",
-            "build-enclave",
-            "--docker-uri",
-            "dkr.ecr.us-east-1.amazonaws.com/stronghold-develss",
-            "--docker-dir",
-            "dir/",
-            "--output-file",
-            "image.eif",
-            "--private-key",
-            "key.pem",
-            "--kms-key-id",
-            "key_id",
         ];
 
         assert!(app.try_get_matches_from(args).is_err())

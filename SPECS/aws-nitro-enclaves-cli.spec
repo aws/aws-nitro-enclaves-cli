@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.3.4
+Version:    1.4.0
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,17 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Fri Jan 31 2025 Mark Kirichenko <mkirich@amazon.de> - 1.4.0-0
+- nitro-cli: allow to use KMS keys to sign EIFs during build
+- nitro-cli: add command to sign pre-built EIFs
+- rust: bump MSRV to 1.71
+- build(deps): bump idna to 1.0.3
+- build(deps): replace yaml-rust with yaml-rust2
+- build(deps): replace serde_cbor with ciborium
+- build(deps): bump Clap to 4.4
+- ci: unpin version for cargo-audit
+- ci: add Unicode-3.0 and OpenSSL to allowed licenses
+
 * Mon Oct 21 2024 Leonard Foerster <foersleo@amazon.com> - 1.3.4-0
 - blobs: Update linuxkit to version 1.5.2
 

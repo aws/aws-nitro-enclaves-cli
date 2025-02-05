@@ -11,7 +11,7 @@ rust-version = "1.68"
 aws-nitro-enclaves-image-format = "0.5"
 nix = "0.26"
 libc = "0.2"
-vsock = "0.3"
+vsock = "0.5"
 
 [dev-dependencies]
 sha2 = "0.9.5"

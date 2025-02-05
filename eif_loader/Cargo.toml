@@ -15,7 +15,7 @@ vsock = "0.3"
 
 [dev-dependencies]
 sha2 = "0.9.5"
-tempfile = "3.5"
+tempfile = "3.16"
 
 [lib]
 name = "eif_loader"

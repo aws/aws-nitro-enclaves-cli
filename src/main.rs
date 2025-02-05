@@ -111,6 +111,7 @@ fn main() {
                 0,
                 false,
                 vec![0],
+                true,
             )
             .map_err(|e| {
                 e.add_subaction("Failed to handle all enclave process replies".to_string())
@@ -178,6 +179,7 @@ fn main() {
                     0,
                     false,
                     vec![0],
+                    true,
                 )
                 .map_err(|e| {
                     e.add_subaction("Failed to handle all enclave process replies".to_string())
@@ -207,6 +209,7 @@ fn main() {
                 comm_errors,
                 true,
                 vec![0],
+                true,
             )
             .map_err(|e| {
                 e.add_subaction("Failed to handle all enclave process replies".to_string())

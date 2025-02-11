@@ -1,0 +1,15 @@
+[package]
+name = "allocator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4.22"
+serde = {version = "1.0.217", features = ["derive"] }
+serde_yaml = "0.9.34"
+thiserror = "2.0.9"
+lazy_static = "1.4"
+
+
+[dev-dependencies]
+tempfile = "3.2"

@@ -10,18 +10,31 @@ pub enum ResourcePool {
     CpuCount { memory_mib: usize , cpu_count: usize},
     CpuPool { cpu_pool: String, memory_mib: usize },
 }
-pub fn get_resource_pool_from_config()  -> Result<Vec<ResourcePool>, Box<dyn std::error::Error>> {
-    //config file deserializing
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum ResourcePoolConfig {
+    #[serde(rename = "value")]
+    Single(ResourcePool),
+    #[serde(rename = "value")]
+    Multiple(Vec<ResourcePool>),
+}
+
+pub fn get_resource_pool_from_config() -> Result<Vec<ResourcePool>, Box<dyn std::error::Error>> {
     let f = std::fs::File::open("/etc/nitro_enclaves/allocator.yaml")?;
-    let pool: Vec<ResourcePool> =  match serde_yaml::from_reader(f) {
-        Ok(pool) => pool,
-        Err(_) => {return Err(Box::new(Error::ConfigFileCorruption));},//error messages use anyhow
+    let config: ResourcePoolConfig = serde_yaml::from_reader(f)
+        .map_err(|_| Error::ConfigFileCorruption)?;
+    
+    let pool = match config {
+        ResourcePoolConfig::Single(pool) => vec![pool],
+        ResourcePoolConfig::Multiple(pools) => pools,
     };
+
     if pool.len() > 4 {
-       eprintln!("{}",Error::MoreResourcePoolThanSupported);
+        eprintln!("{}", Error::MoreResourcePoolThanSupported);
     }
     Ok(pool)
 }
+
 pub fn get_current_allocated_cpu_pool() -> Result<Option<std::collections::BTreeSet::<usize>>, Box<dyn std::error::Error>> {
     let f = std::fs::read_to_string("/sys/module/nitro_enclaves/parameters/ne_cpus")?;
     if f.trim().is_empty() {

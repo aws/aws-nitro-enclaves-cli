@@ -19,103 +19,66 @@ pub enum Error
 	NumaDifference,
 }
 
-pub struct Allocation
+pub fn allocate_by_cpu_count(mut pool: Vec<ResourcePool>,target_numa: Option<usize>) -> Result<(), Error>
 {
-	// Both allocations implement Drop
-	#[allow(dead_code)]
-	cpu_set_allocation: cpu::Allocation,
-	_huge_pages_allocation: huge_pages::Allocation,
-}
-
-impl Allocation
-{
-	#[allow(dead_code)]
-	pub fn new(cpu_count: usize, memory_mib: usize) -> Result<Self, Error>
-	{
-		// Find NUMA nodes with a suitable CPU set
-		for (numa_node, cpu_set) in cpu::find_suitable_cpu_sets(cpu_count)?.into_iter()
-		{
-			// Try to allocate the memory on the NUMA node ...
-			let huge_pages_allocation =
-				match huge_pages::Allocation::new(numa_node, memory_mib)
-				{
-					Ok(allocation) => allocation,
-					Err(huge_pages::Error::InsufficientMemory) => continue,
-					Err(error) => return Err(error.into()),
-				};
-
-			// ... if successful, also allocate the CPU set
-			let cpu_set_allocation = cpu::Allocation::new(cpu_set)?;
-
-			return Ok(Self
-				{
-					cpu_set_allocation,
-					_huge_pages_allocation: huge_pages_allocation,
-				});
-		}
-
-		Err(Error::Allocation)
-	}
-	pub fn allocate_by_cpu_count(mut pool: Vec<ResourcePool>,target_numa: Option<usize>) -> Result<(), Error>
-	{
-		pool.retain(|p| matches!(p, ResourcePool::CpuCount{..}));
-		if pool.len() == 0 {
-			return Ok(());
-		}
-
-
-		let total_cpu_count: usize = pool.iter()
-		.map(|p| {
-			if let ResourcePool::CpuCount { cpu_count, .. } = p {
-				*cpu_count
-			} else {
-				unreachable!()  // Won't happen because we already filtered
-			}
-		})
-		.sum();
-					
-		// Find NUMA nodes with a suitable CPU set
-		for (numa_node, cpu_set) in cpu::find_suitable_cpu_sets(total_cpu_count)?.into_iter()
-		.filter(|(numa_node, _)| target_numa.is_none() || *numa_node == target_numa.unwrap()) 
-		{//if user specificly defined cpu ids in config file and they also want to allocate some other resource pool with cpu_count tag then allocator should allocate them in same numa node
-			match allocate_cpus_n_pages(&pool, cpu_set, numa_node) {
-				Ok(_) => return Ok(()),
-				Err(Error::HugePage(huge_pages::Error::InsufficientMemory)) => continue,
-				Err(error) => return Err(error.into()),
-			}
-		}
-		return Err(Error::Allocation);
+	pool.retain(|p| matches!(p, ResourcePool::CpuCount{..}));
+	if pool.len() == 0 {
+		return Ok(());
 	}
 
-	pub fn allocate_by_cpu_pools(mut pools: Vec<ResourcePool>) -> Result<Option<usize>, Error>
-	{
-		pools.retain(|p| matches!(p, ResourcePool::CpuPool {..}));
-		if pools.len() == 0 {
-			return Ok(None);
+
+	let total_cpu_count: usize = pool.iter()
+	.map(|p| {
+		if let ResourcePool::CpuCount { cpu_count, .. } = p {
+			*cpu_count
+		} else {
+			unreachable!()  // Won't happen because we already filtered
 		}
-		
-		let mut final_cpu_list = cpu::CpuSet::new();
-
-		//merging cpu lists
-		for pool in &pools {
-			if let ResourcePool::CpuPool { cpu_pool, .. } = pool {
-				final_cpu_list.extend(cpu::parse_cpu_list(cpu_pool)?);
-			}
-		}
-
-		//check if provided cpus are in the same numa node
-		let numa_node = match sanity_check_numa_nodes(&final_cpu_list) {
-			Ok(numa) => numa,
-			Err(e) => return Err(e),
-		};
-
-		match allocate_cpus_n_pages(&pools, final_cpu_list, numa_node) {
-			Ok(_) => return Ok(Some(numa_node)),
+	})
+	.sum();
+				
+	// Find NUMA nodes with a suitable CPU set
+	for (numa_node, cpu_set) in cpu::find_suitable_cpu_sets(total_cpu_count)?.into_iter()
+	.filter(|(numa_node, _)| target_numa.is_none() || *numa_node == target_numa.unwrap()) 
+	{//if user specificly defined cpu ids in config file and they also want to allocate some other resource pool with cpu_count tag then allocator should allocate them in same numa node
+		match allocate_cpus_n_pages(&pool, cpu_set, numa_node) {
+			Ok(_) => return Ok(()),
+			Err(Error::HugePage(huge_pages::Error::InsufficientMemory)) => continue,
 			Err(error) => return Err(error.into()),
 		}
-
 	}
+	return Err(Error::Allocation);
 }
+
+pub fn allocate_by_cpu_pools(mut pools: Vec<ResourcePool>) -> Result<Option<usize>, Error>
+{
+	pools.retain(|p| matches!(p, ResourcePool::CpuPool {..}));
+	if pools.len() == 0 {
+		return Ok(None);
+	}
+	
+	let mut final_cpu_list = cpu::CpuSet::new();
+
+	//merging cpu lists
+	for pool in &pools {
+		if let ResourcePool::CpuPool { cpu_pool, .. } = pool {
+			final_cpu_list.extend(cpu::parse_cpu_list(cpu_pool)?);
+		}
+	}
+
+	//check if provided cpus are in the same numa node
+	let numa_node = match sanity_check_numa_nodes(&final_cpu_list) {
+		Ok(numa) => numa,
+		Err(e) => return Err(e),
+	};
+
+	match allocate_cpus_n_pages(&pools, final_cpu_list, numa_node) {
+		Ok(_) => return Ok(Some(numa_node)),
+		Err(error) => return Err(error.into()),
+	}
+
+}
+
 //All enclaves should be allocated in same numa node if user wants to allocate specific cpus then system should check if they are all in same numa node
 pub fn sanity_check_numa_nodes(cpu_set: &BTreeSet<usize>) -> Result<usize, Error> {//change the logic
 	let mut numa = usize::MAX;
@@ -203,7 +166,7 @@ mod tests {
         ];
         println!("Created pools: {:?}", pools);
 
-        match Allocation::allocate_by_cpu_count(pools, Some(0)) {
+        match allocate_by_cpu_count(pools, Some(0)) {
             Ok(_) => println!("find_n_allocate successful"),
             Err(e) => panic!("find_n_allocate failed with error: {:?}", e),
         }
@@ -214,7 +177,7 @@ mod tests {
     fn test_find_n_allocate_with_target_numa() {
         let _lock = TEST_MUTEX.lock().unwrap();
         let pools = vec![create_resource_pool_with_count(512, 2)];
-        let result = Allocation::allocate_by_cpu_count(pools, Some(0));
+        let result = allocate_by_cpu_count(pools, Some(0));
         assert!(result.is_ok());
         let _ = configuration::clear_everything_in_numa_node();
     }
@@ -223,7 +186,7 @@ mod tests {
     fn test_find_n_allocate_with_insufficient_memory() {
         let _lock = TEST_MUTEX.lock().unwrap();
         let pools = vec![create_resource_pool_with_count(1024000, 2)];
-        let result = Allocation::allocate_by_cpu_count(pools, Some(0));
+        let result = allocate_by_cpu_count(pools, Some(0));
         assert!(result.is_err());
     }
 
@@ -231,7 +194,7 @@ mod tests {
     fn test_find_n_allocate_with_insufficient_cpu() {
         let _lock = TEST_MUTEX.lock().unwrap();
         let pools = vec![create_resource_pool_with_count(1024, usize::MAX)];
-        let result = Allocation::allocate_by_cpu_count(pools, Some(0));
+        let result = allocate_by_cpu_count(pools, Some(0));
         assert!(result.is_err());
     }
 
@@ -245,7 +208,7 @@ mod tests {
         ];
         println!("Created pools: {:?}", pools);
 
-        match Allocation::allocate_by_cpu_pools(pools) {
+        match allocate_by_cpu_pools(pools) {
             Ok(numa) => println!("allocate_by_cpu_pools successful with NUMA node: {}", numa.unwrap()),
             Err(e) => panic!("allocate_by_cpu_pools failed with error: {:?}", e),
         }

@@ -4,31 +4,19 @@ mod configuration;
 
 
 fn main()  -> Result<(), Box<dyn std::error::Error>> {
-	let _ = configuration::clear_everything_in_numa_node();
+	let _ = configuration::clear_everything_in_numa_node().map_err(|e| format!("Failed to clear previously allocated resources.{}",e));
 
-	match configuration::get_resource_pool_from_config() {
-    	Ok(pool) => {			
-			let numa_node = match resources::Allocation::allocate_by_cpu_pools(pool.clone()){
-				Ok(numa) => numa,
-				Err(e) =>{
-					eprintln!("Allocation failed: {}",e);
-					return Err(Box::new(e));
-				},//proper error messages				
-			};
-      		match resources::Allocation::allocate_by_cpu_count(pool,numa_node) {
-				Ok(_) => {},
-				Err(e) => {
-					let _ = configuration::clear_everything_in_numa_node();
-					eprintln!(" Allocation failed: {}",e);
-					return Err(Box::new(e));
-				}
-			} //check if allocation successful or not, if not clear what you allocated previously
-    	}
-    	Err(e) => {
-			eprintln!("Allocation failed: {}",e);
-      		return Err(e);
-    	}
+	let pool = configuration::get_resource_pool_from_config()
+        .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-  	};
-  	Ok(())
+    let numa_node = resources::allocate_by_cpu_pools(pool.clone())
+        .map_err(|e| format!("Failed to allocate resources: {}", e))?;
+
+    resources::allocate_by_cpu_count(pool, numa_node)
+        .map_err(|e| {
+            let _ = configuration::clear_everything_in_numa_node().map_err(|e| format!("Failed to clear previously allocated resources.{}",e));
+            format!("Failed to allocate resources: {}", e)
+        })?;
+
+    Ok(())
 }

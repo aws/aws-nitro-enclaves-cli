@@ -1,4 +1,4 @@
-type CpuSet = std::collections::BTreeSet::<usize>;
+pub type CpuSet = std::collections::BTreeSet::<usize>;
 type CpuSets = std::collections::HashMap::<usize, CpuSet>;
 
 #[derive(thiserror::Error, Debug)]
@@ -8,16 +8,19 @@ pub enum Error
 	Io(#[from] std::io::Error),
 	#[error(transparent)]
 	ParseInt(#[from] std::num::ParseIntError),
-	#[error("Missing CPU pool file, please make sure the Nitro Enclaves driver is present")]
+	#[error("missing CPU pool file, make sure the Nitro Enclaves driver is present")]
 	MissingCpuPoolFile,
-	#[error("Unexpected sysfs file structure")]
+	#[error("unexpected sysfs file structure")]
 	UnexptectedFileStructure,
+	#[error("failed to configure requested cpu pool, this indicates insufficient system resources")]
+	InsufficientCpuPool,	
 }
 
 const CPU_POOL_FILE: &str = "/sys/module/nitro_enclaves/parameters/ne_cpus";
 
 pub struct Allocation
 {
+	#[allow(dead_code)]
 	cpu_set: CpuSet,
 }
 
@@ -31,17 +34,6 @@ impl Allocation
 		{
 			cpu_set,
 		})
-	}
-}
-
-impl Drop for Allocation
-{
-	fn drop(&mut self)
-	{
-		if let Err(error) = deallocate_cpu_set(&self.cpu_set)
-		{
-			log::error!("Failed to release CPUs: {error}");
-		}
 	}
 }
 
@@ -82,7 +74,7 @@ pub fn find_suitable_cpu_sets(cpu_count: usize) -> Result<CpuSets, Error>
 			{
 				let siblings = get_cpu_siblings(
 					// Safety: We know we have at least one entry in the set
-					*cpus_in_core.iter().next().unwrap())?;
+					*cpus_in_core.first().unwrap())?;
 
 				if *cpus_in_core == siblings
 				{
@@ -109,7 +101,7 @@ fn allocate_cpu_set(update: &CpuSet) -> Result<(), Error>
 	set_cpu_pool(&cpu_set)
 }
 
-fn deallocate_cpu_set(update: &CpuSet) -> Result<(), Error>
+pub fn deallocate_cpu_set(update: &CpuSet) -> Result<(), Error>
 {
 	let mut cpu_set = get_cpu_pool()?;
 	cpu_set.retain(|cpu| !update.contains(cpu));
@@ -132,7 +124,7 @@ fn get_numa_node_count() -> Result<usize, Error>
 	Ok(get_numa_nodes(node_path)?.len())
 }
 
-fn get_numa_node_for_cpu(cpu: usize) -> Result<usize, Error>
+pub fn get_numa_node_for_cpu(cpu: usize) -> Result<usize, Error>
 {
 	let cpu_path = format!("/sys/devices/system/cpu/cpu{cpu}");
 
@@ -209,7 +201,7 @@ fn set_cpu_pool(cpu_set: &CpuSet) -> Result<(), Error>
 	}?)
 }
 
-fn parse_cpu_list(cpu_list: &str) -> Result<CpuSet, Error>
+pub fn parse_cpu_list(cpu_list: &str) -> Result<CpuSet, Error>
 {
 	cpu_list.trim().split_terminator(',')
 		.try_fold(CpuSet::new(), |mut set, entry|
@@ -230,7 +222,7 @@ fn parse_cpu_list(cpu_list: &str) -> Result<CpuSet, Error>
 		})
 }
 
-fn format_cpu_list(cpu_set: &CpuSet) -> String
+pub fn format_cpu_list(cpu_set: &CpuSet) -> String
 {
 	let mut cpu_set = cpu_set.iter();
 
@@ -273,4 +265,3 @@ fn format_range(range: std::ops::RangeInclusive<usize>) -> String
 		format!("{}-{}", range.start(), range.end())
 	}
 }
-

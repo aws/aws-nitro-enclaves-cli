@@ -1,6 +1,5 @@
 type Pages = std::collections::HashMap<usize, usize>;
 type PageSizes = std::collections::BTreeSet<usize>;
-
 #[derive(thiserror::Error, Debug)]
 pub enum Error
 {
@@ -8,9 +7,9 @@ pub enum Error
 	Io(#[from] std::io::Error),
 	#[error(transparent)]
 	ParseInt(#[from] std::num::ParseIntError),
-	#[error("Failed to configure entire amount of requested memory, this indicates insufficient system resources")]
+	#[error("failed to configure requested memory, this indicates insufficient system resources. Rebooting the system might solve the issue")]
 	InsufficientMemory,
-	#[error("Unexpected sysfs file structure")]
+	#[error("unexpected sysfs file structure")]
 	UnexptectedFileStructure,
 }
 
@@ -32,12 +31,7 @@ impl Allocation
 			allocated_pages,
 		})
 	}
-}
-
-impl Drop for Allocation
-{
-	fn drop(&mut self)
-	{
+	pub fn release_resources(&self){
 		if let Err(error) = release_huge_pages(self.numa_node, &self.allocated_pages)
 		{
 			log::error!("Failed to release huge pages: {error}");
@@ -75,7 +69,7 @@ fn configure_huge_pages(numa_node: usize, memory_mib: usize) -> Result<Pages, Er
 		if actual_allocated_pages > 0
 		{
 			allocated_pages.insert(page_size, actual_allocated_pages);
-			remaining_memory -= page_size * actual_allocated_pages;
+			remaining_memory = remaining_memory.saturating_sub(page_size * actual_allocated_pages);
 		}
 
 		if remaining_memory == 0
@@ -94,7 +88,7 @@ fn configure_huge_pages(numa_node: usize, memory_mib: usize) -> Result<Pages, Er
 	Ok(allocated_pages)
 }
 
-fn release_huge_pages(numa_node: usize, allocated_pages: &Pages)
+pub fn release_huge_pages(numa_node: usize, allocated_pages: &Pages)
 	-> Result<(), Error>
 {
 	for (page_size, &allocated_count) in allocated_pages
@@ -111,7 +105,15 @@ fn release_huge_pages(numa_node: usize, allocated_pages: &Pages)
 
 	Ok(())
 }
-
+pub fn release_all_huge_pages(numa_node: usize) -> Result<(), Error> {
+	for page_size in get_huge_page_sizes(numa_node)?.into_iter().rev()
+	{
+		let huge_pages_path =
+			format!("/sys/devices/system/node/node{numa_node}/hugepages/hugepages-{page_size}kB/nr_hugepages");
+		std::fs::write(&huge_pages_path, "0")?;
+	}
+	Ok(())
+}
 fn get_huge_page_sizes(numa_node: usize) -> Result<PageSizes, Error>
 {
 	let path = format!("/sys/devices/system/node/node{numa_node}/hugepages");

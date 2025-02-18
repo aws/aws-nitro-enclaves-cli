@@ -760,23 +760,23 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.18"
+version = "4.5.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e578d6ec4194633722ccf9544794b71b1385c3c027efe0c55db226fc880865c"
+checksum = "92b7b18d71fad5313a1e320fa9897994228ce274b60faa4d694fe0ea89cd9e6d"
 dependencies = [
  "clap_builder",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.4.18"
+version = "4.5.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4df4df40ec50c46000231c914968278b1eb05098cf8f1b3a518a95030e71d1c7"
+checksum = "a35db2071778a7344791a4fb4f95308b5673d219dee3ae348b86642574ecc90c"
 dependencies = [
  "anstream",
  "anstyle",
- "clap_lex 0.6.0",
- "strsim 0.10.0",
+ "clap_lex 0.7.4",
+ "strsim 0.11.1",
 ]
 
 [[package]]
@@ -790,9 +790,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.6.0"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
+checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "colorchoice"
@@ -805,7 +805,7 @@ name = "command-executer"
 version = "0.1.0"
 dependencies = [
  "byteorder",
- "clap 4.4.18",
+ "clap 4.5.30",
  "log",
  "nix 0.26.4",
  "num",
@@ -1001,7 +1001,7 @@ dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64 0.22.1",
  "bollard",
- "clap 4.4.18",
+ "clap 4.5.30",
  "flate2",
  "futures",
  "log",
@@ -1909,7 +1909,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -2030,7 +2030,7 @@ dependencies = [
  "bindgen",
  "chrono",
  "ciborium",
- "clap 4.4.18",
+ "clap 4.5.30",
  "driver-bindings",
  "eif_loader",
  "enclave_build",
@@ -3190,7 +3190,7 @@ name = "vsock-proxy"
 version = "1.0.1"
 dependencies = [
  "chrono",
- "clap 4.4.18",
+ "clap 4.5.30",
  "ctor",
  "env_logger",
  "hickory-resolver",

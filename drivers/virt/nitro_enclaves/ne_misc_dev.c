@@ -1645,8 +1645,12 @@ static __poll_t ne_enclave_poll(struct file *file, poll_table *wait)
 
 	poll_wait(file, &ne_enclave->eventq, wait);
 
+	mutex_lock(&ne_enclave->enclave_info_mutex);
+
 	if (ne_enclave->has_event)
 		mask |= EPOLLHUP;
+
+	mutex_unlock(&ne_enclave->enclave_info_mutex);
 
 	return mask;
 }

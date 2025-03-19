@@ -760,23 +760,23 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.18"
+version = "4.5.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e578d6ec4194633722ccf9544794b71b1385c3c027efe0c55db226fc880865c"
+checksum = "6088f3ae8c3608d19260cd7445411865a485688711b78b5be70d78cd96136f83"
 dependencies = [
  "clap_builder",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.4.18"
+version = "4.5.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4df4df40ec50c46000231c914968278b1eb05098cf8f1b3a518a95030e71d1c7"
+checksum = "22a7ef7f676155edfb82daa97f99441f3ebf4a58d5e32f295a56259f1b6facc8"
 dependencies = [
  "anstream",
  "anstyle",
- "clap_lex 0.6.0",
- "strsim 0.10.0",
+ "clap_lex 0.7.4",
+ "strsim 0.11.1",
 ]
 
 [[package]]
@@ -790,9 +790,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.6.0"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
+checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "colorchoice"
@@ -805,7 +805,7 @@ name = "command-executer"
 version = "0.1.0"
 dependencies = [
  "byteorder",
- "clap 4.4.18",
+ "clap 4.5.32",
  "log",
  "nix 0.26.4",
  "num",
@@ -1001,7 +1001,7 @@ dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64 0.22.1",
  "bollard",
- "clap 4.4.18",
+ "clap 4.5.32",
  "flate2",
  "futures",
  "log",
@@ -2030,7 +2030,7 @@ dependencies = [
  "bindgen",
  "chrono",
  "ciborium",
- "clap 4.4.18",
+ "clap 4.5.32",
  "driver-bindings",
  "eif_loader",
  "enclave_build",
@@ -3183,7 +3183,7 @@ name = "vsock-proxy"
 version = "1.0.1"
 dependencies = [
  "chrono",
- "clap 4.4.18",
+ "clap 4.5.32",
  "ctor",
  "env_logger",
  "hickory-resolver",

@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.4.1
+Version:    1.4.2
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,9 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Wed Mar 19 2025 Costin Lupu <lvpv@amazon.com> - 1.4.2-0
+- bump ring from 0.17.13 to 0.17.14
+
 * Tue Mar 18 2025 Costin Lupu <lvpv@amazon.com> - 1.4.1-0
 - build(deps): bump hickory-resolver from 0.24.2 to 0.24.4
 - build(deps): bump ring from 0.17.8 to 0.17.13

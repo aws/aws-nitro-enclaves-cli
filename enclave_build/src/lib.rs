@@ -7,11 +7,12 @@ use std::path::Path;
 use std::process::Command;
 
 mod docker;
+mod utils;
 mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
 use aws_nitro_enclaves_image_format::utils::identity::parse_custom_metadata;
-use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignEnclaveInfo};
+use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignKeyData};
 use docker::DockerUtil;
 use serde_json::json;
 use sha2::Digest;
@@ -30,7 +31,7 @@ pub struct Docker2Eif<'a> {
     linuxkit_path: String,
     artifacts_prefix: String,
     output: &'a mut File,
-    sign_info: Option<SignEnclaveInfo>,
+    sign_info: Option<SignKeyData>,
     img_name: Option<String>,
     img_version: Option<String>,
     metadata_path: Option<String>,
@@ -68,13 +69,16 @@ impl<'a> Docker2Eif<'a> {
         output: &'a mut File,
         artifacts_prefix: String,
         certificate_path: &Option<String>,
-        key_path: &Option<String>,
+        private_key: &Option<String>,
         img_name: Option<String>,
         img_version: Option<String>,
         metadata_path: Option<String>,
         build_info: EifBuildInfo,
     ) -> Result<Self, Docker2EifError> {
-        let docker = DockerUtil::new(docker_image.clone());
+        let docker = DockerUtil::new(docker_image.clone()).map_err(|e| {
+            eprintln!("Docker error: {e:?}");
+            Docker2EifError::DockerError
+        })?;
 
         if !Path::new(&init_path).is_file() {
             return Err(Docker2EifError::InitPathError);
@@ -94,13 +98,15 @@ impl<'a> Docker2Eif<'a> {
             }
         }
 
-        let sign_info = match (certificate_path, key_path) {
-            (None, None) => None,
-            (Some(cert_path), Some(key_path)) => Some(
-                SignEnclaveInfo::new(cert_path, key_path)
-                    .map_err(|err| Docker2EifError::SignImageError(format!("{err:?}")))?,
+        let sign_info = match (private_key, certificate_path) {
+            (Some(key), Some(cert)) => SignKeyData::new(key, Path::new(&cert)).map_or_else(
+                |e| {
+                    eprintln!("Could not read signing info: {:?}", e);
+                    None
+                },
+                Some,
             ),
-            _ => return Err(Docker2EifError::SignArgsError),
+            _ => None,
         };
 
         Ok(Docker2Eif {
@@ -221,10 +227,11 @@ impl<'a> Docker2Eif<'a> {
         let output = Command::new(&self.linuxkit_path)
             .args([
                 "build",
-                "-name",
+                "--name",
                 &bootstrap_ramfs,
-                "-format",
-                "kernel+initrd",
+                "--format",
+                "kernel+initrd-nogz",
+                "--no-sbom",
                 ramfs_config_file.path().to_str().unwrap(),
             ])
             .output()
@@ -241,13 +248,12 @@ impl<'a> Docker2Eif<'a> {
         let output = Command::new(&self.linuxkit_path)
             .args([
                 "build",
-                "-docker",
-                "-name",
+                "--docker",
+                "--name",
                 &customer_ramfs,
-                "-format",
-                "kernel+initrd",
-                "-prefix",
-                "rootfs/",
+                "--format",
+                "kernel+initrd-nogz",
+                "--no-sbom",
                 ramfs_with_rootfs_config_file.path().to_str().unwrap(),
             ])
             .output()
@@ -271,10 +277,15 @@ impl<'a> Docker2Eif<'a> {
             _ => return Err(Docker2EifError::UnsupportedArchError),
         };
 
+        // We cannot clone `sign_info` because it might contain a KmsKey object
+        // which is not copyable. Since `create` is the last method called, we can
+        // move it out of the struct.
+        let sign_info = self.sign_info.take();
+
         let mut build = EifBuilder::new(
             Path::new(&self.kernel_img_path),
             self.cmdline.clone(),
-            self.sign_info.clone(),
+            sign_info,
             sha2::Sha384::new(),
             flags,
             self.generate_identity_info()?,

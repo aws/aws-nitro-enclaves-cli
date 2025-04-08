@@ -42,7 +42,7 @@ pub struct RunEnclavesArgs {
 impl RunEnclavesArgs {
     /// Construct a new `RunEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        if let Some(config_file) = args.value_of("config") {
+        if let Some(config_file) = args.get_one::<String>("config") {
             let file = File::open(config_file).map_err(|err| {
                 new_nitro_cli_failure!(
                     &format!("Failed to open config file: {:?}", err),
@@ -106,7 +106,7 @@ pub struct BuildEnclavesArgs {
     pub output: String,
     /// The path to the signing certificate for signed enclaves.
     pub signing_certificate: Option<String>,
-    /// The path to the private key for signed enclaves.
+    /// KMS key ARN or path to the private key for signed enclaves.
     pub private_key: Option<String>,
     /// The name of the enclave image.
     pub img_name: Option<String>,
@@ -119,27 +119,6 @@ pub struct BuildEnclavesArgs {
 impl BuildEnclavesArgs {
     /// Construct a new `BuildEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        let signing_certificate = parse_signing_certificate(args);
-        let private_key = parse_private_key(args);
-
-        match (&signing_certificate, &private_key) {
-            (Some(_), None) => {
-                return Err(new_nitro_cli_failure!(
-                    "`private-key` argument not found",
-                    NitroCliErrorEnum::MissingArgument
-                )
-                .add_info(vec!["private-key"]))
-            }
-            (None, Some(_)) => {
-                return Err(new_nitro_cli_failure!(
-                    "`signing-certificate` argument not found",
-                    NitroCliErrorEnum::MissingArgument
-                )
-                .add_info(vec!["signing-certificate"]))
-            }
-            _ => (),
-        };
-
         Ok(BuildEnclavesArgs {
             docker_uri: parse_docker_tag(args).ok_or_else(|| {
                 new_nitro_cli_failure!(
@@ -156,8 +135,8 @@ impl BuildEnclavesArgs {
                 )
                 .add_info(vec!["output"])
             })?,
-            signing_certificate,
-            private_key,
+            signing_certificate: parse_signing_certificate(args),
+            private_key: parse_private_key(args),
             img_name: parse_image_name(args),
             img_version: parse_image_version(args),
             metadata: parse_metadata(args),
@@ -237,7 +216,7 @@ impl DescribeEnclavesArgs {
     /// Construct a new `DescribeEnclavesArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> Self {
         DescribeEnclavesArgs {
-            metadata: args.is_present("metadata"),
+            metadata: args.get_flag("metadata"),
         }
     }
 }
@@ -270,7 +249,7 @@ pub struct PcrArgs {
 impl PcrArgs {
     /// Construct a new `PcrArgs` instance from the given command-line arguments.
     pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
-        let (val_name, pcr_type) = match args.is_present("signing-certificate") {
+        let (val_name, pcr_type) = match args.contains_id("signing-certificate") {
             true => ("signing-certificate", PcrType::SigningCertificate),
             false => ("input", PcrType::DefaultType),
         };
@@ -280,15 +259,41 @@ impl PcrArgs {
     }
 }
 
+/// The arguments used by `sign-eif` command
+#[derive(Debug, Clone)]
+pub struct SignEifArgs {
+    /// Path to the EIF file needed for signing
+    pub eif_path: String,
+    /// The path to the signing certificate for signed enclaves.
+    pub signing_certificate: Option<String>,
+    /// ARN of the KMS key or path to the local private key for signed enclaves.
+    pub private_key: Option<String>,
+}
+
+impl SignEifArgs {
+    /// Construct a new `SignEifArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> NitroCliResult<Self> {
+        let signing_certificate = parse_signing_certificate(args);
+        let private_key = parse_private_key(args);
+
+        Ok(SignEifArgs {
+            eif_path: parse_eif_path(args)
+                .map_err(|e| e.add_subaction("Parse EIF path".to_string()))?,
+            signing_certificate,
+            private_key,
+        })
+    }
+}
+
 /// Parse file path to hash from the command-line arguments.
 fn parse_file_path(args: &ArgMatches, val_name: &str) -> NitroCliResult<String> {
-    let path = args.value_of(val_name).ok_or_else(|| {
+    let path = args.get_one::<String>(val_name).ok_or_else(|| {
         new_nitro_cli_failure!(
             "`input` or `signing-certificate` argument not found",
             NitroCliErrorEnum::MissingArgument
         )
     })?;
-    Ok(path.to_string())
+    Ok(path.into())
 }
 
 #[derive(Debug)]
@@ -332,7 +337,7 @@ impl FromStr for MemoryUnit {
 /// # Arguments
 /// * `args` - The command-line arguments.
 pub fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
-    let memory = args.value_of("memory").ok_or_else(|| {
+    let memory = args.get_one::<String>("memory").ok_or_else(|| {
         new_nitro_cli_failure!(
             "`memory` argument not found",
             NitroCliErrorEnum::MissingArgument
@@ -341,7 +346,7 @@ pub fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
 
     let (num_str, size_str) = match memory.find(|c: char| !c.is_numeric()) {
         Some(index) => memory.split_at(index),
-        None => (memory, ""),
+        None => (memory.as_str(), ""),
     };
     let num = num_str.parse::<u64>().map_err(|_| {
         new_nitro_cli_failure!(
@@ -363,17 +368,17 @@ pub fn parse_memory(args: &ArgMatches) -> NitroCliResult<u64> {
 
 /// Parse the Docker tag from the command-line arguments.
 fn parse_docker_tag(args: &ArgMatches) -> Option<String> {
-    args.value_of("docker-uri").map(|val| val.to_string())
+    args.get_one::<String>("docker-uri").map(String::from)
 }
 
 /// Parse the Docker directory from the command-line arguments.
 fn parse_docker_dir(args: &ArgMatches) -> Option<String> {
-    args.value_of("docker-dir").map(|val| val.to_string())
+    args.get_one::<String>("docker-dir").map(String::from)
 }
 
 /// Parse the enclave's required CID from the command-line arguments.
 fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
-    let enclave_cid = if let Some(enclave_cid) = args.value_of("enclave-cid") {
+    let enclave_cid = if let Some(enclave_cid) = args.get_one::<String>("enclave-cid") {
         let enclave_cid: u64 = enclave_cid.parse().map_err(|_| {
             new_nitro_cli_failure!(
                 "`enclave-cid` is not a number",
@@ -403,7 +408,7 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
             ));
         }
 
-        if enclave_cid == u32::max_value() as u64 {
+        if enclave_cid == u32::MAX as u64 {
             return Err(new_nitro_cli_failure!(
                 &format!(
                     "CID {} is a well-known CID, not to be used for enclaves",
@@ -425,7 +430,7 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
         }
 
         // 64-bit CIDs are not yet supported for the vsock device.
-        if enclave_cid > u32::max_value() as u64 {
+        if enclave_cid > u32::MAX as u64 {
             return Err(new_nitro_cli_failure!(
                 &format!(
                     "CID {} is higher than the maximum supported (u32 max) for a vsock device",
@@ -445,38 +450,35 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
 
 /// Parse the enclave image file path from the command-line arguments.
 fn parse_eif_path(args: &ArgMatches) -> NitroCliResult<String> {
-    let eif_path = args.value_of("eif-path").ok_or_else(|| {
+    let eif_path = args.get_one::<String>("eif-path").ok_or_else(|| {
         new_nitro_cli_failure!(
             "`eif-path` argument not found",
             NitroCliErrorEnum::MissingArgument
         )
     })?;
-    Ok(eif_path.to_string())
+    Ok(eif_path.into())
 }
 
 /// Parse the enclave's ID from the command-line arguments.
 fn parse_enclave_id(args: &ArgMatches) -> NitroCliResult<String> {
-    let enclave_id = args.value_of("enclave-id").ok_or_else(|| {
+    let enclave_id = args.get_one::<String>("enclave-id").ok_or_else(|| {
         new_nitro_cli_failure!(
             "`enclave-id` argument not found",
             NitroCliErrorEnum::MissingArgument
         )
     })?;
-    Ok(enclave_id.to_string())
+    Ok(enclave_id.into())
 }
 
 /// Parse the disconnect timeout from the command-line arguments.
 fn parse_disconnect_timeout(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
-    let disconnect_timeout = match args.value_of("disconnect-timeout") {
+    let disconnect_timeout = match args.get_one::<String>("disconnect-timeout") {
         Some(arg) => Some(arg.parse::<u64>().map_err(|_| {
             new_nitro_cli_failure!(
                 "`disconnect-timeout` argument can't be parsed as a number",
                 NitroCliErrorEnum::InvalidArgument
             )
-            .add_info(vec![
-                "disconnect-timeout",
-                args.value_of("disconnect-timeout").unwrap(),
-            ])
+            .add_info(vec!["disconnect-timeout", arg])
         })?),
         None => None,
     };
@@ -485,85 +487,81 @@ fn parse_disconnect_timeout(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
 
 /// Parse the list of requested CPU IDs from the command-line arguments.
 fn parse_cpu_ids(args: &ArgMatches) -> NitroCliResult<Option<Vec<u32>>> {
-    let cpu_ids_arg = args.values_of("cpu-ids");
-    match cpu_ids_arg {
-        Some(iterator) => {
-            let mut cpu_ids = Vec::new();
-            for cpu_id in iterator {
-                cpu_ids.push(cpu_id.parse().map_err(|_| {
-                    new_nitro_cli_failure!(
-                        "`cpu-id` is not a number",
-                        NitroCliErrorEnum::InvalidArgument
-                    )
-                    .add_info(vec!["cpu-id", cpu_id])
-                })?);
-            }
-            Ok(Some(cpu_ids))
-        }
-        None => Ok(None),
-    }
+    args.get_many::<String>("cpu-ids")
+        .map(|values| {
+            values
+                .map(|id| {
+                    id.parse().map_err(|_| {
+                        new_nitro_cli_failure!(
+                            "`cpu-id` is not a number",
+                            NitroCliErrorEnum::InvalidArgument
+                        )
+                        .add_info(vec!["cpu-id", id])
+                    })
+                })
+                .collect()
+        })
+        .transpose()
 }
 
 /// Parse the requested number of CPUs from the command-line arguments.
 fn parse_cpu_count(args: &ArgMatches) -> NitroCliResult<Option<u32>> {
-    let cpu_count = if let Some(cpu_count) = args.value_of("cpu-count") {
-        let cpu_count: u32 = cpu_count.parse().map_err(|_| {
-            new_nitro_cli_failure!(
-                "`cpu-count` is not a number",
-                NitroCliErrorEnum::InvalidArgument
-            )
-            .add_info(vec!["cpu-count", cpu_count])
-        })?;
-        Some(cpu_count)
-    } else {
-        None
-    };
-    Ok(cpu_count)
+    args.get_one::<String>("cpu-count")
+        .map(|count| {
+            count.parse().map_err(|_| {
+                new_nitro_cli_failure!(
+                    "`cpu-count` is not a number",
+                    NitroCliErrorEnum::InvalidArgument
+                )
+                .add_info(vec!["cpu-count", count])
+            })
+        })
+        .transpose()
 }
 
 /// Parse the path of an output file from the command-line arguments.
 fn parse_output(args: &ArgMatches) -> Option<String> {
-    args.value_of("output-file").map(|val| val.to_string())
+    args.get_one::<String>("output-file").map(String::from)
 }
 
 /// Parse the debug-mode flag from the command-line arguments.
 fn debug_mode(args: &ArgMatches) -> bool {
-    args.is_present("debug-mode") || args.is_present("attach-console")
+    args.get_flag("debug-mode") || args.get_flag("attach-console")
 }
 
 /// Parse the attach-console flag from the command-line arguments.
 fn attach_console(args: &ArgMatches) -> bool {
-    args.is_present("attach-console")
+    args.get_flag("attach-console")
 }
 
 /// Parse the enclave name from the command-line arguments.
 fn parse_enclave_name(args: &ArgMatches) -> NitroCliResult<Option<String>> {
-    Ok(args.value_of("enclave-name").map(|e| e.to_string()))
+    Ok(args.get_one::<String>("enclave-name").map(String::from))
 }
 
 fn parse_signing_certificate(args: &ArgMatches) -> Option<String> {
-    args.value_of("signing-certificate")
-        .map(|val| val.to_string())
+    args.get_one::<String>("signing-certificate")
+        .map(String::from)
 }
 
 fn parse_private_key(args: &ArgMatches) -> Option<String> {
-    args.value_of("private-key").map(|val| val.to_string())
+    args.get_one::<String>("private-key").map(String::from)
 }
 
 fn parse_image_name(args: &ArgMatches) -> Option<String> {
-    args.value_of("image_name").map(|val| val.to_string())
+    args.get_one::<String>("image_name").map(String::from)
 }
 
 fn parse_image_version(args: &ArgMatches) -> Option<String> {
-    args.value_of("image_version").map(|val| val.to_string())
+    args.get_one::<String>("image_version").map(String::from)
 }
 
 fn parse_metadata(args: &ArgMatches) -> Option<String> {
-    args.value_of("metadata").map(|val| val.to_string())
+    args.get_one::<String>("metadata").map(String::from)
 }
 
 fn parse_error_code_str(args: &ArgMatches) -> NitroCliResult<String> {
-    let error_code_str = args.value_of("error-code").ok_or_else(|| {
+    let error_code_str = args.get_one::<String>("error-code").ok_or_else(|| {
         new_nitro_cli_failure!(
             "`error-code` argument not found",
             NitroCliErrorEnum::MissingArgument
@@ -579,17 +577,19 @@ mod tests {
     use crate::common::construct_error_message;
     use crate::create_app;
 
-    use clap::{App, AppSettings, Arg, SubCommand};
+    use clap::{Arg, Command};
 
     /// Parse the path of the JSON config file
     fn parse_config_file(args: &ArgMatches) -> NitroCliResult<String> {
-        let config_file = args.value_of("config").ok_or_else(|| {
-            new_nitro_cli_failure!(
-                "`config` argument not found",
-                NitroCliErrorEnum::MissingArgument
-            )
-        })?;
-        Ok(config_file.to_string())
+        let config_file = args
+            .get_one::<String>("config")
+            .ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`config` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+            })?;
+        Ok(config_file.into())
     }
 
     #[test]
@@ -606,7 +606,7 @@ mod tests {
             "non_existing_eif.eif",
         ];
 
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_memory(
@@ -634,7 +634,7 @@ mod tests {
             "non_existing_eif.eif",
         ];
 
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_memory(
@@ -658,7 +658,7 @@ mod tests {
             "non_existing_eif.eif",
         ];
 
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_memory(
@@ -682,7 +682,7 @@ mod tests {
             "non_existing_eif.eif",
         ];
 
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_memory(
@@ -706,7 +706,7 @@ mod tests {
             "non_existing_eif.eif",
         ];
 
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_memory(
@@ -732,7 +732,7 @@ mod tests {
             "--output-file",
             "sample_eif.eif",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_docker_tag(
@@ -759,7 +759,7 @@ mod tests {
             "--output-file",
             "sample_eif.eif",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_docker_dir(
@@ -788,7 +788,7 @@ mod tests {
             "--enclave-cid",
             "10",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_enclave_cid(
@@ -820,7 +820,7 @@ mod tests {
             "--enclave-cid",
             "0",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_enclave_cid(
@@ -852,7 +852,7 @@ mod tests {
             "--enclave-cid",
             "0x1g",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_enclave_cid(
@@ -885,7 +885,7 @@ mod tests {
             "--enclave-cid",
             &cid_local,
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_enclave_cid(
@@ -918,7 +918,7 @@ mod tests {
             "--enclave-cid",
             &cid_host,
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_enclave_cid(
@@ -951,7 +951,7 @@ mod tests {
             "--enclave-cid",
             &parent_vm_cid,
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_enclave_cid(
@@ -983,7 +983,7 @@ mod tests {
             "--enclave-cid",
             "-18",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         // Error (got unexpected value ["-1"])
         assert!(matches.is_err());
     }
@@ -1001,7 +1001,7 @@ mod tests {
             "--eif-path",
             "non_existing_eif.eif",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_eif_path(
@@ -1024,7 +1024,7 @@ mod tests {
             "--enclave-id",
             "i-0000-enc-1234",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_enclave_id(
@@ -1052,7 +1052,7 @@ mod tests {
             "--memory",
             "64",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_cpu_ids(
@@ -1084,7 +1084,7 @@ mod tests {
             "non_existing_eif.eif",
             "--memory 64",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         // Error (got unexpected value ["-5"])
         assert!(matches.is_err());
     }
@@ -1103,7 +1103,7 @@ mod tests {
             "--memory",
             "64",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_cpu_ids(
@@ -1133,7 +1133,7 @@ mod tests {
             "--memory",
             "64",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_cpu_count(
@@ -1163,7 +1163,7 @@ mod tests {
             "--memory",
             "64",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_cpu_count(
@@ -1193,7 +1193,7 @@ mod tests {
             "--output-file",
             "sample_eif.eif",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_output(
@@ -1218,7 +1218,7 @@ mod tests {
             "--docker-dir",
             "/home/user/non_existing_dir",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         // Error (the following required argument were not supplied)
         assert!(matches.is_err());
     }
@@ -1237,7 +1237,7 @@ mod tests {
             "non_existing_eif.eif",
             "--debug-mode",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = debug_mode(
@@ -1263,7 +1263,7 @@ mod tests {
             "--eif-path",
             "non_existing_eif.eif",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = debug_mode(
@@ -1290,7 +1290,7 @@ mod tests {
             "--eif-path",
             "non_existing_eif.eif",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let matches = matches
@@ -1313,7 +1313,7 @@ mod tests {
             "--config",
             "non_existing_config.json",
         ];
-        let matches = app.get_matches_from_safe(args);
+        let matches = app.try_get_matches_from(args);
         assert!(matches.is_ok());
 
         let result = parse_config_file(

@@ -11,7 +11,6 @@ use eif_loader::{enclave_ready, TIMEOUT_MINUTE_MS};
 use libc::c_int;
 use log::{debug, info};
 use std::collections::BTreeMap;
-use std::convert::{From, Into};
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::Error;
@@ -109,8 +108,9 @@ pub struct MemoryRegion {
 }
 
 /// The state an enclave may be in.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum EnclaveState {
+    #[default]
     /// The enclave is not running (it's either not started or has been terminated).
     Empty,
     /// The enclave is running.
@@ -169,20 +169,13 @@ pub struct EnclaveManager {
     enclave_handle: Arc<Mutex<EnclaveHandle>>,
 }
 
-impl ToString for EnclaveState {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for EnclaveState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EnclaveState::Empty => "EMPTY",
-            EnclaveState::Running => "RUNNING",
-            EnclaveState::Terminating => "TERMINATING",
+            EnclaveState::Empty => write!(f, "EMPTY"),
+            EnclaveState::Running => write!(f, "RUNNING"),
+            EnclaveState::Terminating => write!(f, "TERMINATING"),
         }
-        .to_string()
-    }
-}
-
-impl Default for EnclaveState {
-    fn default() -> Self {
-        EnclaveState::Empty
     }
 }
 
@@ -596,7 +589,7 @@ impl EnclaveHandle {
             .len();
 
         // Update the poll timeout based on the eif size or allocated memory
-        let poll_timeout = calculate_necessary_timeout(eif_size);
+        let poll_timeout = calculate_necessary_timeout(eif_size, self.allocated_memory_mib * MiB);
 
         enclave_ready(listener, poll_timeout).map_err(|err| {
             let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
@@ -1195,21 +1188,26 @@ pub fn between_packets_delay() -> Option<Duration> {
 /// # Arguments
 ///
 /// * `eif_size` - The EIF size in bytes
+/// * `allocated_memory` - The memory size in bytes
 ///
 /// # Examples
 ///
 /// ```
 /// use nitro_cli::enclave_proc::resource_manager::calculate_necessary_timeout;
 /// use nitro_cli::enclave_proc::utils::GiB;
-/// // Returns the timeout based on the 8GiB EIF size
-/// let timeout = calculate_necessary_timeout(8 * GiB);
+/// // Returns the timeout based on the 8GiB EIF size and 32GiB of allocated memory
+/// let timeout = calculate_necessary_timeout(8 * GiB, 32 * GiB);
 /// ```
-pub fn calculate_necessary_timeout(eif_size: u64) -> c_int {
+pub fn calculate_necessary_timeout(eif_size: u64, allocated_memory: u64) -> c_int {
     // in case we have a valid eif_size give TIMEOUT_MINUTE_MS ms for each 6GiB
-    let poll_timeout: c_int =
+    let eif_size_timeout: c_int =
         ((1 + (eif_size - 1) / (6 * GiB)) as i32).saturating_mul(TIMEOUT_MINUTE_MS);
 
-    poll_timeout
+    // Update the poll timeout to be TIMEOUT_MINUTE_MS per 100 GiB of enclave memory.
+    let allocated_memory_timeout: c_int =
+        ((1 + (allocated_memory - 1) / (100 * GiB)) as i32).saturating_mul(TIMEOUT_MINUTE_MS);
+
+    eif_size_timeout + allocated_memory_timeout
 }
 
 #[cfg(test)]
@@ -1220,8 +1218,30 @@ mod tests {
 
     #[test]
     fn test_timeout_calculation() {
-        assert_eq!(calculate_necessary_timeout(2 * GiB), TIMEOUT_MINUTE_MS);
-        assert_eq!(calculate_necessary_timeout(6 * GiB), TIMEOUT_MINUTE_MS);
-        assert_eq!(calculate_necessary_timeout(10 * GiB), 2 * TIMEOUT_MINUTE_MS);
+        assert_eq!(
+            calculate_necessary_timeout(2 * GiB, 32 * GiB),
+            2 * TIMEOUT_MINUTE_MS
+        );
+        assert_eq!(
+            calculate_necessary_timeout(6 * GiB, 32 * GiB),
+            2 * TIMEOUT_MINUTE_MS
+        );
+        assert_eq!(
+            calculate_necessary_timeout(10 * GiB, 32 * GiB),
+            3 * TIMEOUT_MINUTE_MS
+        );
+
+        assert_eq!(
+            calculate_necessary_timeout(2 * GiB, 128 * GiB),
+            3 * TIMEOUT_MINUTE_MS
+        );
+        assert_eq!(
+            calculate_necessary_timeout(6 * GiB, 128 * GiB),
+            3 * TIMEOUT_MINUTE_MS
+        );
+        assert_eq!(
+            calculate_necessary_timeout(10 * GiB, 128 * GiB),
+            4 * TIMEOUT_MINUTE_MS
+        );
     }
 }

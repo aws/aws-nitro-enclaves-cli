@@ -68,6 +68,7 @@ lazy_static! {
             (NitroCliErrorEnum::HasherError, "E57"),
             (NitroCliErrorEnum::EnclaveNamingError, "E58"),
             (NitroCliErrorEnum::EIFSignatureCheckerError, "E59"),
+            (NitroCliErrorEnum::EIFSigningError, "E60"),
         ].iter().cloned().collect();
 }
 
@@ -333,6 +334,9 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
         "E59" => {
             ret.push_str("EIF signature checker error. Such error appears when validation of the signing certificate fails.");
         }
+        "E60" => {
+            ret.push_str("Signing error. Such error appears if incorrect key or certificate paths are provided, or when AWS credenrials need to be refreshed to use a KMS key.");
+        }
         _ => {
             ret.push_str(format!("No such error code {}", error_code_str).as_str());
         }
@@ -542,6 +546,9 @@ pub fn explain_error(error_code_str: String) {
         }
         "E56" => {
             eprintln!("Logger error. Such error appears when attempting to initialize the underlying logging system fails.");
+        }
+        "E60" => {
+            eprintln!("Signing error. Such error appears if incorrect key or certificate paths are provided, or when AWS credenrials need to be refreshed to use a KMS key.");
         }
         _ => {
             eprintln!("No such error code {}", error_code_str);

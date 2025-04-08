@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
-use std::string::ToString;
 use std::sync::{Arc, Mutex};
 
 use crate::common::{receive_from_stream, write_u64_le};
@@ -310,7 +309,8 @@ impl Connection {
         }
 
         let mut stream = lock.input_stream.as_mut().unwrap();
-        let reply_bytes = serde_cbor::to_vec(reply).map_err(|e| {
+        let mut reply_bytes = Vec::new();
+        ciborium::into_writer(reply, &mut reply_bytes).map_err(|e| {
             new_nitro_cli_failure!(
                 &format!("Failed to serialize reply: {:?}", e),
                 NitroCliErrorEnum::SerdeError

@@ -283,12 +283,7 @@ pub fn run(args: RunArgs) -> Result<i32, String> {
     print!("{}", output.stdout);
     eprint!("{}", output.stderr);
 
-    let rc = match output.rc {
-        Some(code) => code,
-        _ => 0,
-    };
-
-    Ok(rc)
+    Ok(output.rc.unwrap_or_default())
 }
 
 pub fn recv_file(args: FileArgs) -> Result<(), String> {

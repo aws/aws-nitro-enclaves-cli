@@ -56,8 +56,9 @@ const SOCKETS_DIR_PATH: &str = "/run/nitro_enclaves";
 const BACKTRACE_VAR: &str = "BACKTRACE";
 
 /// All possible errors which may occur.
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, Hash, PartialEq)]
 pub enum NitroCliErrorEnum {
+    #[default]
     /// Unspecified error (should avoid using it thoughout the code).
     UnspecifiedError = 0,
     /// Error for handling missing arguments.
@@ -178,12 +179,8 @@ pub enum NitroCliErrorEnum {
     EnclaveNamingError,
     /// Signature checker error
     EIFSignatureCheckerError,
-}
-
-impl Default for NitroCliErrorEnum {
-    fn default() -> NitroCliErrorEnum {
-        NitroCliErrorEnum::UnspecifiedError
-    }
+    /// Signing error
+    EIFSigningError,
 }
 
 impl Eq for NitroCliErrorEnum {}
@@ -225,7 +222,7 @@ pub enum EnclaveProcessReply {
 }
 
 /// Struct that is passed along the backtrace and accumulates error messages.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct NitroCliFailure {
     /// Main action which was attempted and failed.
     pub action: String,
@@ -479,7 +476,8 @@ where
     T: Serialize,
 {
     // Serialize the command type.
-    let cmd_bytes = serde_cbor::to_vec(&cmd).map_err(|e| {
+    let mut cmd_bytes = Vec::new();
+    ciborium::ser::into_writer(&cmd, &mut cmd_bytes).map_err(|e| {
         new_nitro_cli_failure!(
             &format!("Invalid command format: {:?}", e),
             NitroCliErrorEnum::InvalidCommand
@@ -501,7 +499,8 @@ where
 
     // Serialize the command arguments.
     if let Some(args) = args {
-        let arg_bytes = serde_cbor::to_vec(args).map_err(|e| {
+        let mut arg_bytes = Vec::new();
+        ciborium::ser::into_writer(args, &mut arg_bytes).map_err(|e| {
             new_nitro_cli_failure!(
                 &format!("Invalid single command arguments: {:?}", e),
                 NitroCliErrorEnum::InvalidCommand
@@ -531,18 +530,13 @@ where
         .map_err(|e| e.add_subaction("Failed to receive data size".to_string()))?
         as usize;
     let mut raw_data: Vec<u8> = vec![0; size];
-    input_stream.read_exact(&mut raw_data[..]).map_err(|e| {
-        new_nitro_cli_failure!(
-            &format!("Failed to receive data: {:?}", e),
-            NitroCliErrorEnum::SocketError
-        )
-    })?;
-    let data: T = serde_cbor::from_slice(&raw_data[..]).map_err(|e| {
-        new_nitro_cli_failure!(
-            &format!("Failed to decode received data: {:?}", e),
-            NitroCliErrorEnum::SerdeError
-        )
-    })?;
+    let data: T =
+        ciborium::de::from_reader_with_buffer(input_stream, &mut raw_data[..]).map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to decode received data: {:?}", e),
+                NitroCliErrorEnum::SerdeError
+            )
+        })?;
     Ok(data)
 }
 

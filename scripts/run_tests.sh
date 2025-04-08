@@ -13,6 +13,8 @@ source "$SCRIPTDIR/lib_tests.sh"
 
 trap test_failed ERR
 
+check_dependencies
+
 # Build and install NE CLI
 build_and_install
 

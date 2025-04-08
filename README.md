@@ -1,6 +1,6 @@
 ![msrv]
 
-[msrv]: https://img.shields.io/badge/MSRV-1.60.0-blue
+[msrv]: https://img.shields.io/badge/MSRV-1.71.1-blue
 
 ## Nitro Enclaves Command Line Interface (Nitro CLI)
 

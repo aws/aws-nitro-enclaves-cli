@@ -3,25 +3,30 @@ name: Notify owners about new event
 on:
   pull_request_target:
     types: [opened, reopened]
-    
+
   issues:
     types: [opened, reopened]
 
 jobs:
   build:
-    if: ${{ github.repository == "aws/aws-nitro-enclaves-cli" }}
+    if: github.repository == 'aws/aws-nitro-enclaves-cli'
     runs-on: ubuntu-latest
     steps:
       - name: if_pr
         if: github.event.pull_request
         run: |
-          echo "EVENT_TYPE=PR" >> $GITHUB_ENV
-          echo "EVENT_URL=${{ github.event.pull_request.html_url }}" >> $GITHUB_ENV
+          echo "EVENT_TYPE=PR" >> "$GITHUB_ENV"
+          echo "EVENT_URL=${{ github.event.pull_request.html_url }}" >> "$GITHUB_ENV"
+
       - name: if_issue
         if: github.event.issue
         run: |
-          echo "EVENT_TYPE=issue" >> $GITHUB_ENV
-          echo "EVENT_URL=${{ github.event.issue.html_url }}" >> $GITHUB_ENV
+          echo "EVENT_TYPE=issue" >> "$GITHUB_ENV"
+          echo "EVENT_URL=${{ github.event.issue.html_url }}" >> "$GITHUB_ENV"
+
       - name: notify
         run: |
-          curl -d '{ "type": "${{ env.EVENT_TYPE }}", "url": "${{ env.EVENT_URL }}" }' ${{ secrets.EVENT_WEBHOOK_URL }}
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"type":"${{ env.EVENT_TYPE }}","url":"${{ env.EVENT_URL }}"}' \
+            "${{ secrets.EVENT_WEBHOOK_URL }}"

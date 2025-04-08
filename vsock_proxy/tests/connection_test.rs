@@ -11,10 +11,10 @@ use std::thread;
 use tempfile::NamedTempFile;
 use vsock::{VsockAddr, VsockStream};
 
-use vsock_proxy::starter::Proxy;
+use vsock_proxy::{proxy::Proxy, IpAddrType};
 
 fn vsock_connect(port: u32) -> VsockStream {
-    let sockaddr = VsockAddr::new(vsock_proxy::starter::VSOCK_PROXY_CID, port);
+    let sockaddr = VsockAddr::new(vsock_proxy::proxy::VSOCK_PROXY_CID, port);
     VsockStream::connect(&sockaddr).expect("Could not connect")
 }
 
@@ -29,14 +29,12 @@ fn test_tcp_connection() {
             - {address: 127.0.0.1, port: 9000}",
     )
     .unwrap();
-    let proxy = Proxy::new(
-        vsock_proxy::starter::VSOCK_PROXY_PORT,
-        &addr,
+    let mut proxy = Proxy::new(
+        vsock_proxy::proxy::VSOCK_PROXY_PORT,
+        addr,
         9000,
         2,
-        file.path().to_str(),
-        false,
-        false,
+        IpAddrType::IPAddrMixed,
     )
     .unwrap();
 
@@ -73,7 +71,7 @@ fn test_tcp_connection() {
 
     // Start client that connects to proxy on port 8000 vsock
     let client_handle = thread::spawn(move || {
-        let mut stream = vsock_connect(vsock_proxy::starter::VSOCK_PROXY_PORT);
+        let mut stream = vsock_connect(vsock_proxy::proxy::VSOCK_PROXY_PORT);
 
         // Write request
         stream.write_all(b"client2server").expect("client write");

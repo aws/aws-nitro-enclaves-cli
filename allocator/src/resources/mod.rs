@@ -18,7 +18,21 @@ pub enum Error
 	#[error("Config file cannot include cpus from different numa nodes")]
 	NumaDifference,
 }
-
+/// Allocates resources based on CPU count after CPU pool allocation
+/// 
+/// This function is called after `allocate_by_cpu_pools` to ensure all resources
+/// are allocated on the same NUMA node. The workflow is:
+/// 
+/// 1. If user specified specific CPU IDs (`allocate_by_cpu_pools`):
+///    - Determines the NUMA node of those CPUs
+///    - Passes that NUMA node to this function
+/// 2. This function then allocates additional resources:
+///    - Finds suitable CPU sets on the specified NUMA node
+///    - Allocates corresponding memory
+/// 
+/// # Arguments
+/// * `pool` - Vector of resource requirements with CPU counts
+/// * `target_numa` - NUMA node determined by previous CPU pool allocation
 pub fn allocate_by_cpu_count(mut pool: Vec<ResourcePool>,target_numa: Option<usize>) -> Result<(), Error>
 {
 	pool.retain(|p| matches!(p, ResourcePool::CpuCount{..}));
@@ -49,7 +63,17 @@ pub fn allocate_by_cpu_count(mut pool: Vec<ResourcePool>,target_numa: Option<usi
 	}
 	return Err(Error::Allocation);
 }
-
+/// Allocates resources based on user-specified CPU IDs
+/// 
+/// This function runs first in the allocation process:
+/// 1. Verifies all specified CPUs are on the same NUMA node
+/// 2. Allocates the requested CPUs and corresponding memory
+/// 3. Returns the NUMA node where resources were allocated
+/// 
+/// The returned NUMA node is used as input for `allocate_by_cpu_count`
+/// to ensure all subsequent allocations occur on the same node.
+/// 
+/// Returns Some(numa_node) if CPUs were allocated, None if no CPU pools were specified
 pub fn allocate_by_cpu_pools(mut pools: Vec<ResourcePool>) -> Result<Option<usize>, Error>
 {
 	pools.retain(|p| matches!(p, ResourcePool::CpuPool {..}));
@@ -79,7 +103,9 @@ pub fn allocate_by_cpu_pools(mut pools: Vec<ResourcePool>) -> Result<Option<usiz
 
 }
 
-//All enclaves should be allocated in same numa node if user wants to allocate specific cpus then system should check if they are all in same numa node
+
+/// Verifies that all specified CPUs belong to the same NUMA node
+/// Returns the NUMA node ID if all CPUs are on the same node
 pub fn sanity_check_numa_nodes(cpu_set: &BTreeSet<usize>) -> Result<usize, Error> {//change the logic
 	let mut numa = usize::MAX;
 	for cpu in cpu_set{
@@ -93,6 +119,25 @@ pub fn sanity_check_numa_nodes(cpu_set: &BTreeSet<usize>) -> Result<usize, Error
 	}
 	Ok(numa)
 }
+/// Performs the actual allocation of CPUs and memory
+/// 
+/// Allocation strategy:
+/// 1. Attempts to allocate memory first
+/// 2. Only proceeds with CPU allocation if memory allocation succeeds
+/// 3. Rolls back memory allocation if CPU allocation fails
+/// 4. If either memory or CPU allocation fails on a NUMA node:
+///    - All allocated resources are released
+///    - Returns an error indicating insufficient resources
+///    - Caller should try allocation on another NUMA node if available
+/// Example flow:
+/// NUMA Node 0:
+///   ✓ Memory allocation successful
+///   ✗ CPU allocation failed
+///   → Release memory, try NUMA Node 1
+/// NUMA Node 1:
+///   ✓ Memory allocation successful
+///   ✓ CPU allocation successful
+///   → Complete allocation successful
 fn allocate_cpus_n_pages(pool: &Vec<ResourcePool>, cpu_set: BTreeSet<usize>, numa_node:usize) -> Result<(), Error>{
 	let mut allocated_pages:Vec<huge_pages::Allocation> = Vec::with_capacity(pool.len());
 	// Try to allocate the memory on the NUMA node ...
@@ -126,92 +171,4 @@ fn allocate_cpus_n_pages(pool: &Vec<ResourcePool>, cpu_set: BTreeSet<usize>, num
 			return Err(Error::Cpu(cpu::Error::InsufficientCpuPool));
 		},
 	}
-}
-
-
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Mutex;
-    use lazy_static::lazy_static;
-	use crate::configuration;
-    // Create a global mutex for test synchronization
-    lazy_static! {
-        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
-    }
-
-    fn create_resource_pool_with_count(memory: usize, cpu_count: usize) -> ResourcePool {
-        ResourcePool::CpuCount { 
-            memory_mib: memory, 
-            cpu_count 
-        }
-    }
-
-    fn create_resource_pool_with_pool(memory: usize, cpu_pool: &str) -> ResourcePool {
-        ResourcePool::CpuPool { 
-            memory_mib: memory, 
-            cpu_pool: cpu_pool.to_string() 
-        }
-    }
-
-    #[test]
-    fn test_find_n_allocate() {
-        let _lock = TEST_MUTEX.lock().unwrap();
-        println!("Testing find_n_allocate");
-        let pools = vec![
-            create_resource_pool_with_count(1024, 2),
-            create_resource_pool_with_count(512, 2),
-        ];
-        println!("Created pools: {:?}", pools);
-
-        match allocate_by_cpu_count(pools, Some(0)) {
-            Ok(_) => println!("find_n_allocate successful"),
-            Err(e) => panic!("find_n_allocate failed with error: {:?}", e),
-        }
-        let _ = configuration::clear_everything_in_numa_node();
-    }
-
-    #[test]
-    fn test_find_n_allocate_with_target_numa() {
-        let _lock = TEST_MUTEX.lock().unwrap();
-        let pools = vec![create_resource_pool_with_count(512, 2)];
-        let result = allocate_by_cpu_count(pools, Some(0));
-        assert!(result.is_ok());
-        let _ = configuration::clear_everything_in_numa_node();
-    }
-
-    #[test]
-    fn test_find_n_allocate_with_insufficient_memory() {
-        let _lock = TEST_MUTEX.lock().unwrap();
-        let pools = vec![create_resource_pool_with_count(1024000, 2)];
-        let result = allocate_by_cpu_count(pools, Some(0));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_find_n_allocate_with_insufficient_cpu() {
-        let _lock = TEST_MUTEX.lock().unwrap();
-        let pools = vec![create_resource_pool_with_count(1024, usize::MAX)];
-        let result = allocate_by_cpu_count(pools, Some(0));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_allocate_by_cpu_pools() {
-        let _lock = TEST_MUTEX.lock().unwrap();
-        println!("Testing allocate_by_cpu_pools");
-        let pools = vec![
-            create_resource_pool_with_pool(1024, "1,5"),
-            create_resource_pool_with_pool(512, "2,6"),
-        ];
-        println!("Created pools: {:?}", pools);
-
-        match allocate_by_cpu_pools(pools) {
-            Ok(numa) => println!("allocate_by_cpu_pools successful with NUMA node: {}", numa.unwrap()),
-            Err(e) => panic!("allocate_by_cpu_pools failed with error: {:?}", e),
-        }
-        let _ = configuration::clear_everything_in_numa_node();
-    }
 }

@@ -15,8 +15,13 @@ pub enum Error
 	#[error("failed to configure requested cpu pool, this indicates insufficient system resources")]
 	InsufficientCpuPool,	
 }
-
+/// Represents the path to the offline CPU pool file. CPU allocation is performed by writing 
+/// CPU IDs to this file, with the Nitro Enclaves driver handling the rest of the process.
+#[cfg(not(test))]
 const CPU_POOL_FILE: &str = "/sys/module/nitro_enclaves/parameters/ne_cpus";
+///This constant for mocking test cases.
+#[cfg(test)]
+const CPU_POOL_FILE: &str = "ne_cpus_for_cpu_test";
 
 pub struct Allocation
 {
@@ -36,7 +41,10 @@ impl Allocation
 		})
 	}
 }
-
+/// CPU allocation strategy:
+/// 1. Finds suitable NUMA nodes while avoiding CPU 0 and its siblings (reserved for parent instance)
+/// 2. Attempts to allocate CPU siblings together for optimal performance
+/// 3. Falls back to other NUMA nodes if the current node has insufficient resources
 pub fn find_suitable_cpu_sets(cpu_count: usize) -> Result<CpuSets, Error>
 {
 	let cpu_0_numa_node = get_numa_node_for_cpu(0)?;
@@ -92,7 +100,7 @@ pub fn find_suitable_cpu_sets(cpu_count: usize) -> Result<CpuSets, Error>
 			Ok(cpu_sets)
 		})
 }
-
+/// Allocates CPUs by adding them to the existing CPU pool
 fn allocate_cpu_set(update: &CpuSet) -> Result<(), Error>
 {
 	let mut cpu_set = get_cpu_pool()?;
@@ -100,7 +108,7 @@ fn allocate_cpu_set(update: &CpuSet) -> Result<(), Error>
 
 	set_cpu_pool(&cpu_set)
 }
-
+/// Deallocates CPUs by removing them from the CPU pool file, which brings them back online
 pub fn deallocate_cpu_set(update: &CpuSet) -> Result<(), Error>
 {
 	let mut cpu_set = get_cpu_pool()?;
@@ -108,7 +116,7 @@ pub fn deallocate_cpu_set(update: &CpuSet) -> Result<(), Error>
 
 	set_cpu_pool(&cpu_set)
 }
-
+/// Retrieves the core ID for a given CPU
 fn get_core_id(cpu: usize) -> Result<usize, Error>
 {
 	let core_id_path = format!("/sys/devices/system/cpu/cpu{cpu}/topology/core_id");
@@ -116,21 +124,21 @@ fn get_core_id(cpu: usize) -> Result<usize, Error>
 
 	Ok(content.trim().parse()?)
 }
-
+/// Returns the total number of NUMA nodes available in the system
 fn get_numa_node_count() -> Result<usize, Error>
 {
 	let node_path = "/sys/devices/system/node";
 
 	Ok(get_numa_nodes(node_path)?.len())
 }
-
+/// Identifies which NUMA node a specific CPU belongs to
 pub fn get_numa_node_for_cpu(cpu: usize) -> Result<usize, Error>
 {
 	let cpu_path = format!("/sys/devices/system/cpu/cpu{cpu}");
 
 	get_numa_nodes(&cpu_path)?.into_iter().next().ok_or(Error::UnexptectedFileStructure)
 }
-
+///Reads the sysfs directories and return the NUMA nodes.
 fn get_numa_nodes(path: &str) -> Result<CpuSet, Error>
 {
 	std::fs::read_dir(path)?
@@ -148,14 +156,14 @@ fn get_numa_nodes(path: &str) -> Result<CpuSet, Error>
 			Ok(set)
 		})
 }
-
+/// Returns all CPUs belonging to a specific NUMA node
 fn get_cpus_in_numa_node(node: usize) -> Result<CpuSet, Error>
 {
 	let cpu_list_path = format!("/sys/devices/system/node/node{node}/cpulist");
 
 	get_cpu_list(&cpu_list_path)
 }
-
+/// Retrieves sibling CPUs (threads) for a given CPU ID
 fn get_cpu_siblings(cpu: usize) -> Result<CpuSet, Error>
 {
 	let thread_siblings_list_path =
@@ -200,7 +208,8 @@ fn set_cpu_pool(cpu_set: &CpuSet) -> Result<(), Error>
 		other => other,
 	}?)
 }
-
+/// Parses a CPU list string into a CpuSet (BTreeSet<usize>)
+/// Format examples: "1,2,3" or "1-4" or "1,3-5,7"
 pub fn parse_cpu_list(cpu_list: &str) -> Result<CpuSet, Error>
 {
 	cpu_list.trim().split_terminator(',')
@@ -221,7 +230,10 @@ pub fn parse_cpu_list(cpu_list: &str) -> Result<CpuSet, Error>
 			Ok(set)
 		})
 }
-
+/// Formats a CpuSet into a string representation
+/// Examples:
+/// - [1,2,3,4] becomes "1-4"
+/// - [1,2,3,5,7,8,9] becomes "1-3,5,7-9"
 pub fn format_cpu_list(cpu_set: &CpuSet) -> String
 {
 	let mut cpu_set = cpu_set.iter();
@@ -264,4 +276,92 @@ fn format_range(range: std::ops::RangeInclusive<usize>) -> String
 	{
 		format!("{}-{}", range.start(), range.end())
 	}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+	use tempfile::NamedTempFile;
+    #[test]
+    fn test_format_cpu_list() {
+        let single_cpu_set: BTreeSet<usize> = [1].into_iter().collect();
+        assert_eq!(format_cpu_list(&single_cpu_set), "1\n");
+		let consecutive_cpu_set: BTreeSet<usize> = [0, 1, 2, 3].into_iter().collect();
+        assert_eq!(format_cpu_list(&consecutive_cpu_set), "0-3\n");
+		let non_consecutive_cpu_set: BTreeSet<usize> = [0, 2, 4].into_iter().collect();
+        assert_eq!(format_cpu_list(&non_consecutive_cpu_set), "0,2,4\n");
+		let mixed_ranges_and_single_cpu_set: BTreeSet<usize> = [0, 1, 2, 4, 6, 7, 8].into_iter().collect();
+        assert_eq!(format_cpu_list(&mixed_ranges_and_single_cpu_set), "0-2,4,6-8\n");
+    }
+	#[test]
+	fn test_parse_cpu_list() {
+		let single_cpu = parse_cpu_list("1").unwrap();
+		assert_eq!(single_cpu, BTreeSet::from([1]));
+
+		let consecutive_cpus = parse_cpu_list("0-3").unwrap();
+		assert_eq!(consecutive_cpus, BTreeSet::from([0, 1, 2, 3]));
+
+		let non_consecutive_cpus = parse_cpu_list("0,2,4").unwrap();
+		assert_eq!(non_consecutive_cpus, BTreeSet::from([0, 2, 4]));
+
+		let mixed_ranges = parse_cpu_list("0-2,4,6-8").unwrap();
+		assert_eq!(mixed_ranges, BTreeSet::from([0, 1, 2, 4, 6, 7, 8]));
+
+		// Error cases
+		assert!(parse_cpu_list("abc").is_err());
+		assert!(parse_cpu_list("1-abc").is_err());
+		assert!(parse_cpu_list(",1").is_err());
+	}
+	#[test]
+    fn test_set_cpu_pool_cases() {
+        struct TestCase {
+            input: BTreeSet<usize>,
+            should_succeed: bool,
+            expected_content: Option<&'static str>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: BTreeSet::from([2, 5]),
+                should_succeed: true,
+                expected_content: Some("2,5\n"),
+            },
+            TestCase {
+                input: BTreeSet::from([0, 1, 2, 3]),
+                should_succeed: true,
+                expected_content: Some("0-3\n"),
+            },
+            TestCase {
+                input: BTreeSet::new(), // empty set
+                should_succeed: true,    // should succeed with InvalidInput error
+                expected_content: Some("\n"),
+            },
+            TestCase {
+                input: BTreeSet::from([1, 3, 4, 5, 7]),
+                should_succeed: true,
+                expected_content: Some("1,3-5,7\n"),
+            },
+        ];
+
+        for case in test_cases {
+            let temp_file = NamedTempFile::new().unwrap();//print temp file path debug
+            std::os::unix::fs::symlink(temp_file.path(), CPU_POOL_FILE).unwrap();
+
+            let result = set_cpu_pool(&case.input);
+            
+            if case.should_succeed {
+                assert!(result.is_ok());
+                
+                if let Some(expected) = case.expected_content {
+                    let written_content = std::fs::read_to_string(CPU_POOL_FILE).unwrap();
+                    assert_eq!(written_content, expected);
+                }
+            } else {
+                assert!(result.is_err());
+            }
+
+            std::fs::remove_file(CPU_POOL_FILE).unwrap();
+        }
+    }
 }

@@ -93,7 +93,7 @@ aws-nitro-enclaves-cli.tar.gz:
 sources: aws-nitro-enclaves-cli.tar.gz crates-dependencies
 
 .PHONY: all
-all: build-setup nitro-cli vsock-proxy
+all: build-setup nitro-cli vsock-proxy nitro-enclaves-allocator
 
 .PHONY: driver-deps
 driver-deps:
@@ -289,6 +289,32 @@ vsock-proxy-native:
 		--manifest-path=${BASE_PATH}/vsock_proxy/Cargo.toml \
 		--target-dir=${OBJ_PATH}/vsock_proxy
 
+# See .build-container rule for explanation.
+.build-nitro-enclaves-allocator: $(shell find $(BASE_PATH)/allocator/src -name "*.rs")
+	$(DOCKER) run \
+		-v "$$(readlink -f ${BASE_PATH})":/nitro_src \
+		-v "$$(readlink -f ${OBJ_PATH})":/nitro_build \
+		$(CONTAINER_TAG) bin/bash -c \
+			'source /root/.cargo/env && \
+			CC=${CC} cargo build \
+				--release \
+				--target-dir=/nitro_build/allocator \
+				--target=${CARGO_TARGET} \
+				--manifest-path=/nitro_src/allocator/Cargo.toml && \
+			chmod -R 777 nitro_build '
+	ln -sf ../${CARGO_TARGET}/release/nitro-enclaves-allocator \
+		${OBJ_PATH}/allocator/release/nitro-enclaves-allocator
+	touch $@
+
+nitro-enclaves-allocator: build-setup build-container .build-nitro-enclaves-allocator
+
+.PHONY: nitro-enclaves-allocator-native
+nitro-enclaves-allocator-native:
+	cargo build \
+		--release \
+		--manifest-path=${BASE_PATH}/allocator/Cargo.toml \
+		--target-dir=${OBJ_PATH}/allocator
+
 .PHONY: install-command-executer
 install-command-executer:
 	$(INSTALL) -D -m 0755 $(OBJ_PATH)/command-executer/release/command-executer ${NITRO_CLI_INSTALL_DIR}/${BIN_DIR}/command-executer
@@ -300,7 +326,7 @@ install-tools:
 	$(INSTALL) -D -m 0755 $(OBJ_PATH)/vsock_proxy/release/vsock-proxy ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/vsock-proxy
 	$(INSTALL) -D -m 0644 vsock_proxy/service/nitro-enclaves-vsock-proxy.service ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-vsock-proxy.service
 	$(INSTALL) -D -m 0644 vsock_proxy/configs/vsock-proxy.yaml ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/vsock-proxy.yaml
-	$(INSTALL) -D -m 0755 bootstrap/nitro-enclaves-allocator ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/nitro-enclaves-allocator
+	$(INSTALL) -D -m 0755 $(OBJ_PATH)/allocator/release/nitro-enclaves-allocator ${NITRO_CLI_INSTALL_DIR}${BIN_DIR}/nitro-enclaves-allocator
 	$(INSTALL) -D -m 0664 bootstrap/allocator.yaml ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/allocator.yaml
 	$(INSTALL) -D -m 0644 bootstrap/nitro-enclaves-allocator.service ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/blobs

@@ -12,3 +12,15 @@ cpu_count: 2
 # Note: cpu_count and cpu_pool conflict with each other. Only use exactly one of them.
 # Example of reserving CPUs 2, 3, and 6 through 9:
 # cpu_pool: 2,3,6-9
+#
+# Allocator configuration for multiple enclaves
+# Each list item represents a separate enclave
+# Use YAML array like the example below.
+# Example:
+# - memory_mib: 512
+#   cpu_count: 2
+# - memory_mib: 512
+#   cpu_pool: 2,3,6-9
+# You can add more enclave configurations as needed.
+# Allocated Resources are not tied with enclaves.
+# It's a mechanism to separate resources from each other.

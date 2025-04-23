@@ -39,19 +39,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "allocator"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "lazy_static",
- "log",
- "serde",
- "serde_yaml 0.9.34+deprecated",
- "tempfile",
- "thiserror 2.0.11",
-]
-
-[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2053,6 +2040,19 @@ dependencies = [
  "tempfile",
  "vmm-sys-util",
  "vsock",
+]
+
+[[package]]
+name = "nitro-enclaves-allocator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "lazy_static",
+ "log",
+ "serde",
+ "serde_yaml 0.9.34+deprecated",
+ "tempfile",
+ "thiserror 2.0.11",
 ]
 
 [[package]]

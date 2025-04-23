@@ -5,6 +5,7 @@ use crate::error::Error;
 /// Path to the file containing currently allocated (offlined) CPUs
 #[cfg(not(test))]
 const OFFLINED_CPUS: &str = "/sys/module/nitro_enclaves/parameters/ne_cpus";
+const SUPPORTED_ENCLAVES_NUM: usize = 4;
 ///Mock file for unit tests
 #[cfg(test)]
 const OFFLINED_CPUS: &str = "ne_cpus"; 
@@ -54,7 +55,7 @@ fn configure_resource_pool(config: ResourcePoolConfig) -> Vec<ResourcePool>{
         ResourcePoolConfig::Multiple(pools) => pools,
     };
 
-    if pool.len() > 4 {
+    if pool.len() > SUPPORTED_ENCLAVES_NUM {
         eprintln!("{}", Error::MoreResourcePoolThanSupported);
     }
     pool

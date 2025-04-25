@@ -7,7 +7,7 @@ pub enum Error
 	TryFromInt(#[from] std::num::TryFromIntError),
 	#[error(transparent)]
 	Allocation(#[from] super::resources::Error),
-	#[error("Invalid config file. This might happened due to old config file or config file corruption. See release notes :")]
+	#[error("Invalid or corrupted config file.")]
 	ConfigFileCorruption,
 	#[error("WARNING! Requested resource pool is more than supported. Supported Enclave number is 4")]
 	MoreResourcePoolThanSupported,

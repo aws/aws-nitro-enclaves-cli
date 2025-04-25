@@ -9,7 +9,7 @@ serde = {version = "1.0.217", features = ["derive"] }
 serde_yaml = "0.9.34"
 thiserror = "2.0.9"
 lazy_static = "1.4"
-
+anyhow = { version = "1.0", default-features = false }
 
 [dev-dependencies]
 tempfile = "3.2"

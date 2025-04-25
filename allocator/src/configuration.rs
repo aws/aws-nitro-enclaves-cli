@@ -1,6 +1,7 @@
-use serde::Deserialize;
+use serde::{Deserialize,Deserializer};
 use crate::resources;
 use crate::error::Error;
+use anyhow::Result;
 
 /// Path to the file containing currently allocated (offlined) CPUs
 #[cfg(not(test))]
@@ -20,8 +21,33 @@ const OFFLINED_CPUS: &str = "ne_cpus";
 #[serde(untagged)]
 pub enum ResourcePool {
     CpuCount { memory_mib: usize , cpu_count: usize},
-    CpuPool { cpu_pool: String, memory_mib: usize },
+    CpuPool {
+        #[serde(deserialize_with = "deserialize_cpu_pool")]
+        cpu_pool: String, 
+        memory_mib: usize 
+    },
 }
+///Serde was failing when just a single number provided for cpu_pool in config file
+/// It expects a string but it doesn't deserialize if just a single number provided.
+/// e.g: cpu_pool: 2 -> was failing because it expects something like this 2,3,4
+/// this function helps serde to deserialize and cover the problematic case.
+fn deserialize_cpu_pool<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNum {
+        String(String),
+        Num(usize),
+    }
+
+    Ok(match StringOrNum::deserialize(deserializer)? {
+        StringOrNum::String(s) => s,
+        StringOrNum::Num(n) => n.to_string(),
+    })
+}
+
 /// Configuration format supporting both single and multiple enclave allocations
 /// 
 /// Provides backward compatibility with existing single-enclave configurations
@@ -38,7 +64,7 @@ pub enum ResourcePoolConfig {
 /// 
 /// Loads resource requirements from '/etc/nitro_enclaves/allocator.yaml'
 /// and returns a vector of resource pools for allocation.
-pub fn get_resource_pool_from_config() -> Result<Vec<ResourcePool>, Box<dyn std::error::Error>> {
+pub fn get_resource_pool_from_config() -> Result<Vec<ResourcePool>> {
     let f = std::fs::File::open("/etc/nitro_enclaves/allocator.yaml")?;
     let config: ResourcePoolConfig = serde_yaml::from_reader(f)
         .map_err(|_| Error::ConfigFileCorruption)?;
@@ -66,7 +92,7 @@ fn configure_resource_pool(config: ResourcePoolConfig) -> Vec<ResourcePool>{
 /// allocated to enclaves. This information is used to:
 /// 1. Determine the NUMA node of existing allocations
 /// 2. Support cleanup operations
-pub fn get_current_allocated_cpu_pool() -> Result<Option<std::collections::BTreeSet::<usize>>, Box<dyn std::error::Error>> {
+pub fn get_current_allocated_cpu_pool() -> Result<Option<std::collections::BTreeSet::<usize>>> {
     let f = std::fs::read_to_string(OFFLINED_CPUS)?;
     if f.trim().is_empty() {
         return Ok(None);
@@ -84,7 +110,7 @@ pub fn get_current_allocated_cpu_pool() -> Result<Option<std::collections::BTree
 /// 
 /// This ensures a clean slate before new allocations and prevents
 /// resource fragmentation.
-pub fn clear_everything_in_numa_node() -> Result<(), Box<dyn std::error::Error>> {//change the name
+pub fn clear_everything_in_numa_node() -> Result<()> {
     match get_current_allocated_cpu_pool()?{
 		Some(cpu_list) => {
 		//find numa by one of cpuids

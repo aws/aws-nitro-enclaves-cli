@@ -13,7 +13,7 @@ pub enum Error
 	Cpu(#[from] cpu::Error),
 	#[error(transparent)]
 	HugePage(#[from] huge_pages::Error),
-	#[error("failed to find suitable combination of CPUs and memory")]
+	#[error("Failed to find suitable combination of CPUs and memory. Could be either CPU or Memory insufficiency")]
 	Allocation,
 	#[error("Config file cannot include cpus from different numa nodes")]
 	NumaDifference,

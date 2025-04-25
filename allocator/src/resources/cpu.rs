@@ -13,7 +13,9 @@ pub enum Error
 	#[error("unexpected sysfs file structure")]
 	UnexptectedFileStructure,
 	#[error("failed to configure requested cpu pool, this indicates insufficient system resources")]
-	InsufficientCpuPool,	
+	InsufficientCpuPool,
+	#[error("Requested Cpu ID does not exist.")]
+	NonExistentCpuID,
 }
 /// Represents the path to the offline CPU pool file. CPU allocation is performed by writing 
 /// CPU IDs to this file, with the Nitro Enclaves driver handling the rest of the process.
@@ -120,7 +122,11 @@ pub fn deallocate_cpu_set(update: &CpuSet) -> Result<(), Error>
 fn get_core_id(cpu: usize) -> Result<usize, Error>
 {
 	let core_id_path = format!("/sys/devices/system/cpu/cpu{cpu}/topology/core_id");
-	let content = std::fs::read_to_string(core_id_path)?;
+	let content = std::fs::read_to_string(core_id_path)
+									.map_err(|e| 
+										match e.kind(){ 
+											std::io::ErrorKind::NotFound => Error::NonExistentCpuID,
+											_ => Error::Io(e)})?;
 
 	Ok(content.trim().parse()?)
 }
@@ -141,7 +147,10 @@ pub fn get_numa_node_for_cpu(cpu: usize) -> Result<usize, Error>
 ///Reads the sysfs directories and return the NUMA nodes.
 fn get_numa_nodes(path: &str) -> Result<CpuSet, Error>
 {
-	std::fs::read_dir(path)?
+	std::fs::read_dir(path).map_err(|e| 
+		match e.kind(){ 
+			std::io::ErrorKind::NotFound => Error::NonExistentCpuID,
+			_ => Error::Io(e)})?
 		.try_fold(CpuSet::new(), |mut set, entry|
 		{
 			let entry = entry?;
@@ -174,7 +183,10 @@ fn get_cpu_siblings(cpu: usize) -> Result<CpuSet, Error>
 
 fn get_cpu_list(list: &str) -> Result<CpuSet, Error>
 {
-	let list = std::fs::read_to_string(list)?;
+	let list = std::fs::read_to_string(list).map_err(|e| 
+		match e.kind(){ 
+			std::io::ErrorKind::NotFound => Error::NonExistentCpuID,
+			_ => Error::Io(e)})?;
 
 	parse_cpu_list(&list)
 }

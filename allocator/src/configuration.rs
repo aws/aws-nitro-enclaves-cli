@@ -66,7 +66,7 @@ pub enum ResourcePoolConfig {
 /// and returns a vector of resource pools for allocation.
 pub fn get_resource_pool_from_config() -> Result<Vec<ResourcePool>> {
     let f = std::fs::File::open(format!("{}/etc/nitro_enclaves/allocator.yaml",
-    std::env::var("NITRO_CLI_INSTALL_DIR").unwrap_err()))?;
+    std::env::var("NITRO_CLI_INSTALL_DIR").unwrap_or("".to_string())))?;
     let config: ResourcePoolConfig = serde_yaml::from_reader(f)
         .map_err(|_| Error::ConfigFileCorruption)?;
 

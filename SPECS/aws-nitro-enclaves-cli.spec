@@ -79,6 +79,7 @@ cp tools/cargo_vendor_config_template .cargo/config
 %build
 make nitro-cli-native
 make vsock-proxy-native
+make nitro-enclaves-allocator-native
 
 
 %install

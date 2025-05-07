@@ -108,6 +108,7 @@ build_and_install() {
 	make nitro_enclaves
 	make nitro-cli
 	make vsock-proxy
+	make nitro-enclaves-allocator
 	make install
 }
 

@@ -17,9 +17,9 @@ log = "0.4"
 nix = "0.26"
 yaml-rust2 = "0.9"
 threadpool = "1.7.1"
-vsock = "0.3"
+vsock = "0.5"
 
 [dev-dependencies]
 ctor = "0.2.7"
 rand = "0.8.5"
-tempfile = "3.5.0"
+tempfile = "3.19.1"

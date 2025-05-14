@@ -338,6 +338,53 @@ mod test_nitro_cli_args {
     }
 
     #[test]
+    fn sign_enclave_correct_command() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "sign-eif",
+            "--eif-path",
+            "image.eif",
+            "--signing-certificate",
+            "cert.pem",
+            "--private-key",
+            "key.pem",
+        ];
+
+        assert!(app.try_get_matches_from(args).is_ok())
+    }
+
+    #[test]
+    fn sign_enclave_missing_certificate() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "sign-eif",
+            "--eif-path",
+            "image.eif",
+            "--private-key",
+            "key.pem",
+        ];
+
+        assert!(app.try_get_matches_from(args).is_err())
+    }
+
+    #[test]
+    fn sign_enclave_missing_key() {
+        let app = create_app!();
+        let args = vec![
+            "nitro cli",
+            "sign-eif",
+            "--eif-path",
+            "image.eif",
+            "--signing-certificate",
+            "cert.pem",
+        ];
+
+        assert!(app.try_get_matches_from(args).is_err())
+    }
+
+    #[test]
     fn build_enclave_with_metadata_correct_command() {
         let app = create_app!();
         let args = vec![

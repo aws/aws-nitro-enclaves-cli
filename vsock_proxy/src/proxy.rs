@@ -66,21 +66,21 @@ pub fn check_allowlist(
             // If hostname matching failed, attempt to match against IPs.
             let rresults = dns::resolve(addr, ip_addr_type);
 
-            let remote_addr_matched = rresults
+            if let Some(matched_addr) = rresults
                 .into_iter()
                 .flatten()
                 .find(|rresult| rresult.ip_addr() == remote_addr)
-                .map(|_| remote_addr);
-
-            match remote_addr_matched {
-                Some(addr) => {
-                    info!("Matched with host IP \"{}\" and port \"{}\"", addr, port);
-                }
-                None => {
-                    warn!("Unable to resolve allow listed host: {:?}.", remote_host);
-                }
+                .map(|_| remote_addr)
+            {
+                info!(
+                    "Matched with host IP \"{}\" and port \"{}\"",
+                    matched_addr, port
+                );
+                return Ok(matched_addr);
             }
         }
+
+        warn!("Unable to resolve allow listed host: {:?}.", remote_host);
     }
     Err("The given address and port are not allowed".to_string())
 }

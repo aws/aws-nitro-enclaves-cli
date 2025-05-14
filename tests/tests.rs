@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests {
     use nitro_cli::common::commands_parser::{
-        BuildEnclavesArgs, RunEnclavesArgs, TerminateEnclavesArgs,
+        BuildEnclavesArgs, RunEnclavesArgs, SignEifArgs, TerminateEnclavesArgs,
     };
     use nitro_cli::common::json_output::EnclaveDescribeInfo;
     use nitro_cli::enclave_proc::commands::{describe_enclaves, run_enclaves, terminate_enclaves};
@@ -17,7 +17,7 @@ mod tests {
     use nitro_cli::utils::{Console, PcrType};
     use nitro_cli::{
         build_enclaves, build_from_docker, describe_eif, enclave_console, get_file_pcr,
-        new_enclave_name,
+        new_enclave_name, sign_eif,
     };
     use nitro_cli::{CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR};
     use serde_json::json;
@@ -351,6 +351,59 @@ mod tests {
             &build_args.metadata,
         )
         .expect("Docker build failed");
+
+        let args = RunEnclavesArgs {
+            enclave_cid: None,
+            eif_path: build_args.output,
+            cpu_ids: None,
+            cpu_count: Some(2),
+            memory_mib: 256,
+            debug_mode: true,
+            attach_console: false,
+            enclave_name: Some("testName".to_string()),
+        };
+        run_describe_terminate(args);
+    }
+
+    #[test]
+    fn run_describe_terminate_separately_signed_enclave_image() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+
+        setup_env();
+        let build_args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: None,
+            private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
+        };
+
+        build_from_docker(
+            &build_args.docker_uri,
+            &build_args.docker_dir,
+            &build_args.output,
+            &build_args.signing_certificate,
+            &build_args.private_key,
+            &build_args.img_name,
+            &build_args.img_version,
+            &build_args.metadata,
+        )
+        .expect("Docker build failed");
+
+        let sign_args = SignEifArgs {
+            eif_path: build_args.output.clone(),
+            signing_certificate: Some(cert_path),
+            private_key: Some(key_path),
+        };
+        sign_eif(sign_args).expect("Sign EIF failed");
 
         let args = RunEnclavesArgs {
             enclave_cid: None,
@@ -1030,6 +1083,121 @@ mod tests {
     }
 
     #[test]
+    fn build_sign_decribe_simple_eif() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: None,
+            private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
+        )
+        .expect("Docker build failed");
+
+        let eif_info = describe_eif(args.output.clone()).unwrap();
+
+        assert_eq!(eif_info.version, 4);
+        assert!(!eif_info.is_signed);
+        assert!(eif_info.cert_info.is_none());
+        assert!(eif_info.crc_check);
+        assert!(eif_info.sign_check.is_none());
+
+        let sign_args = SignEifArgs {
+            eif_path: args.output.clone(),
+            signing_certificate: Some(cert_path),
+            private_key: Some(key_path),
+        };
+        sign_eif(sign_args).expect("Sign EIF failed");
+        let signed_eif_info = describe_eif(args.output).unwrap();
+
+        assert_eq!(signed_eif_info.version, 4);
+        assert!(signed_eif_info.is_signed);
+        assert!(signed_eif_info.cert_info.is_some());
+        assert!(signed_eif_info.crc_check);
+        assert!(signed_eif_info.sign_check.unwrap());
+    }
+
+    #[test]
+    fn build_describe_signed_simple_eif_with_updated_signature() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        let cert_path2 = format!("{}/cert2.pem", dir_path);
+        let key_path2 = format!("{}/key2.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+        generate_signing_cert_and_key(&cert_path2, &key_path2);
+
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: Some(cert_path),
+            private_key: Some(key_path),
+            img_name: None,
+            img_version: None,
+            metadata: None,
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
+        )
+        .expect("Docker build failed");
+
+        let eif_info = describe_eif(args.output.clone()).unwrap();
+
+        assert_eq!(eif_info.version, 4);
+        assert!(eif_info.is_signed);
+        assert!(eif_info.cert_info.is_some());
+        assert!(eif_info.crc_check);
+        assert!(eif_info.sign_check.unwrap());
+
+        let sign_args = SignEifArgs {
+            eif_path: args.output.clone(),
+            signing_certificate: Some(cert_path2),
+            private_key: Some(key_path2),
+        };
+        sign_eif(sign_args).expect("Sign EIF failed");
+        let signed_eif_info = describe_eif(args.output).unwrap();
+
+        assert_eq!(signed_eif_info.version, 4);
+        assert!(signed_eif_info.is_signed);
+        assert!(signed_eif_info.cert_info.is_some());
+        assert!(signed_eif_info.crc_check);
+        assert!(signed_eif_info.sign_check.unwrap());
+    }
+
+    #[test]
     fn get_certificate_pcr() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
@@ -1075,5 +1243,558 @@ mod tests {
                 .unwrap(),
             pcr.get(&"PCR8".to_string()).unwrap(),
         );
+    }
+
+    #[test]
+    fn get_certificate_pcr_after_separate_signing() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: None,
+            private_key: None,
+            img_name: None,
+            img_version: None,
+            metadata: None,
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
+        )
+        .expect("Docker build failed");
+
+        let sign_args = SignEifArgs {
+            eif_path: args.output.clone(),
+            signing_certificate: Some(cert_path.clone()),
+            private_key: Some(key_path),
+        };
+        sign_eif(sign_args).expect("Sign EIF failed");
+
+        // Describe EIF and get PCR8
+        let eif_info = describe_eif(args.output).unwrap();
+        // Hash signing certificate and verify that PCR8 is the same (identifying the certificate)
+        let pcr = get_file_pcr(cert_path, PcrType::SigningCertificate).unwrap();
+
+        assert_eq!(
+            eif_info
+                .build_info
+                .measurements
+                .get(&"PCR8".to_string())
+                .unwrap(),
+            pcr.get(&"PCR8".to_string()).unwrap(),
+        );
+    }
+
+    #[test]
+    fn get_certificate_pcr_after_signature_update() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap();
+        let eif_path = format!("{}/test.eif", dir_path);
+        let cert_path = format!("{}/cert.pem", dir_path);
+        let key_path = format!("{}/key.pem", dir_path);
+        let cert_path2 = format!("{}/cert2.pem", dir_path);
+        let key_path2 = format!("{}/key2.pem", dir_path);
+        generate_signing_cert_and_key(&cert_path, &key_path);
+        generate_signing_cert_and_key(&cert_path2, &key_path2);
+
+        setup_env();
+        let args = BuildEnclavesArgs {
+            docker_uri: SAMPLE_DOCKER.to_string(),
+            docker_dir: None,
+            output: eif_path,
+            signing_certificate: Some(cert_path),
+            private_key: Some(key_path),
+            img_name: None,
+            img_version: None,
+            metadata: None,
+        };
+
+        build_from_docker(
+            &args.docker_uri,
+            &args.docker_dir,
+            &args.output,
+            &args.signing_certificate,
+            &args.private_key,
+            &args.img_name,
+            &args.img_version,
+            &args.metadata,
+        )
+        .expect("Docker build failed");
+
+        let sign_args = SignEifArgs {
+            eif_path: args.output.clone(),
+            signing_certificate: Some(cert_path2.clone()),
+            private_key: Some(key_path2),
+        };
+        sign_eif(sign_args).expect("Sign EIF failed");
+
+        // Describe EIF and get PCR8
+        let eif_info = describe_eif(args.output).unwrap();
+        // Hash signing certificate and verify that PCR8 is the same (identifying the certificate)
+        let pcr = get_file_pcr(cert_path2, PcrType::SigningCertificate).unwrap();
+
+        assert_eq!(
+            eif_info
+                .build_info
+                .measurements
+                .get(&"PCR8".to_string())
+                .unwrap(),
+            pcr.get(&"PCR8".to_string()).unwrap(),
+        );
+    }
+
+    mod kms_keys {
+        use super::*;
+        use std::env;
+
+        #[test]
+        fn build_describe_signed_simple_eif() {
+            let dir = tempdir().unwrap();
+            let dir_path = dir.path().to_str().unwrap();
+            let eif_path = format!("{}/test.eif", dir_path);
+            let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
+            let kms_cert_path =
+                env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
+
+            setup_env();
+            let args = BuildEnclavesArgs {
+                docker_uri: SAMPLE_DOCKER.to_string(),
+                docker_dir: None,
+                output: eif_path,
+                signing_certificate: Some(kms_cert_path),
+                private_key: Some(kms_key_arn),
+                img_name: None,
+                img_version: None,
+                metadata: None,
+            };
+
+            build_from_docker(
+                &args.docker_uri,
+                &args.docker_dir,
+                &args.output,
+                &args.signing_certificate,
+                &args.private_key,
+                &args.img_name,
+                &args.img_version,
+                &args.metadata,
+            )
+            .expect("Docker build failed");
+
+            let eif_info = describe_eif(args.output).unwrap();
+
+            assert_eq!(eif_info.version, 4);
+            assert!(eif_info.is_signed);
+            assert!(eif_info.cert_info.is_some());
+            assert!(eif_info.crc_check);
+            assert!(eif_info.sign_check.unwrap());
+        }
+
+        #[test]
+        fn build_sign_decribe_simple_eif() {
+            let dir = tempdir().unwrap();
+            let dir_path = dir.path().to_str().unwrap();
+            let eif_path = format!("{}/test.eif", dir_path);
+            let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
+            let kms_cert_path =
+                env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
+
+            setup_env();
+            let args = BuildEnclavesArgs {
+                docker_uri: SAMPLE_DOCKER.to_string(),
+                docker_dir: None,
+                output: eif_path,
+                signing_certificate: None,
+                private_key: None,
+                img_name: None,
+                img_version: None,
+                metadata: None,
+            };
+
+            build_from_docker(
+                &args.docker_uri,
+                &args.docker_dir,
+                &args.output,
+                &args.signing_certificate,
+                &args.private_key,
+                &args.img_name,
+                &args.img_version,
+                &args.metadata,
+            )
+            .expect("Docker build failed");
+
+            let eif_info = describe_eif(args.output.clone()).unwrap();
+
+            assert_eq!(eif_info.version, 4);
+            assert!(!eif_info.is_signed);
+            assert!(eif_info.cert_info.is_none());
+            assert!(eif_info.crc_check);
+            assert!(eif_info.sign_check.is_none());
+
+            let sign_args = SignEifArgs {
+                eif_path: args.output.clone(),
+                signing_certificate: Some(kms_cert_path),
+                private_key: Some(kms_key_arn),
+            };
+            sign_eif(sign_args).expect("Sign EIF failed");
+            let signed_eif_info = describe_eif(args.output).unwrap();
+
+            assert_eq!(signed_eif_info.version, 4);
+            assert!(signed_eif_info.is_signed);
+            assert!(signed_eif_info.cert_info.is_some());
+            assert!(signed_eif_info.crc_check);
+            assert!(signed_eif_info.sign_check.unwrap());
+        }
+
+        #[test]
+        fn build_describe_signed_simple_eif_with_updated_signature_local_to_kms() {
+            let dir = tempdir().unwrap();
+            let dir_path = dir.path().to_str().unwrap();
+            let eif_path = format!("{}/test.eif", dir_path);
+            let local_cert_path = format!("{}/cert.pem", dir_path);
+            let local_key_path = format!("{}/key.pem", dir_path);
+            generate_signing_cert_and_key(&local_cert_path, &local_key_path);
+            let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
+            let kms_cert_path =
+                env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
+
+            setup_env();
+            let args = BuildEnclavesArgs {
+                docker_uri: SAMPLE_DOCKER.to_string(),
+                docker_dir: None,
+                output: eif_path,
+                signing_certificate: Some(local_cert_path),
+                private_key: Some(local_key_path),
+                img_name: None,
+                img_version: None,
+                metadata: None,
+            };
+
+            build_from_docker(
+                &args.docker_uri,
+                &args.docker_dir,
+                &args.output,
+                &args.signing_certificate,
+                &args.private_key,
+                &args.img_name,
+                &args.img_version,
+                &args.metadata,
+            )
+            .expect("Docker build failed");
+
+            let eif_info = describe_eif(args.output.clone()).unwrap();
+
+            assert_eq!(eif_info.version, 4);
+            assert!(eif_info.is_signed);
+            assert!(eif_info.cert_info.is_some());
+            assert!(eif_info.crc_check);
+            assert!(eif_info.sign_check.unwrap());
+
+            let sign_args = SignEifArgs {
+                eif_path: args.output.clone(),
+                signing_certificate: Some(kms_cert_path),
+                private_key: Some(kms_key_arn),
+            };
+            sign_eif(sign_args).expect("Sign EIF failed");
+            let signed_eif_info = describe_eif(args.output).unwrap();
+
+            assert_eq!(signed_eif_info.version, 4);
+            assert!(signed_eif_info.is_signed);
+            assert!(signed_eif_info.cert_info.is_some());
+            assert!(signed_eif_info.crc_check);
+            assert!(signed_eif_info.sign_check.unwrap());
+        }
+
+        #[test]
+        fn build_describe_signed_simple_eif_with_updated_signature_kms_to_local() {
+            let dir = tempdir().unwrap();
+            let dir_path = dir.path().to_str().unwrap();
+            let eif_path = format!("{}/test.eif", dir_path);
+            let local_cert_path = format!("{}/cert.pem", dir_path);
+            let local_key_path = format!("{}/key.pem", dir_path);
+            generate_signing_cert_and_key(&local_cert_path, &local_key_path);
+            let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
+            let kms_cert_path =
+                env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
+
+            setup_env();
+            let args = BuildEnclavesArgs {
+                docker_uri: SAMPLE_DOCKER.to_string(),
+                docker_dir: None,
+                output: eif_path,
+                signing_certificate: Some(kms_cert_path),
+                private_key: Some(kms_key_arn),
+                img_name: None,
+                img_version: None,
+                metadata: None,
+            };
+
+            build_from_docker(
+                &args.docker_uri,
+                &args.docker_dir,
+                &args.output,
+                &args.signing_certificate,
+                &args.private_key,
+                &args.img_name,
+                &args.img_version,
+                &args.metadata,
+            )
+            .expect("Docker build failed");
+
+            let eif_info = describe_eif(args.output.clone()).unwrap();
+
+            assert_eq!(eif_info.version, 4);
+            assert!(eif_info.is_signed);
+            assert!(eif_info.cert_info.is_some());
+            assert!(eif_info.crc_check);
+            assert!(eif_info.sign_check.unwrap());
+
+            let sign_args = SignEifArgs {
+                eif_path: args.output.clone(),
+                signing_certificate: Some(local_cert_path),
+                private_key: Some(local_key_path),
+            };
+            sign_eif(sign_args).expect("Sign EIF failed");
+            let signed_eif_info = describe_eif(args.output).unwrap();
+
+            assert_eq!(signed_eif_info.version, 4);
+            assert!(signed_eif_info.is_signed);
+            assert!(signed_eif_info.cert_info.is_some());
+            assert!(signed_eif_info.crc_check);
+            assert!(signed_eif_info.sign_check.unwrap());
+        }
+
+        #[test]
+        fn get_certificate_pcr() {
+            let dir = tempdir().unwrap();
+            let dir_path = dir.path().to_str().unwrap();
+            let eif_path = format!("{}/test.eif", dir_path);
+            let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
+            let kms_cert_path =
+                env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
+
+            setup_env();
+            let args = BuildEnclavesArgs {
+                docker_uri: SAMPLE_DOCKER.to_string(),
+                docker_dir: None,
+                output: eif_path,
+                signing_certificate: Some(kms_cert_path.clone()),
+                private_key: Some(kms_key_arn),
+                img_name: None,
+                img_version: None,
+                metadata: None,
+            };
+
+            build_from_docker(
+                &args.docker_uri,
+                &args.docker_dir,
+                &args.output,
+                &args.signing_certificate,
+                &args.private_key,
+                &args.img_name,
+                &args.img_version,
+                &args.metadata,
+            )
+            .expect("Docker build failed");
+
+            // Describe EIF and get PCR8
+            let eif_info = describe_eif(args.output).unwrap();
+            // Hash signing certificate and verify that PCR8 is the same (identifying the certificate)
+            let pcr = get_file_pcr(kms_cert_path, PcrType::SigningCertificate).unwrap();
+
+            assert_eq!(
+                eif_info
+                    .build_info
+                    .measurements
+                    .get(&"PCR8".to_string())
+                    .unwrap(),
+                pcr.get(&"PCR8".to_string()).unwrap(),
+            );
+        }
+
+        #[test]
+        fn get_certificate_pcr_after_separate_signing() {
+            let dir = tempdir().unwrap();
+            let dir_path = dir.path().to_str().unwrap();
+            let eif_path = format!("{}/test.eif", dir_path);
+            let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
+            let kms_cert_path =
+                env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
+
+            setup_env();
+            let args = BuildEnclavesArgs {
+                docker_uri: SAMPLE_DOCKER.to_string(),
+                docker_dir: None,
+                output: eif_path,
+                signing_certificate: None,
+                private_key: None,
+                img_name: None,
+                img_version: None,
+                metadata: None,
+            };
+
+            build_from_docker(
+                &args.docker_uri,
+                &args.docker_dir,
+                &args.output,
+                &args.signing_certificate,
+                &args.private_key,
+                &args.img_name,
+                &args.img_version,
+                &args.metadata,
+            )
+            .expect("Docker build failed");
+
+            let sign_args = SignEifArgs {
+                eif_path: args.output.clone(),
+                signing_certificate: Some(kms_cert_path.clone()),
+                private_key: Some(kms_key_arn),
+            };
+            sign_eif(sign_args).expect("Sign EIF failed");
+
+            // Describe EIF and get PCR8
+            let eif_info = describe_eif(args.output).unwrap();
+            // Hash signing certificate and verify that PCR8 is the same (identifying the certificate)
+            let pcr = get_file_pcr(kms_cert_path, PcrType::SigningCertificate).unwrap();
+
+            assert_eq!(
+                eif_info
+                    .build_info
+                    .measurements
+                    .get(&"PCR8".to_string())
+                    .unwrap(),
+                pcr.get(&"PCR8".to_string()).unwrap(),
+            );
+        }
+
+        #[test]
+        fn get_certificate_pcr_after_signature_update_local_to_kms() {
+            let dir = tempdir().unwrap();
+            let dir_path = dir.path().to_str().unwrap();
+            let eif_path = format!("{}/test.eif", dir_path);
+            let local_cert_path = format!("{}/cert.pem", dir_path);
+            let local_key_path = format!("{}/key.pem", dir_path);
+            generate_signing_cert_and_key(&local_cert_path, &local_key_path);
+            let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
+            let kms_cert_path =
+                env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
+
+            setup_env();
+            let args = BuildEnclavesArgs {
+                docker_uri: SAMPLE_DOCKER.to_string(),
+                docker_dir: None,
+                output: eif_path,
+                signing_certificate: Some(local_cert_path),
+                private_key: Some(local_key_path),
+                img_name: None,
+                img_version: None,
+                metadata: None,
+            };
+
+            build_from_docker(
+                &args.docker_uri,
+                &args.docker_dir,
+                &args.output,
+                &args.signing_certificate,
+                &args.private_key,
+                &args.img_name,
+                &args.img_version,
+                &args.metadata,
+            )
+            .expect("Docker build failed");
+
+            let sign_args = SignEifArgs {
+                eif_path: args.output.clone(),
+                signing_certificate: Some(kms_cert_path.clone()),
+                private_key: Some(kms_key_arn),
+            };
+            sign_eif(sign_args).expect("Sign EIF failed");
+
+            // Describe EIF and get PCR8
+            let eif_info = describe_eif(args.output).unwrap();
+            // Hash signing certificate and verify that PCR8 is the same (identifying the certificate)
+            let pcr = get_file_pcr(kms_cert_path, PcrType::SigningCertificate).unwrap();
+
+            assert_eq!(
+                eif_info
+                    .build_info
+                    .measurements
+                    .get(&"PCR8".to_string())
+                    .unwrap(),
+                pcr.get(&"PCR8".to_string()).unwrap(),
+            );
+        }
+
+        #[test]
+        fn get_certificate_pcr_after_signature_update_kms_to_local() {
+            let dir = tempdir().unwrap();
+            let dir_path = dir.path().to_str().unwrap();
+            let eif_path = format!("{}/test.eif", dir_path);
+            let local_cert_path = format!("{}/cert.pem", dir_path);
+            let local_key_path = format!("{}/key.pem", dir_path);
+            generate_signing_cert_and_key(&local_cert_path, &local_key_path);
+            let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
+            let kms_cert_path =
+                env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
+
+            setup_env();
+            let args = BuildEnclavesArgs {
+                docker_uri: SAMPLE_DOCKER.to_string(),
+                docker_dir: None,
+                output: eif_path,
+                signing_certificate: Some(kms_cert_path),
+                private_key: Some(kms_key_arn),
+                img_name: None,
+                img_version: None,
+                metadata: None,
+            };
+
+            build_from_docker(
+                &args.docker_uri,
+                &args.docker_dir,
+                &args.output,
+                &args.signing_certificate,
+                &args.private_key,
+                &args.img_name,
+                &args.img_version,
+                &args.metadata,
+            )
+            .expect("Docker build failed");
+
+            let sign_args = SignEifArgs {
+                eif_path: args.output.clone(),
+                signing_certificate: Some(local_cert_path.clone()),
+                private_key: Some(local_key_path),
+            };
+            sign_eif(sign_args).expect("Sign EIF failed");
+
+            // Describe EIF and get PCR8
+            let eif_info = describe_eif(args.output).unwrap();
+            // Hash signing certificate and verify that PCR8 is the same (identifying the certificate)
+            let pcr = get_file_pcr(local_cert_path, PcrType::SigningCertificate).unwrap();
+
+            assert_eq!(
+                eif_info
+                    .build_info
+                    .measurements
+                    .get(&"PCR8".to_string())
+                    .unwrap(),
+                pcr.get(&"PCR8".to_string()).unwrap(),
+            );
+        }
     }
 }

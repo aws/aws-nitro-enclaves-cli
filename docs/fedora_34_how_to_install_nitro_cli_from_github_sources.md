@@ -165,6 +165,8 @@ $ make nitro-cli
 
 $ make vsock-proxy
 
+$ make nitro-enclaves-allocator
+
 $ sudo make NITRO_CLI_INSTALL_DIR=/ install
 
 $ source /etc/profile.d/nitro-cli-env.sh

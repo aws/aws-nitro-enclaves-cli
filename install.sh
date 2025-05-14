@@ -33,7 +33,7 @@ update_git() {
 }
 
 install_nitro_cli() {
-	make nitro-cli && make vsock-proxy && make install
+	make nitro-cli && make vsock-proxy && make nitro-enclaves-allocator && make install
 	source "${NITRO_CLI_INSTALL_DIR}"/etc/profile.d/nitro-cli-env.sh
 	echo "Nitro CLI is now installed. We recommend adding ${NITRO_CLI_INSTALL_DIR}/etc/profile.d/nitro-cli-env.sh in your .bashrc file"
 }

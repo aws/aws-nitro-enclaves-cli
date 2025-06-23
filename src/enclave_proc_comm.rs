@@ -303,6 +303,7 @@ pub fn enclave_process_handle_all_replies<T>(
     prev_failed_conns: usize,
     print_as_vec: bool,
     allowed_return_codes: Vec<i32>,
+    pretty_print: bool,
 ) -> NitroCliResult<Vec<T>>
 where
     T: Clone + DeserializeOwned + Serialize,
@@ -318,18 +319,28 @@ where
     // Output the received objects either individually or as an array.
     if print_as_vec {
         let obj_vec: Vec<T> = objects.iter().map(|v| v.0.clone()).collect();
+        let json_result = if pretty_print {
+            serde_json::to_string_pretty(&obj_vec)
+        } else {
+            serde_json::to_string(&obj_vec)
+        };
         println!(
             "{}",
-            serde_json::to_string_pretty(&obj_vec).map_err(|e| new_nitro_cli_failure!(
+            json_result.map_err(|e| new_nitro_cli_failure!(
                 &format!("Failed to print JSON vector: {:?}", e),
                 NitroCliErrorEnum::SerdeError
             ))?
         );
     } else {
         for object in objects.iter().map(|v| v.0.clone()) {
+            let json_result = if pretty_print {
+                serde_json::to_string_pretty(&object)
+            } else {
+                serde_json::to_string(&object)
+            };
             println!(
                 "{}",
-                serde_json::to_string_pretty(&object).map_err(|e| new_nitro_cli_failure!(
+                json_result.map_err(|e| new_nitro_cli_failure!(
                     &format!("Failed to print JSON object: {:?}", e),
                     NitroCliErrorEnum::SerdeError
                 ))?

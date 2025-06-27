@@ -10,7 +10,8 @@ phases:
   build:
     commands:
       - echo Build started on `date`
-      - env | grep CODEBUILD > build_env.txt
+      - env | grep CODEBUILD > $CODEBUILD_SRC_DIR/build_env.txt
+      - $CODEBUILD_SRC_DIR/ci_entrypoint.sh
   post_build:
     commands:
       - echo Build completed on `date`

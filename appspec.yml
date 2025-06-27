@@ -1,6 +1,0 @@
-version: 0.0
-os: linux
-hooks:
-  AfterInstall:
-    - location: ci_entrypoint.sh
-      timeout: 3600

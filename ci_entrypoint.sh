@@ -27,7 +27,6 @@ function status_update() {
 # where a CI run will eventually fail due to no space left.
 # We also clear the system caches in order to guarantee the maximum possible available memory.
 docker system prune --force
-echo 3 > /proc/sys/vm/drop_caches
 
 pwd
 source build_env.txt

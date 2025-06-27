@@ -77,7 +77,7 @@ impl EnclaveProcSock {
         let requested_remove_clone = self.requested_remove.clone();
         let socket_inotify = Inotify::init().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to initialize socket notifications: {:?}", e),
+                &format!("Failed to initialize socket notifications: {e:?}"),
                 NitroCliErrorEnum::InotifyError
             )
         })?;
@@ -93,7 +93,7 @@ impl EnclaveProcSock {
             )
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to add watch to inotify: {:?}", e),
+                    &format!("Failed to add watch to inotify: {e:?}"),
                     NitroCliErrorEnum::InotifyError
                 )
             })?;
@@ -139,7 +139,7 @@ impl EnclaveProcSock {
                 .join()
                 .map_err(|e| {
                     new_nitro_cli_failure!(
-                        &format!("Failed to join socket notification thread: {:?}", e),
+                        &format!("Failed to join socket notification thread: {e:?}"),
                         NitroCliErrorEnum::ThreadJoinFailure
                     )
                 })?;
@@ -173,7 +173,7 @@ fn socket_removal_listener(
             .read_events_blocking(&mut buffer)
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Socket removal listener error: {:?}", e),
+                    &format!("Socket removal listener error: {e:?}"),
                     NitroCliErrorEnum::InotifyError
                 )
                 .set_action("Run Enclave".to_string())
@@ -269,7 +269,7 @@ mod tests {
             UnixListener::bind(socket.get_path())
                 .map_err(|e| {
                     new_nitro_cli_failure!(
-                        &format!("Failed to bind to socket: {:?}", e),
+                        &format!("Failed to bind to socket: {e:?}"),
                         NitroCliErrorEnum::SocketError
                     )
                 })
@@ -306,7 +306,7 @@ mod tests {
             let _ = UnixListener::bind(socket.get_path())
                 .map_err(|e| {
                     new_nitro_cli_failure!(
-                        &format!("Failed to bind to socket: {:?}", e),
+                        &format!("Failed to bind to socket: {e:?}"),
                         NitroCliErrorEnum::SocketError
                     )
                 })

@@ -55,7 +55,7 @@ impl ConnectionListener {
         Ok(ConnectionListener {
             epoll_fd: epoll::epoll_create().map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to initialize epoll: {:?}", e),
+                    &format!("Failed to initialize epoll: {e:?}"),
                     NitroCliErrorEnum::EpollError
                 )
             })?,
@@ -78,7 +78,7 @@ impl ConnectionListener {
         // Bind the listener to the socket and spawn the listener thread.
         let listener = UnixListener::bind(self.socket.get_path()).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to bind connection listener: {:?}", e),
+                &format!("Failed to bind connection listener: {e:?}"),
                 NitroCliErrorEnum::SocketError
             )
         })?;
@@ -112,7 +112,7 @@ impl ConnectionListener {
         epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, stream_fd, &mut cli_evt).map_err(
             |e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to add stream to epoll: {:?}", e),
+                    &format!("Failed to add stream to epoll: {e:?}"),
                     NitroCliErrorEnum::EpollError
                 )
             },
@@ -130,7 +130,7 @@ impl ConnectionListener {
         epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlAdd, enc_fd, &mut enc_event).map_err(
             |e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to add enclave descriptor to epoll: {:?}", e),
+                    &format!("Failed to add enclave descriptor to epoll: {e:?}"),
                     NitroCliErrorEnum::EpollError
                 )
             },
@@ -198,7 +198,7 @@ impl ConnectionListener {
         // Send termination notification to the listener thread.
         let mut self_conn = UnixStream::connect(self.socket.get_path()).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to connect to listener thread: {:?}", e),
+                &format!("Failed to connect to listener thread: {e:?}"),
                 NitroCliErrorEnum::SocketError
             )
         })?;
@@ -212,7 +212,7 @@ impl ConnectionListener {
         // Shut the connection down.
         self_conn.shutdown(std::net::Shutdown::Both).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to close connection: {:?}", e),
+                &format!("Failed to close connection: {e:?}"),
                 NitroCliErrorEnum::SocketCloseError
             )
         })?;
@@ -220,7 +220,7 @@ impl ConnectionListener {
         // Ensure that the listener thread has terminated.
         self.listener_thread.take().unwrap().join().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to join listener thread: {:?}", e),
+                &format!("Failed to join listener thread: {e:?}"),
                 NitroCliErrorEnum::ThreadJoinFailure
             )
         })?;
@@ -239,7 +239,7 @@ impl ConnectionListener {
                 Err(nix::errno::Errno::EINTR) => continue,
                 Err(e) => {
                     return Err(new_nitro_cli_failure!(
-                        &format!("Failed to wait on epoll: {:?}", e),
+                        &format!("Failed to wait on epoll: {e:?}"),
                         NitroCliErrorEnum::EpollError
                     ))
                 }
@@ -259,7 +259,7 @@ impl ConnectionListener {
         // the Connection not touch epoll directly.
         epoll::epoll_ctl(self.epoll_fd, EpollOp::EpollCtlDel, fd, None).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to remove descriptor from epoll: {:?}", e),
+                &format!("Failed to remove descriptor from epoll: {e:?}"),
                 NitroCliErrorEnum::EpollError
             )
         })?;
@@ -445,13 +445,13 @@ mod tests {
 
             // Bind the listener to the socket and spawn the listener thread.
             let listener = UnixListener::bind(connection_listener.socket.get_path())
-                .map_err(|e| format!("Failed to bind connection listener: {:?}", e))
+                .map_err(|e| format!("Failed to bind connection listener: {e:?}"))
                 .unwrap();
             connection_listener.enable_credentials_passing(&listener);
             connection_listener
                 .socket
                 .start_monitoring(true)
-                .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))
+                .map_err(|e| format!("Failed to start socket monitoring: {e:?}"))
                 .unwrap();
 
             let res = connection_listener.connection_listener_run(listener);
@@ -564,13 +564,13 @@ mod tests {
 
             // Bind the listener to the socket and spawn the listener thread.
             let listener = UnixListener::bind(connection_listener.socket.get_path())
-                .map_err(|e| format!("Failed to bind connection listener: {:?}", e))
+                .map_err(|e| format!("Failed to bind connection listener: {e:?}"))
                 .unwrap();
             connection_listener.enable_credentials_passing(&listener);
             connection_listener
                 .socket
                 .start_monitoring(true)
-                .map_err(|e| format!("Failed to start socket monitoring: {:?}", e))
+                .map_err(|e| format!("Failed to start socket monitoring: {e:?}"))
                 .unwrap();
 
             conn_clone.connection_listener_run(listener).unwrap();

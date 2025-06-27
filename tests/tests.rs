@@ -216,6 +216,7 @@ mod tests {
         let mut key_file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(key_path)
             .unwrap();
         key_file
@@ -225,6 +226,7 @@ mod tests {
         let mut cert_file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(cert_path)
             .unwrap();
         cert_file.write_all(&cert.to_pem().unwrap()).unwrap();
@@ -234,9 +236,9 @@ mod tests {
     fn build_enclaves_signed_simple_image() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
 
         setup_env();
@@ -323,9 +325,9 @@ mod tests {
     fn run_describe_terminate_signed_enclave_image() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
 
         setup_env();
@@ -369,9 +371,9 @@ mod tests {
     fn run_describe_terminate_separately_signed_enclave_image() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
 
         setup_env();
@@ -1044,9 +1046,9 @@ mod tests {
     fn build_describe_signed_simple_eif() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
 
         setup_env();
@@ -1086,9 +1088,9 @@ mod tests {
     fn build_sign_decribe_simple_eif() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
 
         setup_env();
@@ -1142,11 +1144,11 @@ mod tests {
     fn build_describe_signed_simple_eif_with_updated_signature() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
-        let cert_path2 = format!("{}/cert2.pem", dir_path);
-        let key_path2 = format!("{}/key2.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
+        let cert_path2 = format!("{dir_path}/cert2.pem");
+        let key_path2 = format!("{dir_path}/key2.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
         generate_signing_cert_and_key(&cert_path2, &key_path2);
 
@@ -1201,9 +1203,9 @@ mod tests {
     fn get_certificate_pcr() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
 
         setup_env();
@@ -1236,12 +1238,8 @@ mod tests {
         let pcr = get_file_pcr(cert_path, PcrType::SigningCertificate).unwrap();
 
         assert_eq!(
-            eif_info
-                .build_info
-                .measurements
-                .get(&"PCR8".to_string())
-                .unwrap(),
-            pcr.get(&"PCR8".to_string()).unwrap(),
+            eif_info.build_info.measurements.get("PCR8").unwrap(),
+            pcr.get("PCR8").unwrap(),
         );
     }
 
@@ -1249,9 +1247,9 @@ mod tests {
     fn get_certificate_pcr_after_separate_signing() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
 
         setup_env();
@@ -1291,12 +1289,8 @@ mod tests {
         let pcr = get_file_pcr(cert_path, PcrType::SigningCertificate).unwrap();
 
         assert_eq!(
-            eif_info
-                .build_info
-                .measurements
-                .get(&"PCR8".to_string())
-                .unwrap(),
-            pcr.get(&"PCR8".to_string()).unwrap(),
+            eif_info.build_info.measurements.get("PCR8").unwrap(),
+            pcr.get("PCR8").unwrap(),
         );
     }
 
@@ -1304,11 +1298,11 @@ mod tests {
     fn get_certificate_pcr_after_signature_update() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap();
-        let eif_path = format!("{}/test.eif", dir_path);
-        let cert_path = format!("{}/cert.pem", dir_path);
-        let key_path = format!("{}/key.pem", dir_path);
-        let cert_path2 = format!("{}/cert2.pem", dir_path);
-        let key_path2 = format!("{}/key2.pem", dir_path);
+        let eif_path = format!("{dir_path}/test.eif");
+        let cert_path = format!("{dir_path}/cert.pem");
+        let key_path = format!("{dir_path}/key.pem");
+        let cert_path2 = format!("{dir_path}/cert2.pem");
+        let key_path2 = format!("{dir_path}/key2.pem");
         generate_signing_cert_and_key(&cert_path, &key_path);
         generate_signing_cert_and_key(&cert_path2, &key_path2);
 
@@ -1349,12 +1343,8 @@ mod tests {
         let pcr = get_file_pcr(cert_path2, PcrType::SigningCertificate).unwrap();
 
         assert_eq!(
-            eif_info
-                .build_info
-                .measurements
-                .get(&"PCR8".to_string())
-                .unwrap(),
-            pcr.get(&"PCR8".to_string()).unwrap(),
+            eif_info.build_info.measurements.get("PCR8").unwrap(),
+            pcr.get("PCR8").unwrap(),
         );
     }
 
@@ -1366,7 +1356,7 @@ mod tests {
         fn build_describe_signed_simple_eif() {
             let dir = tempdir().unwrap();
             let dir_path = dir.path().to_str().unwrap();
-            let eif_path = format!("{}/test.eif", dir_path);
+            let eif_path = format!("{dir_path}/test.eif");
             let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
             let kms_cert_path =
                 env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
@@ -1408,7 +1398,7 @@ mod tests {
         fn build_sign_decribe_simple_eif() {
             let dir = tempdir().unwrap();
             let dir_path = dir.path().to_str().unwrap();
-            let eif_path = format!("{}/test.eif", dir_path);
+            let eif_path = format!("{dir_path}/test.eif");
             let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
             let kms_cert_path =
                 env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
@@ -1464,9 +1454,9 @@ mod tests {
         fn build_describe_signed_simple_eif_with_updated_signature_local_to_kms() {
             let dir = tempdir().unwrap();
             let dir_path = dir.path().to_str().unwrap();
-            let eif_path = format!("{}/test.eif", dir_path);
-            let local_cert_path = format!("{}/cert.pem", dir_path);
-            let local_key_path = format!("{}/key.pem", dir_path);
+            let eif_path = format!("{dir_path}/test.eif");
+            let local_cert_path = format!("{dir_path}/cert.pem");
+            let local_key_path = format!("{dir_path}/key.pem");
             generate_signing_cert_and_key(&local_cert_path, &local_key_path);
             let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
             let kms_cert_path =
@@ -1523,9 +1513,9 @@ mod tests {
         fn build_describe_signed_simple_eif_with_updated_signature_kms_to_local() {
             let dir = tempdir().unwrap();
             let dir_path = dir.path().to_str().unwrap();
-            let eif_path = format!("{}/test.eif", dir_path);
-            let local_cert_path = format!("{}/cert.pem", dir_path);
-            let local_key_path = format!("{}/key.pem", dir_path);
+            let eif_path = format!("{dir_path}/test.eif");
+            let local_cert_path = format!("{dir_path}/cert.pem");
+            let local_key_path = format!("{dir_path}/key.pem");
             generate_signing_cert_and_key(&local_cert_path, &local_key_path);
             let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
             let kms_cert_path =
@@ -1582,7 +1572,7 @@ mod tests {
         fn get_certificate_pcr() {
             let dir = tempdir().unwrap();
             let dir_path = dir.path().to_str().unwrap();
-            let eif_path = format!("{}/test.eif", dir_path);
+            let eif_path = format!("{dir_path}/test.eif");
             let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
             let kms_cert_path =
                 env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
@@ -1617,12 +1607,8 @@ mod tests {
             let pcr = get_file_pcr(kms_cert_path, PcrType::SigningCertificate).unwrap();
 
             assert_eq!(
-                eif_info
-                    .build_info
-                    .measurements
-                    .get(&"PCR8".to_string())
-                    .unwrap(),
-                pcr.get(&"PCR8".to_string()).unwrap(),
+                eif_info.build_info.measurements.get("PCR8").unwrap(),
+                pcr.get("PCR8").unwrap(),
             );
         }
 
@@ -1630,7 +1616,7 @@ mod tests {
         fn get_certificate_pcr_after_separate_signing() {
             let dir = tempdir().unwrap();
             let dir_path = dir.path().to_str().unwrap();
-            let eif_path = format!("{}/test.eif", dir_path);
+            let eif_path = format!("{dir_path}/test.eif");
             let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
             let kms_cert_path =
                 env::var("TEST_CERTIFICATE_PATH").expect("Please set TEST_CERTIFICATE_PATH");
@@ -1672,12 +1658,8 @@ mod tests {
             let pcr = get_file_pcr(kms_cert_path, PcrType::SigningCertificate).unwrap();
 
             assert_eq!(
-                eif_info
-                    .build_info
-                    .measurements
-                    .get(&"PCR8".to_string())
-                    .unwrap(),
-                pcr.get(&"PCR8".to_string()).unwrap(),
+                eif_info.build_info.measurements.get("PCR8").unwrap(),
+                pcr.get("PCR8").unwrap(),
             );
         }
 
@@ -1685,9 +1667,9 @@ mod tests {
         fn get_certificate_pcr_after_signature_update_local_to_kms() {
             let dir = tempdir().unwrap();
             let dir_path = dir.path().to_str().unwrap();
-            let eif_path = format!("{}/test.eif", dir_path);
-            let local_cert_path = format!("{}/cert.pem", dir_path);
-            let local_key_path = format!("{}/key.pem", dir_path);
+            let eif_path = format!("{dir_path}/test.eif");
+            let local_cert_path = format!("{dir_path}/cert.pem");
+            let local_key_path = format!("{dir_path}/key.pem");
             generate_signing_cert_and_key(&local_cert_path, &local_key_path);
             let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
             let kms_cert_path =
@@ -1730,12 +1712,8 @@ mod tests {
             let pcr = get_file_pcr(kms_cert_path, PcrType::SigningCertificate).unwrap();
 
             assert_eq!(
-                eif_info
-                    .build_info
-                    .measurements
-                    .get(&"PCR8".to_string())
-                    .unwrap(),
-                pcr.get(&"PCR8".to_string()).unwrap(),
+                eif_info.build_info.measurements.get("PCR8").unwrap(),
+                pcr.get("PCR8").unwrap(),
             );
         }
 
@@ -1743,9 +1721,9 @@ mod tests {
         fn get_certificate_pcr_after_signature_update_kms_to_local() {
             let dir = tempdir().unwrap();
             let dir_path = dir.path().to_str().unwrap();
-            let eif_path = format!("{}/test.eif", dir_path);
-            let local_cert_path = format!("{}/cert.pem", dir_path);
-            let local_key_path = format!("{}/key.pem", dir_path);
+            let eif_path = format!("{dir_path}/test.eif");
+            let local_cert_path = format!("{dir_path}/cert.pem");
+            let local_key_path = format!("{dir_path}/key.pem");
             generate_signing_cert_and_key(&local_cert_path, &local_key_path);
             let kms_key_arn = env::var("TEST_KMS_KEY_ARN").expect("Please set TEST_KMS_KEY_ARN");
             let kms_cert_path =
@@ -1788,12 +1766,8 @@ mod tests {
             let pcr = get_file_pcr(local_cert_path, PcrType::SigningCertificate).unwrap();
 
             assert_eq!(
-                eif_info
-                    .build_info
-                    .measurements
-                    .get(&"PCR8".to_string())
-                    .unwrap(),
-                pcr.get(&"PCR8".to_string()).unwrap(),
+                eif_info.build_info.measurements.get("PCR8").unwrap(),
+                pcr.get("PCR8").unwrap(),
             );
         }
     }

@@ -33,14 +33,14 @@ pub fn recv_i32(fd: RawFd) -> Result<i32, String> {
 }
 
 pub fn send_loop(fd: RawFd, buf: &[u8], len: u64) -> Result<(), String> {
-    let len: usize = len.try_into().map_err(|err| format!("{:?}", err))?;
+    let len: usize = len.try_into().map_err(|err| format!("{err:?}"))?;
     let mut send_bytes = 0;
 
     while send_bytes < len {
         let size = match send(fd, &buf[send_bytes..len], MsgFlags::empty()) {
             Ok(size) => size,
             Err(nix::errno::Errno::EINTR) => 0,
-            Err(err) => return Err(format!("{:?}", err)),
+            Err(err) => return Err(format!("{err:?}")),
         };
         send_bytes += size;
     }
@@ -49,7 +49,7 @@ pub fn send_loop(fd: RawFd, buf: &[u8], len: u64) -> Result<(), String> {
 }
 
 pub fn recv_loop(fd: RawFd, buf: &mut [u8], len: u64) -> Result<(), String> {
-    let len: usize = len.try_into().map_err(|err| format!("{:?}", err))?;
+    let len: usize = len.try_into().map_err(|err| format!("{err:?}"))?;
     let mut recv_bytes = 0;
 
     while recv_bytes < len {
@@ -57,7 +57,7 @@ pub fn recv_loop(fd: RawFd, buf: &mut [u8], len: u64) -> Result<(), String> {
             Ok(0) => return Err(format!("{:?}", "Peer closed connection")),
             Ok(size) => size,
             Err(nix::errno::Errno::EINTR) => 0,
-            Err(err) => return Err(format!("{:?}", err)),
+            Err(err) => return Err(format!("{err:?}")),
         };
         recv_bytes += size;
     }

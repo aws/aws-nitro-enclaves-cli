@@ -74,7 +74,7 @@ lazy_static! {
 
 /// Returns detailed error information based on supplied arguments.
 pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> String {
-    let mut ret = format!("[ {} ] ", error_code_str);
+    let mut ret = format!("[ {error_code_str} ] ");
     let info_placeholder = "MISSING_INFO".to_string();
 
     match error_code_str.as_str() {
@@ -338,7 +338,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
             ret.push_str("Signing error. Such error appears if incorrect key or certificate paths are provided, or when AWS credenrials need to be refreshed to use a KMS key.");
         }
         _ => {
-            ret.push_str(format!("No such error code {}", error_code_str).as_str());
+            ret.push_str(format!("No such error code {error_code_str}").as_str());
         }
     }
 
@@ -347,10 +347,7 @@ pub fn get_detailed_info(error_code_str: String, additional_info: &[String]) -> 
 
 /// Returns a link with more detailed information regarding a specific error.
 pub fn construct_help_link(error_code_str: String) -> String {
-    format!(
-        "https://docs.aws.amazon.com/enclaves/latest/user/cli-errors.html#{}",
-        error_code_str
-    )
+    format!("https://docs.aws.amazon.com/enclaves/latest/user/cli-errors.html#{error_code_str}")
 }
 
 /// Returns a string containing the backtrace recorded during propagating an error message
@@ -360,7 +357,7 @@ pub fn construct_backtrace(failure_info: &NitroCliFailure) -> String {
     format!("  Action: {}\n  Subactions:{}\n  Root error file: {}\n  Root error line: {}\n  Version: {}",
         failure_info.action,
         failure_info.subactions.iter().rev().fold("".to_string(), |acc, x| {
-            format!("{}\n    {}", acc, x)
+            format!("{acc}\n    {x}")
         }),
         failure_info.file,
         failure_info.line,
@@ -551,7 +548,7 @@ pub fn explain_error(error_code_str: String) {
             eprintln!("Signing error. Such error appears if incorrect key or certificate paths are provided, or when AWS credenrials need to be refreshed to use a KMS key.");
         }
         _ => {
-            eprintln!("No such error code {}", error_code_str);
+            eprintln!("No such error code {error_code_str}");
         }
     }
 }

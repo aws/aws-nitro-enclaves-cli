@@ -354,27 +354,26 @@ mod tests {
     fn test_get_credentials() {
         let test_user = "test_user";
         let test_password = "test_password";
-        let auth = format!("{}:{}", test_user, test_password);
+        let auth = format!("{test_user}:{test_password}");
         let encoded_auth = general_purpose::STANDARD.encode(auth);
         let config = format!(
             r#"{{
             "auths": {{
               "https://public.ecr.aws/aws-nitro-enclaves/hello/v1/": {{
-                "auth": "{}"
+                "auth": "{encoded_auth}"
               }},
               "https://registry.example.com": {{
                 "auth": "b3RoZXJfdXNlcjpvdGhlcl9wYXNzd29yZA=="
               }}
             }}
-          }}"#,
-            encoded_auth
+          }}"#
         );
 
         // Create a temporary file
         let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file.");
 
         // Write the config to the temporary file
-        write!(temp_file, "{}", config).expect("Failed to write to temporary file.");
+        write!(temp_file, "{config}").expect("Failed to write to temporary file.");
 
         // Set the DOCKER_CONFIG environment variable to point to the temporary file's path
         let temp_file_path = temp_file.path().to_string_lossy().to_string();

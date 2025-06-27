@@ -81,10 +81,10 @@ pub fn build_from_docker(
 ) -> NitroCliResult<(File, BTreeMap<String, String>)> {
     let blobs_path =
         blobs_path().map_err(|e| e.add_subaction("Failed to retrieve blobs path".to_string()))?;
-    let cmdline_file_path = format!("{}/cmdline", blobs_path);
+    let cmdline_file_path = format!("{blobs_path}/cmdline");
     let mut cmdline_file = File::open(cmdline_file_path.clone()).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Could not open kernel command line file: {:?}", e),
+            &format!("Could not open kernel command line file: {e:?}"),
             NitroCliErrorEnum::FileOperationFailure
         )
         .add_info(vec![&cmdline_file_path, "Open"])
@@ -93,7 +93,7 @@ pub fn build_from_docker(
     let mut cmdline = String::new();
     cmdline_file.read_to_string(&mut cmdline).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to read kernel command line: {:?}", e),
+            &format!("Failed to read kernel command line: {e:?}"),
             NitroCliErrorEnum::FileOperationFailure
         )
         .add_info(vec![&cmdline_file_path, "Read"])
@@ -107,7 +107,7 @@ pub fn build_from_docker(
         .open(output_path)
         .map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Could not create output file: {:?}", e),
+                &format!("Could not create output file: {e:?}"),
                 NitroCliErrorEnum::FileOperationFailure
             )
             .add_info(vec![output_path, "Open"])
@@ -119,21 +119,21 @@ pub fn build_from_docker(
         _ => "undefined",
     };
 
-    let kernel_path = format!("{}/{}", blobs_path, kernel_image_name);
-    let build_info = generate_build_info!(&format!("{}.config", kernel_path)).map_err(|e| {
+    let kernel_path = format!("{blobs_path}/{kernel_image_name}");
+    let build_info = generate_build_info!(&format!("{kernel_path}.config")).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Could not generate build info: {:?}", e),
+            &format!("Could not generate build info: {e:?}"),
             NitroCliErrorEnum::EifBuildingError
         )
     })?;
 
     let mut docker2eif = enclave_build::Docker2Eif::new(
         docker_uri.to_string(),
-        format!("{}/init", blobs_path),
-        format!("{}/nsm.ko", blobs_path),
+        format!("{blobs_path}/init"),
+        format!("{blobs_path}/nsm.ko"),
         kernel_path,
         cmdline.trim().to_string(),
-        format!("{}/linuxkit", blobs_path),
+        format!("{blobs_path}/linuxkit"),
         &mut file_output,
         artifacts_path()?,
         signing_certificate,
@@ -145,7 +145,7 @@ pub fn build_from_docker(
     )
     .map_err(|err| {
         new_nitro_cli_failure!(
-            &format!("Failed to create EIF image: {:?}", err),
+            &format!("Failed to create EIF image: {err:?}"),
             NitroCliErrorEnum::EifBuildingError
         )
     })?;
@@ -155,21 +155,21 @@ pub fn build_from_docker(
             .build_docker_image(docker_dir.clone())
             .map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to build docker image: {:?}", err),
+                    &format!("Failed to build docker image: {err:?}"),
                     NitroCliErrorEnum::DockerImageBuildError
                 )
             })?;
     } else {
         docker2eif.pull_docker_image().map_err(|err| {
             new_nitro_cli_failure!(
-                &format!("Failed to pull docker image: {:?}", err),
+                &format!("Failed to pull docker image: {err:?}"),
                 NitroCliErrorEnum::DockerImagePullError
             )
         })?;
     }
     let measurements = docker2eif.create().map_err(|err| {
         new_nitro_cli_failure!(
-            &format!("Failed to create EIF image: {:?}", err),
+            &format!("Failed to create EIF image: {err:?}"),
             NitroCliErrorEnum::EifBuildingError
         )
     })?;
@@ -179,7 +179,7 @@ pub fn build_from_docker(
     println!(
         "{}",
         serde_json::to_string_pretty(&info).map_err(|err| new_nitro_cli_failure!(
-            &format!("Failed to display EnclaveBuild data: {:?}", err),
+            &format!("Failed to display EnclaveBuild data: {err:?}"),
             NitroCliErrorEnum::SerdeError
         ))?
     );
@@ -223,7 +223,7 @@ pub fn new_enclave_name(run_args: RunEnclavesArgs, names: Vec<String>) -> NitroC
 pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
     let mut eif_reader = EifReader::from_eif(eif_path).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to initialize EIF reader: {:?}", e),
+            &format!("Failed to initialize EIF reader: {e:?}"),
             NitroCliErrorEnum::EifParsingError
         )
     })?;
@@ -237,7 +237,7 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
     )
     .map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to get PCR values: {:?}", e),
+            &format!("Failed to get PCR values: {e:?}"),
             NitroCliErrorEnum::EifParsingError
         )
     })?;
@@ -270,7 +270,7 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
             .get_certificate_info(measurements)
             .map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to get certificate sigining info: {:?}", err),
+                    &format!("Failed to get certificate sigining info: {err:?}"),
                     NitroCliErrorEnum::EifParsingError
                 )
             })?;
@@ -284,7 +284,7 @@ pub fn describe_eif(eif_path: String) -> NitroCliResult<EifDescribeInfo> {
         serde_json::to_string_pretty(&info)
             .map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to display EIF describe data: {:?}", err),
+                    &format!("Failed to display EIF describe data: {err:?}"),
                     NitroCliErrorEnum::SerdeError
                 )
             })?
@@ -299,7 +299,7 @@ pub fn sign_eif(args: SignEifArgs) -> NitroCliResult<()> {
     let sign_info = match (&args.private_key, &args.signing_certificate) {
         (Some(key), Some(cert)) => SignKeyData::new(key, Path::new(&cert)).map_or_else(
             |e| {
-                eprintln!("Could not read signing info: {:?}", e);
+                eprintln!("Could not read signing info: {e:?}");
                 None
             },
             Some,
@@ -325,7 +325,7 @@ pub fn sign_eif(args: SignEifArgs) -> NitroCliResult<()> {
 
     let mut eif_reader = EifReader::from_eif(args.eif_path).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to initialize EIF reader: {:?}", e),
+            &format!("Failed to initialize EIF reader: {e:?}"),
             NitroCliErrorEnum::EifParsingError
         )
     })?;
@@ -333,7 +333,7 @@ pub fn sign_eif(args: SignEifArgs) -> NitroCliResult<()> {
         .get_measurements()
         .map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to get PCR values: {:?}", e),
+                &format!("Failed to get PCR values: {e:?}"),
                 NitroCliErrorEnum::EifParsingError
             )
         })
@@ -341,11 +341,11 @@ pub fn sign_eif(args: SignEifArgs) -> NitroCliResult<()> {
             let info = EnclaveBuildInfo::new(measurements);
             let printed_info = serde_json::to_string_pretty(&info).map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to display EnclaveBuild data: {:?}", err),
+                    &format!("Failed to display EnclaveBuild data: {err:?}"),
                     NitroCliErrorEnum::SerdeError
                 )
             })?;
-            println!("{}", printed_info);
+            println!("{printed_info}");
             Ok(())
         })
 }
@@ -374,17 +374,17 @@ fn artifacts_path() -> NitroCliResult<String> {
     if let Ok(artifacts) = std::env::var("NITRO_CLI_ARTIFACTS") {
         std::fs::create_dir_all(artifacts.clone()).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Could not create artifacts path {}: {:?}", artifacts, e),
+                &format!("Could not create artifacts path {artifacts}: {e:?}"),
                 NitroCliErrorEnum::FileOperationFailure
             )
             .add_info(vec![&artifacts, "Create"])
         })?;
         Ok(artifacts)
     } else if let Ok(home) = std::env::var("HOME") {
-        let artifacts = format!("{}/.nitro_cli/", home);
+        let artifacts = format!("{home}/.nitro_cli/");
         std::fs::create_dir_all(artifacts.clone()).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Could not create artifacts path {}: {:?}", artifacts, e),
+                &format!("Could not create artifacts path {artifacts}: {e:?}"),
                 NitroCliErrorEnum::FileOperationFailure
             )
             .add_info(vec![&artifacts, "Create"])
@@ -404,7 +404,7 @@ pub fn console_enclaves(
     disconnect_timeout_sec: Option<u64>,
 ) -> NitroCliResult<()> {
     debug!("console_enclaves");
-    println!("Connecting to the console for enclave {}...", enclave_cid);
+    println!("Connecting to the console for enclave {enclave_cid}...");
     enclave_console(enclave_cid, disconnect_timeout_sec)?;
     Ok(())
 }
@@ -418,7 +418,7 @@ pub fn enclave_console(
         VMADDR_CID_HYPERVISOR,
         u32::try_from(enclave_cid).map_err(|err| {
             new_nitro_cli_failure!(
-                &format!("Failed to parse enclave CID: {:?}", err),
+                &format!("Failed to parse enclave CID: {err:?}"),
                 NitroCliErrorEnum::IntegerParsingError
             )
         })? + CID_TO_CONSOLE_PORT_OFFSET,
@@ -439,7 +439,7 @@ pub fn terminate_all_enclaves() -> NitroCliResult<()> {
     let mut replies: Vec<UnixStream> = vec![];
     let sockets = std::fs::read_dir(sockets_dir.as_path()).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Error while accessing sockets directory: {:?}", e),
+            &format!("Error while accessing sockets directory: {e:?}"),
             NitroCliErrorEnum::FileOperationFailure
         )
         .add_info(vec![
@@ -566,20 +566,20 @@ pub fn get_file_pcr(path: String, pcr_type: PcrType) -> NitroCliResult<BTreeMap<
     // Initialize hasher
     let mut hasher = EifHasher::new_without_cache(Sha384::new()).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Could not create hasher: {:?}", e),
+            &format!("Could not create hasher: {e:?}"),
             NitroCliErrorEnum::HasherError
         )
     })?;
     let mut file = File::open(path).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to open file: {:?}", e),
+            &format!("Failed to open file: {e:?}"),
             NitroCliErrorEnum::FileOperationFailure
         )
     })?;
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to read file: {:?}", e),
+            &format!("Failed to read file: {e:?}"),
             NitroCliErrorEnum::FileOperationFailure
         )
     })?;
@@ -590,13 +590,13 @@ pub fn get_file_pcr(path: String, pcr_type: PcrType) -> NitroCliResult<BTreeMap<
             key = "PCR8".to_string();
             let cert = openssl::x509::X509::from_pem(&buf[..]).map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to deserialize .pem: {:?}", e),
+                    &format!("Failed to deserialize .pem: {e:?}"),
                     NitroCliErrorEnum::HasherError
                 )
             })?;
             buf = cert.to_der().map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to serialize certificate: {:?}", e),
+                    &format!("Failed to serialize certificate: {e:?}"),
                     NitroCliErrorEnum::HasherError
                 )
             })?;
@@ -604,13 +604,13 @@ pub fn get_file_pcr(path: String, pcr_type: PcrType) -> NitroCliResult<BTreeMap<
     }
     hasher.write_all(&buf).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Could not write to hasher: {:?}", e),
+            &format!("Could not write to hasher: {e:?}"),
             NitroCliErrorEnum::HasherError
         )
     })?;
     let hash = hex::encode(hasher.tpm_extend_finalize_reset().map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Could not get result for hasher: {:?}", e),
+            &format!("Could not get result for hasher: {e:?}"),
             NitroCliErrorEnum::HasherError
         )
     })?);
@@ -622,7 +622,7 @@ pub fn get_file_pcr(path: String, pcr_type: PcrType) -> NitroCliResult<BTreeMap<
         serde_json::to_string_pretty(&result)
             .map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to display PCR(s): {:?}", err),
+                    &format!("Failed to display PCR(s): {err:?}"),
                     NitroCliErrorEnum::SerdeError
                 )
             })?

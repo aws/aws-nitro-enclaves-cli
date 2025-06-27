@@ -206,10 +206,7 @@ impl MemoryRegion {
             .position(|&page_info| page_info.0 == hugepage_flag)
             .ok_or_else(|| {
                 new_nitro_cli_failure!(
-                    &format!(
-                        "Failed to find huge page entry for flag {:X?}",
-                        hugepage_flag
-                    ),
+                    &format!("Failed to find huge page entry for flag {hugepage_flag:X?}"),
                     NitroCliErrorEnum::NoSuchHugepageFlag
                 )
             })?;
@@ -302,7 +299,7 @@ impl MemoryRegion {
         file.read_exact(&mut bytes[region_offset..region_offset + size])
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Error while reading from enclave image: {:?}", e),
+                    &format!("Error while reading from enclave image: {e:?}"),
                     NitroCliErrorEnum::EifParsingError
                 )
             })?;
@@ -482,7 +479,7 @@ impl EnclaveHandle {
             .metadata()
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to get enclave image file metadata: {:?}", e),
+                    &format!("Failed to get enclave image file metadata: {e:?}"),
                     NitroCliErrorEnum::FileOperationFailure
                 )
             })?
@@ -511,7 +508,7 @@ impl EnclaveHandle {
             .open(NE_DEV_FILEPATH)
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to open device file: {:?}", e),
+                    &format!("Failed to open device file: {e:?}"),
                     NitroCliErrorEnum::FileOperationFailure
                 )
                 .add_info(vec![NE_DEV_FILEPATH, "Open"])
@@ -524,7 +521,7 @@ impl EnclaveHandle {
 
         if enc_fd < 0 {
             return Err(new_nitro_cli_failure!(
-                &format!("Invalid enclave file descriptor ({})", enc_fd),
+                &format!("Invalid enclave file descriptor ({enc_fd})"),
                 NitroCliErrorEnum::InvalidEnclaveFd
             ));
         }
@@ -582,7 +579,7 @@ impl EnclaveHandle {
             .metadata()
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to get enclave image file metadata: {:?}", e),
+                    &format!("Failed to get enclave image file metadata: {e:?}"),
                     NitroCliErrorEnum::FileOperationFailure
                 )
             })?
@@ -592,7 +589,7 @@ impl EnclaveHandle {
         let poll_timeout = calculate_necessary_timeout(eif_size, self.allocated_memory_mib * MiB);
 
         enclave_ready(listener, poll_timeout).map_err(|err| {
-            let err_msg = format!("Waiting on enclave to boot failed with error {:?}", err);
+            let err_msg = format!("Waiting on enclave to boot failed with error {err:?}");
             self.terminate_enclave_error(&err_msg);
             new_nitro_cli_failure!(&err_msg, NitroCliErrorEnum::EnclaveBootFailure)
         })?;
@@ -613,7 +610,7 @@ impl EnclaveHandle {
             serde_json::to_string_pretty(&info)
                 .map_err(|err| {
                     new_nitro_cli_failure!(
-                        &format!("Failed to display RunEnclaves data: {:?}", err),
+                        &format!("Failed to display RunEnclaves data: {err:?}"),
                         NitroCliErrorEnum::SerdeError
                     )
                 })?
@@ -699,7 +696,7 @@ impl EnclaveHandle {
             EnclaveCpuConfig::List(cpu_ids) => {
                 for cpu_id in cpu_ids {
                     self.init_single_cpu(cpu_id).map_err(|e| {
-                        e.add_subaction(format!("Failed to add CPU with ID {}", cpu_id))
+                        e.add_subaction(format!("Failed to add CPU with ID {cpu_id}"))
                     })?;
                 }
             }
@@ -785,7 +782,7 @@ impl EnclaveHandle {
 
     /// Terminate the enclave if `run-enclave` failed.
     fn terminate_enclave_error(&mut self, err: &str) {
-        let err_msg = format!("{}. Terminating the enclave...", err);
+        let err_msg = format!("{err}. Terminating the enclave...");
 
         // Notify the user and the logger of the error, then terminate the enclave.
         notify_error(&err_msg);
@@ -856,7 +853,7 @@ impl EnclaveHandle {
                 "The provided enclave CID is invalid, being a well-known CID or the parent VM CID"
                     .to_string()
             }
-            e => format!("An error has occurred: {} (rc: {})", e, rc),
+            e => format!("An error has occurred: {e} (rc: {rc})"),
         };
 
         Err(new_nitro_cli_failure!(
@@ -909,7 +906,7 @@ impl EnclaveManager {
             .lock()
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to acquire lock: {:?}", e),
+                    &format!("Failed to acquire lock: {e:?}"),
                     NitroCliErrorEnum::LockAcquireFailure
                 )
             })?
@@ -927,7 +924,7 @@ impl EnclaveManager {
             .lock()
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to acquire lock: {:?}", e),
+                    &format!("Failed to acquire lock: {e:?}"),
                     NitroCliErrorEnum::LockAcquireFailure
                 )
             })?
@@ -941,7 +938,7 @@ impl EnclaveManager {
             .lock()
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to acquire lock: {:?}", e),
+                    &format!("Failed to acquire lock: {e:?}"),
                     NitroCliErrorEnum::LockAcquireFailure
                 )
             })?
@@ -955,7 +952,7 @@ impl EnclaveManager {
     pub fn get_description_resources(&self) -> NitroCliResult<UnpackedHandle> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -974,7 +971,7 @@ impl EnclaveManager {
     pub fn get_measurements(&self) -> NitroCliResult<EnclaveBuildInfo> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -985,7 +982,7 @@ impl EnclaveManager {
     pub fn get_metadata(&self) -> NitroCliResult<Option<EifIdentityInfo>> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -998,7 +995,7 @@ impl EnclaveManager {
     pub fn get_console_resources_enclave_cid(&self) -> NitroCliResult<u64> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -1011,7 +1008,7 @@ impl EnclaveManager {
     pub fn get_console_resources_enclave_flags(&self) -> NitroCliResult<u64> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -1024,7 +1021,7 @@ impl EnclaveManager {
     fn get_termination_resources(&self) -> NitroCliResult<(RawFd, ResourceAllocator)> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -1040,7 +1037,7 @@ impl EnclaveManager {
     pub fn get_enclave_descriptor(&self) -> NitroCliResult<RawFd> {
         let locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -1053,7 +1050,7 @@ impl EnclaveManager {
     pub fn update_state(&mut self, state: EnclaveState) -> NitroCliResult<()> {
         let mut locked_handle = self.enclave_handle.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -1080,7 +1077,7 @@ impl EnclaveManager {
             .lock()
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to acquire lock: {:?}", e),
+                    &format!("Failed to acquire lock: {e:?}"),
                     NitroCliErrorEnum::LockAcquireFailure
                 )
             })?

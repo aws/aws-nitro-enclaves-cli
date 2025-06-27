@@ -64,7 +64,7 @@ fn test_tcp_connection() {
     let listener = ret.expect("proxy listen");
     let proxy_handle = thread::spawn(move || {
         tx.send(true).expect("proxy send event");
-        let _ret = proxy.sock_accept(&listener).expect("proxy accept");
+        proxy.sock_accept(&listener).expect("proxy accept");
     });
 
     let _ret = rx.recv().expect("main recv event");

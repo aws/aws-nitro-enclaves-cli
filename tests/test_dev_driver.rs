@@ -62,7 +62,7 @@ impl NitroEnclavesDeviceDriver {
         Ok(NitroEnclavesDeviceDriver {
             file: File::open(NE_DEVICE_PATH).map_err(|e| {
                 NitroCliFailure::new()
-                    .add_subaction(format!("Could not open {}: {}", NE_DEVICE_PATH, e))
+                    .add_subaction(format!("Could not open {NE_DEVICE_PATH}: {e}"))
                     .set_error_code(NitroCliErrorEnum::FileOperationFailure)
                     .set_file_and_line(file!(), line!())
                     .add_info(vec![NE_DEVICE_PATH, "Open"])
@@ -79,10 +79,7 @@ impl NitroEnclavesDeviceDriver {
 
         if enc_fd < 0 {
             return Err(NitroCliFailure::new()
-                .add_subaction(format!(
-                    "Could not create an enclave descriptor: {}",
-                    enc_fd
-                ))
+                .add_subaction(format!("Could not create an enclave descriptor: {enc_fd}"))
                 .set_error_code(NitroCliErrorEnum::IoctlFailure)
                 .set_file_and_line(file!(), line!()));
         }
@@ -120,7 +117,7 @@ impl NitroEnclave {
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_SET_USER_MEMORY_REGION as _, &mem_region) };
         if rc < 0 {
             return Err(NitroCliFailure::new()
-                .add_subaction(format!("Could not add memory region: {}", rc))
+                .add_subaction(format!("Could not add memory region: {rc}"))
                 .set_error_code(NitroCliErrorEnum::IoctlSetMemoryRegionFailure)
                 .set_file_and_line(file!(), line!()));
         }
@@ -133,7 +130,7 @@ impl NitroEnclave {
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_ADD_VCPU as _, &mut actual_cpu_id) };
         if rc < 0 {
             return Err(NitroCliFailure::new()
-                .add_subaction(format!("Could not add vCPU: {}", rc))
+                .add_subaction(format!("Could not add vCPU: {rc}"))
                 .set_error_code(NitroCliErrorEnum::IoctlAddVcpuFailure)
                 .set_file_and_line(file!(), line!()));
         }
@@ -145,7 +142,7 @@ impl NitroEnclave {
         let rc = unsafe { libc::ioctl(self.enc_fd, NE_START_ENCLAVE as _, &start_info) };
         if rc < 0 {
             return Err(NitroCliFailure::new()
-                .add_subaction(format!("Could not start enclave: {}", rc))
+                .add_subaction(format!("Could not start enclave: {rc}"))
                 .set_error_code(NitroCliErrorEnum::IoctlEnclaveStartFailure)
                 .set_file_and_line(file!(), line!()));
         }
@@ -207,7 +204,7 @@ impl CheckDmesg {
             for word in checks.iter() {
                 if upper_line.contains(&word.to_uppercase()) {
                     return Err(NitroCliFailure::new()
-                        .add_subaction(format!("Dmesg line: {} contains: {}", line, word))
+                        .add_subaction(format!("Dmesg line: {line} contains: {word}"))
                         .set_error_code(NitroCliErrorEnum::IoctlFailure)
                         .set_file_and_line(file!(), line!()));
                 }
@@ -299,7 +296,7 @@ mod test_dev_driver {
         let result = enclave.add_mem_region(EnclaveMemoryRegion::new(
             0,
             region.mem_addr(),
-            u64::max_value() - (2 * 1024 * 1024) + 1,
+            u64::MAX - (2 * 1024 * 1024) + 1,
         ));
         assert!(result.is_err());
 
@@ -344,7 +341,7 @@ mod test_dev_driver {
         let cpu_info = CpuInfo::new().expect("Failed to obtain CpuInfo.");
 
         // Add an invalid cpu id.
-        let result = enclave.add_cpu(u32::max_value());
+        let result = enclave.add_cpu(u32::MAX);
         assert!(result.is_err());
 
         let mut candidates = cpu_info.get_cpu_candidates();
@@ -556,11 +553,11 @@ mod test_dev_driver {
         let result = enclave.start(enclave_start_info);
         assert!(result.is_err());
 
-        enclave_start_info.enclave_cid = u32::max_value() as u64;
+        enclave_start_info.enclave_cid = u32::MAX as u64;
         let result = enclave.start(enclave_start_info);
         assert!(result.is_err());
 
-        enclave_start_info.enclave_cid = u32::max_value() as u64 + 1234_u64;
+        enclave_start_info.enclave_cid = u32::MAX as u64 + 1234_u64;
         let result = enclave.start(enclave_start_info);
         assert!(result.is_err());
 

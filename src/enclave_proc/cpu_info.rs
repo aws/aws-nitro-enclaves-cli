@@ -41,7 +41,7 @@ impl CpuInfo {
     pub fn new() -> NitroCliResult<Self> {
         let pool_file = File::open(POOL_FILENAME).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to open CPU pool file: {}", e),
+                &format!("Failed to open CPU pool file: {e}"),
                 NitroCliErrorEnum::FileOperationFailure
             )
             .add_info(vec![POOL_FILENAME, "Open"])
@@ -113,10 +113,7 @@ impl CpuInfo {
         for cpu_id in unique_ids {
             if !self.cpu_ids.contains(cpu_id) {
                 return Err(new_nitro_cli_failure!(
-                    &format!(
-                        "The CPU with ID {} is not available in the NE CPU pool",
-                        cpu_id
-                    ),
+                    &format!("The CPU with ID {cpu_id} is not available in the NE CPU pool"),
                     NitroCliErrorEnum::NoSuchCpuAvailableInPool
                 )
                 .add_info(vec!["cpu-ids", &cpu_id.to_string()]));
@@ -138,7 +135,7 @@ impl CpuInfo {
         line_str.retain(|c| !c.is_whitespace());
         line_str.parse::<u32>().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to parse CPU ID: {}", e),
+                &format!("Failed to parse CPU ID: {e}"),
                 NitroCliErrorEnum::MalformedCpuId
             )
         })
@@ -162,7 +159,7 @@ impl CpuInfo {
                 }
                 _ => {
                     return Err(new_nitro_cli_failure!(
-                        &format!("Invalid CPU ID interval ({})", interval),
+                        &format!("Invalid CPU ID interval ({interval})"),
                         NitroCliErrorEnum::CpuError
                     ))
                 }
@@ -179,7 +176,7 @@ impl CpuInfo {
         for line in reader.lines() {
             let line_str = line.map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to read line from CPU pool file: {}", e),
+                    &format!("Failed to read line from CPU pool file: {e}"),
                     NitroCliErrorEnum::FileOperationFailure
                 )
                 .add_info(vec![POOL_FILENAME, "Read"])

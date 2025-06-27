@@ -363,41 +363,31 @@ pub fn construct_error_message(failure: &NitroCliFailure) -> String {
             "1" => {
                 if let Ok(log_path) = log_path {
                     format!(
-                        "{}\n\nFor more details, please visit {}\n\nBacktrace:\n{}\n\nIf you open a support ticket, please provide the error log found at \"{}\"",
-                        error_info, help_link, backtrace, log_path
+                        "{error_info}\n\nFor more details, please visit {help_link}\n\nBacktrace:\n{backtrace}\n\nIf you open a support ticket, please provide the error log found at \"{log_path}\""
                     )
                 } else {
                     format!(
-                        "{}\n\nFor more details, please visit {}\n\nBacktrace:\n{}",
-                        error_info, help_link, backtrace
+                        "{error_info}\n\nFor more details, please visit {help_link}\n\nBacktrace:\n{backtrace}"
                     )
                 }
             }
             _ => {
                 if let Ok(log_path) = log_path {
                     format!(
-                        "{}\n\nFor more details, please visit {}\n\nIf you open a support ticket, please provide the error log found at \"{}\"",
-                        error_info, help_link, log_path
+                        "{error_info}\n\nFor more details, please visit {help_link}\n\nIf you open a support ticket, please provide the error log found at \"{log_path}\""
                     )
                 } else {
-                    format!(
-                        "{}\n\nFor more details, please visit {}",
-                        error_info, help_link
-                    )
+                    format!("{error_info}\n\nFor more details, please visit {help_link}")
                 }
             }
         },
         _ => {
             if let Ok(log_path) = log_path {
                 format!(
-                    "{}\n\nFor more details, please visit {}\n\nIf you open a support ticket, please provide the error log found at \"{}\"",
-                    error_info, help_link, log_path
+                    "{error_info}\n\nFor more details, please visit {help_link}\n\nIf you open a support ticket, please provide the error log found at \"{log_path}\""
                 )
             } else {
-                format!(
-                    "{}\n\nFor more details, please visit {}",
-                    error_info, help_link
-                )
+                format!("{error_info}\n\nFor more details, please visit {help_link}")
             }
         }
     }
@@ -418,7 +408,7 @@ impl<T> ExitGracefully<T> for NitroCliResult<T> {
             Err(err) => {
                 let err_str = construct_error_message(&err);
                 if let Some(additional_info_str) = additional_info {
-                    notify_error(&format!("{} | {}", additional_info_str, err_str));
+                    notify_error(&format!("{additional_info_str} | {err_str}"));
                 } else {
                     notify_error(&err_str);
                 }
@@ -430,7 +420,7 @@ impl<T> ExitGracefully<T> for NitroCliResult<T> {
 
 /// Notify both the user and the logger of an error.
 pub fn notify_error(err_msg: &str) {
-    eprintln!("{}", err_msg);
+    eprintln!("{err_msg}");
     error!("{}", err_msg);
 }
 
@@ -479,7 +469,7 @@ where
     let mut cmd_bytes = Vec::new();
     ciborium::ser::into_writer(&cmd, &mut cmd_bytes).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Invalid command format: {:?}", e),
+            &format!("Invalid command format: {e:?}"),
             NitroCliErrorEnum::InvalidCommand
         )
     })?;
@@ -491,7 +481,7 @@ where
             .map_err(|e| e.add_subaction("Failed to send single command size".to_string()))?;
         socket.write_all(&cmd_bytes[..]).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to send single command: {:?}", e),
+                &format!("Failed to send single command: {e:?}"),
                 NitroCliErrorEnum::SocketError
             )
         })?;
@@ -502,7 +492,7 @@ where
         let mut arg_bytes = Vec::new();
         ciborium::ser::into_writer(args, &mut arg_bytes).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Invalid single command arguments: {:?}", e),
+                &format!("Invalid single command arguments: {e:?}"),
                 NitroCliErrorEnum::InvalidCommand
             )
         })?;
@@ -512,7 +502,7 @@ where
             .map_err(|e| e.add_subaction("Failed to send arguments size".to_string()))?;
         socket.write_all(&arg_bytes).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to send arguments: {:?}", e),
+                &format!("Failed to send arguments: {e:?}"),
                 NitroCliErrorEnum::SocketError
             )
         })?;
@@ -533,7 +523,7 @@ where
     let data: T =
         ciborium::de::from_reader_with_buffer(input_stream, &mut raw_data[..]).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to decode received data: {:?}", e),
+                &format!("Failed to decode received data: {e:?}"),
                 NitroCliErrorEnum::SerdeError
             )
         })?;

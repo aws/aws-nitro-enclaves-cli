@@ -86,7 +86,7 @@ fn send_command_and_close(cmd: EnclaveProcessCommandType, stream: &mut UnixStrea
         .shutdown(std::net::Shutdown::Both)
         .map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to close stream after sending command: {:?}", e),
+                &format!("Failed to close stream after sending command: {e:?}"),
                 NitroCliErrorEnum::SocketCloseError
             )
             .set_action(action_str.to_string())
@@ -133,7 +133,7 @@ fn notify_terminate(
 ) -> NitroCliResult<JoinHandle<()>> {
     let (local_stream, thread_stream) = UnixStream::pair().map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Could not create stream pair: {:?}", e),
+            &format!("Could not create stream pair: {e:?}"),
             NitroCliErrorEnum::SocketPairCreationFailure
         )
     })?;
@@ -152,7 +152,7 @@ fn enclave_proc_configure_signal_handler(conn_listener: &ConnectionListener) -> 
     let (local_stream, thread_stream) = UnixStream::pair()
         .map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to create stream pair: {:?}", e),
+                &format!("Failed to create stream pair: {e:?}"),
                 NitroCliErrorEnum::SocketPairCreationFailure
             )
             .set_action("Run Enclave".to_string())
@@ -227,7 +227,7 @@ fn fetch_describe_result(
             .join()
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Termination thread join failed: {:?}", e),
+                    &format!("Termination thread join failed: {e:?}"),
                     NitroCliErrorEnum::ThreadJoinFailure
                 )
             })?
@@ -352,7 +352,7 @@ fn handle_command(
                 serde_json::to_string_pretty(&enclave_manager.enclave_name)
                     .map_err(|err| {
                         new_nitro_cli_failure!(
-                            &format!("Failed to write enclave name to connection: {:?}", err),
+                            &format!("Failed to write enclave name to connection: {err:?}"),
                             NitroCliErrorEnum::SerdeError
                         )
                     })?
@@ -378,7 +378,7 @@ fn handle_command(
                     serde_json::to_string_pretty(&enclave_manager.enclave_id)
                         .map_err(|err| {
                             new_nitro_cli_failure!(
-                                &format!("Failed to display RunEnclaves data: {:?}", err),
+                                &format!("Failed to display RunEnclaves data: {err:?}"),
                                 NitroCliErrorEnum::SerdeError
                             )
                         })?
@@ -493,7 +493,7 @@ fn process_event_loop(
             Err(mut error_info) => {
                 // Any encountered error is both logged and send to the other side of the connection.
                 error_info = error_info
-                    .add_subaction(format!("Failed to execute command `{:?}`", cmd))
+                    .add_subaction(format!("Failed to execute command `{cmd:?}`"))
                     .set_action("Run Enclave".to_string());
                 notify_error_with_conn(&construct_error_message(&error_info), &connection, cmd);
                 (libc::EINVAL, true)
@@ -513,7 +513,7 @@ fn process_event_loop(
             if terminate_thread.is_some() {
                 terminate_thread.take().unwrap().join().map_err(|e| {
                     new_nitro_cli_failure!(
-                        &format!("Termination thread join failed: {:?}", e),
+                        &format!("Termination thread join failed: {e:?}"),
                         NitroCliErrorEnum::ThreadJoinFailure
                     )
                 })?;
@@ -559,7 +559,7 @@ fn create_enclave_process(logger: &EnclaveProcLogWriter) -> NitroCliResult<()> {
     // unchanged and the standard descriptors are routed to '/dev/null'.
     daemon(true, false).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to daemonize enclave process: {:?}", e),
+            &format!("Failed to daemonize enclave process: {e:?}"),
             NitroCliErrorEnum::DaemonizeProcessFailure
         )
     })?;

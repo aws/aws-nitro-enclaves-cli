@@ -97,7 +97,7 @@ pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
     if metadata(file_path).is_ok() {
         let mut file = File::open(file_path).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to open file: {:?}", e),
+                &format!("Failed to open file: {e:?}"),
                 NitroCliErrorEnum::FileOperationFailure
             )
             .add_info(vec![file_path, "Open"])
@@ -105,15 +105,15 @@ pub fn generate_enclave_id(slot_id: u64) -> NitroCliResult<String> {
         let mut contents = String::new();
         file.read_to_string(&mut contents).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to read from file: {:?}", e),
+                &format!("Failed to read from file: {e:?}"),
                 NitroCliErrorEnum::FileOperationFailure
             )
             .add_info(vec![file_path, "Read"])
         })?;
         contents.retain(|c| !c.is_whitespace());
-        return Ok(format!("{}-enc{:x}", contents, slot_id));
+        return Ok(format!("{contents}-enc{slot_id:x}"));
     }
-    Ok(format!("i-0000000000000000-enc{:x}", slot_id))
+    Ok(format!("i-0000000000000000-enc{slot_id:x}"))
 }
 
 /// Obtain an enclave's slot ID from its full ID.
@@ -141,7 +141,7 @@ mod tests {
         if metadata(file_path).is_err() {
             assert!(enc_id
                 .unwrap()
-                .eq(&format!("i-0000000000000000-enc{:?}", slot_id)));
+                .eq(&format!("i-0000000000000000-enc{slot_id:?}")));
         } else {
             assert!(!enc_id
                 .unwrap()

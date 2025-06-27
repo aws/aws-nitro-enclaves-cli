@@ -68,7 +68,7 @@ impl Console {
         )
         .map_err(|err| {
             new_nitro_cli_failure!(
-                &format!("Failed to create blocking console socket: {:?}", err),
+                &format!("Failed to create blocking console socket: {err:?}"),
                 NitroCliErrorEnum::SocketError
             )
         })?;
@@ -81,7 +81,7 @@ impl Console {
 
         connect(socket_fd, &sockaddr).map_err(|err| {
             new_nitro_cli_failure!(
-                &format!("Failed to connect to the console: {:?}", err),
+                &format!("Failed to connect to the console: {err:?}"),
                 NitroCliErrorEnum::EnclaveConsoleConnectionFailure
             )
         })?;
@@ -100,7 +100,7 @@ impl Console {
         )
         .map_err(|err| {
             new_nitro_cli_failure!(
-                &format!("Failed to create nonblocking console socket: {:?}", err),
+                &format!("Failed to create nonblocking console socket: {err:?}"),
                 NitroCliErrorEnum::SocketError
             )
         })?;
@@ -150,7 +150,7 @@ impl Console {
         // Initialize variables
         let epoll = Epoll::new().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to create epoll: {:?}", e),
+                &format!("Failed to create epoll: {e:?}"),
                 NitroCliErrorEnum::EpollError
             )
         })?;
@@ -164,7 +164,7 @@ impl Console {
             )
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to add fd to epoll: {:?}", e),
+                    &format!("Failed to add fd to epoll: {e:?}"),
                     NitroCliErrorEnum::EpollError
                 )
             })?;
@@ -175,7 +175,7 @@ impl Console {
             // Create timerfd
             let mut timerfd = TimerFd::new().map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to initialize timerfd: {:?}", e),
+                    &format!("Failed to initialize timerfd: {e:?}"),
                     NitroCliErrorEnum::EpollError
                 )
             })?;
@@ -185,7 +185,7 @@ impl Console {
                 .reset(Duration::from_secs(disconnect_timeout), None)
                 .map_err(|e| {
                     new_nitro_cli_failure!(
-                        &format!("Failed to arm timerfd: {:?}", e),
+                        &format!("Failed to arm timerfd: {e:?}"),
                         NitroCliErrorEnum::EpollError
                     )
                 })?;
@@ -200,7 +200,7 @@ impl Console {
                 )
                 .map_err(|e| {
                     new_nitro_cli_failure!(
-                        &format!("Failed to add fd to epoll: {:?}", e),
+                        &format!("Failed to add fd to epoll: {e:?}"),
                         NitroCliErrorEnum::EpollError
                     )
                 })?;
@@ -213,7 +213,7 @@ impl Console {
             // Wait for kernel notification that one of the fds is available
             let num_events = epoll.wait(-1, &mut events).map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to wait epoll: {:?}", e),
+                    &format!("Failed to wait epoll: {e:?}"),
                     NitroCliErrorEnum::EpollError
                 )
             })?;
@@ -227,7 +227,7 @@ impl Console {
                         let mut buffer = [0u8; BUFFER_SIZE];
                         let size = read(self.fd, &mut buffer).map_err(|e| {
                             new_nitro_cli_failure!(
-                                &format!("Failed to read data from the console: {:?}", e),
+                                &format!("Failed to read data from the console: {e:?}"),
                                 NitroCliErrorEnum::EnclaveConsoleReadError
                             )
                         })?;
@@ -241,8 +241,7 @@ impl Console {
                                 new_nitro_cli_failure!(
                                     &format!(
                                         "Failed to write data from the \
-                                        console to the given stream: {:?}",
-                                        e
+                                        console to the given stream: {e:?}"
                                     ),
                                     NitroCliErrorEnum::EnclaveConsoleWriteOutputError
                                 )
@@ -278,7 +277,7 @@ impl Console {
 
             let time_elapsed = sys_time.elapsed().map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("System time moved backwards: {:?}", err),
+                    &format!("System time moved backwards: {err:?}"),
                     NitroCliErrorEnum::ClockSkewError
                 )
             })?;
@@ -308,10 +307,7 @@ fn vsock_set_connect_timeout(fd: RawFd, millis: i64) -> NitroCliResult<()> {
     match ret {
         0 => Ok(()),
         _ => Err(new_nitro_cli_failure!(
-            &format!(
-                "Failed to configure SO_VM_SOCKETS_CONNECT_TIMEOUT: {:?}",
-                ret
-            ),
+            &format!("Failed to configure SO_VM_SOCKETS_CONNECT_TIMEOUT: {ret:?}"),
             NitroCliErrorEnum::SocketConnectTimeoutError
         )),
     }

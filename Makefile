@@ -14,7 +14,7 @@ TOOLCHAIN_PREFIX = unknown-linux-musl
 HOST_MACHINE     = $(shell uname -m)
 
 CARGO   = cargo
-CC      = gcc
+CC      = musl-gcc
 INSTALL = install
 MKDIR   = mkdir
 RM      = rm
@@ -30,7 +30,6 @@ ifeq ($(HOST_MACHINE),$(ARCH_x86_64))
 TOOLCHAIN_ARCH_TARGET = $(ARCH_x86_64)
 else ifeq ($(HOST_MACHINE),$(ARCH_aarch64))
 TOOLCHAIN_ARCH_TARGET = $(ARCH_aarch64)
-CC = musl-gcc # Required for openssl-sys cross-build
 else
 TOOLCHAIN_ARCH_TARGET =
 endif

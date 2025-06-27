@@ -61,7 +61,7 @@ impl Drop for ConnectionData {
                 .shutdown(std::net::Shutdown::Both)
                 .map_err(|e| {
                     new_nitro_cli_failure!(
-                        &format!("Stream shutdown error: {:?}", e),
+                        &format!("Stream shutdown error: {e:?}"),
                         NitroCliErrorEnum::SocketCloseError
                     )
                 })
@@ -162,7 +162,7 @@ impl Connection {
     pub fn read_command(&self) -> NitroCliResult<EnclaveProcessCommandType> {
         let mut lock = self.data.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -219,7 +219,7 @@ impl Connection {
     {
         let mut lock = self.data.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -237,7 +237,7 @@ impl Connection {
     pub fn write_u64(&self, value: u64) -> NitroCliResult<()> {
         let mut lock = self.data.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -283,7 +283,7 @@ impl Connection {
     pub fn get_enclave_event_flags(&self) -> NitroCliResult<Option<EpollFlags>> {
         let lock = self.data.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire connection lock: {:?}", e),
+                &format!("Failed to acquire connection lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -297,7 +297,7 @@ impl Connection {
     fn write_reply(&self, reply: &EnclaveProcessReply) -> NitroCliResult<()> {
         let mut lock = self.data.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire lock: {:?}", e),
+                &format!("Failed to acquire lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -312,7 +312,7 @@ impl Connection {
         let mut reply_bytes = Vec::new();
         ciborium::into_writer(reply, &mut reply_bytes).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to serialize reply: {:?}", e),
+                &format!("Failed to serialize reply: {e:?}"),
                 NitroCliErrorEnum::SerdeError
             )
         })?;
@@ -321,7 +321,7 @@ impl Connection {
             .map_err(|e| e.add_subaction("Write reply".to_string()))?;
         stream.write_all(&reply_bytes).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to write to stream: {:?}", e),
+                &format!("Failed to write to stream: {e:?}"),
                 NitroCliErrorEnum::SocketError
             )
         })

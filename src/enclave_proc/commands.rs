@@ -51,7 +51,7 @@ pub fn run_enclaves(
 
     let eif_file = File::open(&args.eif_path).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to open the EIF file: {:?}", e),
+            &format!("Failed to open the EIF file: {e:?}"),
             NitroCliErrorEnum::FileOperationFailure
         )
         .add_info(vec![&args.eif_path, "Open"])
@@ -86,7 +86,7 @@ pub fn run_enclaves(
 
     let mut signature_checker = PcrSignatureChecker::from_eif(&args.eif_path).map_err(|e| {
         new_nitro_cli_failure!(
-            &format!("Failed to create EIF signature checker: {:?}", e),
+            &format!("Failed to create EIF signature checker: {e:?}"),
             NitroCliErrorEnum::EIFSignatureCheckerError
         )
     })?;
@@ -95,7 +95,7 @@ pub fn run_enclaves(
     if !signature_checker.is_empty() {
         signature_checker.verify().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Invalid signing certificate: {:?}", e),
+                &format!("Invalid signing certificate: {e:?}"),
                 NitroCliErrorEnum::EIFSignatureCheckerError
             )
         })?;
@@ -106,7 +106,7 @@ pub fn run_enclaves(
     let handle = std::thread::spawn(move || {
         let mut eif_reader = EifReader::from_eif(path).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed initialize EIF reader: {:?}", e),
+                &format!("Failed initialize EIF reader: {e:?}"),
                 NitroCliErrorEnum::EifParsingError
             )
         })?;
@@ -120,7 +120,7 @@ pub fn run_enclaves(
         )
         .map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to calculate PCRs: {:?}", e),
+                &format!("Failed to calculate PCRs: {e:?}"),
                 NitroCliErrorEnum::EifParsingError
             )
         })?;
@@ -183,7 +183,7 @@ pub fn terminate_enclaves(
         serde_json::to_string_pretty(&EnclaveTerminateInfo::new(enclave_name, enclave_id, true))
             .map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to display enclave termination data: {:?}", err),
+                    &format!("Failed to display enclave termination data: {err:?}"),
                     NitroCliErrorEnum::SerdeError
                 )
             })?
@@ -206,7 +206,7 @@ pub fn describe_enclaves(
         serde_json::to_string_pretty(&info)
             .map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to display enclave describe data: {:?}", err),
+                    &format!("Failed to display enclave describe data: {err:?}"),
                     NitroCliErrorEnum::SerdeError
                 )
             })?

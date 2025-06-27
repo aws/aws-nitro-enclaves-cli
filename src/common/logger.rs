@@ -62,7 +62,7 @@ impl EnclaveProcLogWriter {
                 .map_err(|e| e.add_subaction(String::from("Failed to open log file")))?;
             let mut file_ref = self.out_file.lock().map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to acquire lock: {:?}", e),
+                    &format!("Failed to acquire lock: {e:?}"),
                     NitroCliErrorEnum::LockAcquireFailure
                 )
             })?;
@@ -76,7 +76,7 @@ impl EnclaveProcLogWriter {
     pub fn update_logger_id(&self, new_id: &str) -> NitroCliResult<()> {
         let mut old_id = self.logger_id.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire logger ID lock: {:?}", e),
+                &format!("Failed to acquire logger ID lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -93,7 +93,7 @@ impl EnclaveProcLogWriter {
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         let logger_id = self.logger_id.lock().map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to acquire logger ID lock: {:?}", e),
+                &format!("Failed to acquire logger ID lock: {e:?}"),
                 NitroCliErrorEnum::LockAcquireFailure
             )
         })?;
@@ -175,7 +175,7 @@ fn open_log_file(file_path: &Path) -> NitroCliResult<File> {
         .open(file_path)
         .map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to open log file: {:?}", e),
+                &format!("Failed to open log file: {e:?}"),
                 NitroCliErrorEnum::FileOperationFailure
             )
             .add_info(vec![
@@ -190,7 +190,7 @@ fn open_log_file(file_path: &Path) -> NitroCliResult<File> {
         file.metadata()
             .map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to get log file metadata: {:?}", e),
+                    &format!("Failed to get log file metadata: {e:?}"),
                     NitroCliErrorEnum::FileOperationFailure
                 )
                 .add_info(vec![
@@ -210,7 +210,7 @@ fn open_log_file(file_path: &Path) -> NitroCliResult<File> {
         let perms = Permissions::from_mode(0o766);
         file.set_permissions(perms).map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to change log file permissions: {:?}", e),
+                &format!("Failed to change log file permissions: {e:?}"),
                 NitroCliErrorEnum::FilePermissionsError
             )
         })?;
@@ -228,7 +228,7 @@ pub fn init_logger() -> NitroCliResult<EnclaveProcLogWriter> {
     flexi_logger::Logger::try_with_env_or_str(DEFAULT_LOG_LEVEL)
         .map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to initialize enclave process logger: {:?}", e),
+                &format!("Failed to initialize enclave process logger: {e:?}"),
                 NitroCliErrorEnum::LoggerError
             )
         })?
@@ -236,7 +236,7 @@ pub fn init_logger() -> NitroCliResult<EnclaveProcLogWriter> {
         .start()
         .map_err(|e| {
             new_nitro_cli_failure!(
-                &format!("Failed to initialize enclave process logger: {:?}", e),
+                &format!("Failed to initialize enclave process logger: {e:?}"),
                 NitroCliErrorEnum::LoggerError
             )
         })?;

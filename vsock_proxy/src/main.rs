@@ -120,15 +120,15 @@ fn main() -> VsockProxyResult<()> {
         num_workers,
         ip_addr_type,
     )
-    .map_err(|err| format!("Could not create proxy: {}", err))?;
+    .map_err(|err| format!("Could not create proxy: {err}"))?;
 
     let listener = proxy
         .sock_listen()
-        .map_err(|err| format!("Could not listen for connections: {}", err))?;
+        .map_err(|err| format!("Could not listen for connections: {err}"))?;
     info!("Proxy is now in listening state");
     loop {
         proxy
             .sock_accept(&listener)
-            .map_err(|err| format!("Could not accept connection: {}", err))?;
+            .map_err(|err| format!("Could not accept connection: {err}"))?;
     }
 }

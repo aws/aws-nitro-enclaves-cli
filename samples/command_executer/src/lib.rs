@@ -44,8 +44,8 @@ impl VsockSocket {
 impl Drop for VsockSocket {
     fn drop(&mut self) {
         shutdown(self.socket_fd, Shutdown::Both)
-            .unwrap_or_else(|e| eprintln!("Failed to shut socket down: {:?}", e));
-        close(self.socket_fd).unwrap_or_else(|e| eprintln!("Failed to close socket: {:?}", e));
+            .unwrap_or_else(|e| eprintln!("Failed to shut socket down: {e:?}"));
+        close(self.socket_fd).unwrap_or_else(|e| eprintln!("Failed to close socket: {e:?}"));
     }
 }
 
@@ -67,11 +67,11 @@ fn vsock_connect(cid: u32, port: u32) -> Result<VsockSocket, String> {
                 SockFlag::empty(),
                 None,
             )
-            .map_err(|err| format!("Failed to create the socket: {:?}", err))?,
+            .map_err(|err| format!("Failed to create the socket: {err:?}"))?,
         );
         match connect(vsocket.as_raw_fd(), &sockaddr) {
             Ok(_) => return Ok(vsocket),
-            Err(e) => err_msg = format!("Failed to connect: {}", e),
+            Err(e) => err_msg = format!("Failed to connect: {e}"),
         }
 
         std::thread::sleep(std::time::Duration::from_secs(1 << i));
@@ -86,8 +86,8 @@ fn run_server(fd: RawFd, no_wait: bool) -> Result<(), String> {
     let mut buf = [0u8; BUF_MAX_LEN];
     recv_loop(fd, &mut buf, len)?;
 
-    let len_usize = len.try_into().map_err(|err| format!("{:?}", err))?;
-    let command = std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{:?}", err))?;
+    let len_usize = len.try_into().map_err(|err| format!("{err:?}"))?;
+    let command = std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{err:?}"))?;
 
     // execute command
     let command_output = if no_wait {
@@ -99,7 +99,7 @@ fn run_server(fd: RawFd, no_wait: bool) -> Result<(), String> {
         if output.is_err() {
             CommandOutput::new(
                 String::new(),
-                format!("Could not execute the command {}", command),
+                format!("Could not execute the command {command}"),
                 1,
             )
         } else {
@@ -110,15 +110,15 @@ fn run_server(fd: RawFd, no_wait: bool) -> Result<(), String> {
             .arg("-c")
             .arg(command)
             .output()
-            .map_err(|err| format!("Could not execute the command {}: {:?}", command, err))?;
+            .map_err(|err| format!("Could not execute the command {command}: {err:?}"))?;
         CommandOutput::new_from(output)?
     };
 
     // send output
     let json_output = serde_json::to_string(&command_output)
-        .map_err(|err| format!("Could not serialize the output: {:?}", err))?;
+        .map_err(|err| format!("Could not serialize the output: {err:?}"))?;
     let buf = json_output.as_bytes();
-    let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
+    let len: u64 = buf.len().try_into().map_err(|err| format!("{err:?}"))?;
     send_u64(fd, len)?;
     send_loop(fd, buf, len)?;
     Ok(())
@@ -129,28 +129,28 @@ fn recv_file_server(fd: RawFd) -> Result<(), String> {
     let len = recv_u64(fd)?;
     let mut buf = [0u8; BUF_MAX_LEN];
     recv_loop(fd, &mut buf, len)?;
-    let len_usize = len.try_into().map_err(|err| format!("{:?}", err))?;
-    let path = std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{:?}", err))?;
+    let len_usize = len.try_into().map_err(|err| format!("{err:?}"))?;
+    let path = std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{err:?}"))?;
 
-    let mut file = File::open(path).map_err(|err| format!("Could not open file {:?}", err))?;
+    let mut file = File::open(path).map_err(|err| format!("Could not open file {err:?}"))?;
 
     let filesize = file
         .metadata()
-        .map_err(|err| format!("Could not get file metadata {:?}", err))?
+        .map_err(|err| format!("Could not get file metadata {err:?}"))?
         .len();
 
     send_u64(fd, filesize)?;
-    println!("Sending file {} - size {}", path, filesize);
+    println!("Sending file {path} - size {filesize}");
 
     let mut progress: u64 = 0;
     let mut tmpsize: u64;
 
     while progress < filesize {
-        tmpsize = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
+        tmpsize = buf.len().try_into().map_err(|err| format!("{err:?}"))?;
         tmpsize = min(tmpsize, filesize - progress);
 
-        file.read_exact(&mut buf[..tmpsize.try_into().map_err(|err| format!("{:?}", err))?])
-            .map_err(|err| format!("Could not read {:?}", err))?;
+        file.read_exact(&mut buf[..tmpsize.try_into().map_err(|err| format!("{err:?}"))?])
+            .map_err(|err| format!("Could not read {err:?}"))?;
         send_loop(fd, &buf, tmpsize)?;
         progress += tmpsize
     }
@@ -163,25 +163,25 @@ fn send_file_server(fd: RawFd) -> Result<(), String> {
     let len = recv_u64(fd)?;
     let mut buf = [0u8; BUF_MAX_LEN];
     recv_loop(fd, &mut buf, len)?;
-    let len_usize = len.try_into().map_err(|err| format!("{:?}", err))?;
-    let path = std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{:?}", err))?;
+    let len_usize = len.try_into().map_err(|err| format!("{err:?}"))?;
+    let path = std::str::from_utf8(&buf[0..len_usize]).map_err(|err| format!("{err:?}"))?;
 
-    let mut file = File::create(path).map_err(|err| format!("Could not open file {:?}", err))?;
+    let mut file = File::create(path).map_err(|err| format!("Could not open file {err:?}"))?;
 
     // Receive filesize
     let filesize = recv_u64(fd)?;
-    println!("Receiving file {} - size {}", path, filesize);
+    println!("Receiving file {path} - size {filesize}");
 
     let mut progress: u64 = 0;
     let mut tmpsize: u64;
 
     while progress < filesize {
-        tmpsize = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
+        tmpsize = buf.len().try_into().map_err(|err| format!("{err:?}"))?;
         tmpsize = min(tmpsize, filesize - progress);
 
         recv_loop(fd, &mut buf, tmpsize)?;
-        file.write_all(&buf[..tmpsize.try_into().map_err(|err| format!("{:?}", err))?])
-            .map_err(|err| format!("Could not write {:?}", err))?;
+        file.write_all(&buf[..tmpsize.try_into().map_err(|err| format!("{err:?}"))?])
+            .map_err(|err| format!("Could not write {err:?}"))?;
         progress += tmpsize
     }
 
@@ -195,16 +195,16 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
         SockFlag::empty(),
         None,
     )
-    .map_err(|err| format!("Create socket failed: {:?}", err))?;
+    .map_err(|err| format!("Create socket failed: {err:?}"))?;
 
     let sockaddr = VsockAddr::new(VMADDR_CID_ANY, args.port);
 
-    bind(socket_fd, &sockaddr).map_err(|err| format!("Bind failed: {:?}", err))?;
+    bind(socket_fd, &sockaddr).map_err(|err| format!("Bind failed: {err:?}"))?;
 
-    listen_vsock(socket_fd, BACKLOG).map_err(|err| format!("Listen failed: {:?}", err))?;
+    listen_vsock(socket_fd, BACKLOG).map_err(|err| format!("Listen failed: {err:?}"))?;
 
     loop {
-        let fd = accept(socket_fd).map_err(|err| format!("Accept failed: {:?}", err))?;
+        let fd = accept(socket_fd).map_err(|err| format!("Accept failed: {err:?}"))?;
 
         //cmd id
         let cmdid = match recv_u64(fd) {
@@ -216,7 +216,7 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
                 }
             },
             Err(e) => {
-                eprintln!("Error {}", e);
+                eprintln!("Error {e}");
                 continue;
             }
         };
@@ -224,22 +224,22 @@ pub fn listen(args: ListenArgs) -> Result<(), String> {
         match cmdid {
             CmdId::RunCmd => {
                 if let Err(e) = run_server(fd, false) {
-                    eprintln!("Error {}", e);
+                    eprintln!("Error {e}");
                 }
             }
             CmdId::RecvFile => {
                 if let Err(e) = recv_file_server(fd) {
-                    eprintln!("Error {}", e);
+                    eprintln!("Error {e}");
                 }
             }
             CmdId::SendFile => {
                 if let Err(e) = send_file_server(fd) {
-                    eprintln!("Error {}", e);
+                    eprintln!("Error {e}");
                 }
             }
             CmdId::RunCmdNoWait => {
                 if let Err(e) = run_server(fd, true) {
-                    eprintln!("Error {}", e);
+                    eprintln!("Error {e}");
                 }
             }
         }
@@ -259,7 +259,7 @@ pub fn run(args: RunArgs) -> Result<i32, String> {
 
     // send command
     let buf = args.command.as_bytes();
-    let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
+    let len: u64 = buf.len().try_into().map_err(|err| format!("{err:?}"))?;
     send_u64(socket_fd, len)?;
     send_loop(socket_fd, buf, len)?;
 
@@ -272,14 +272,14 @@ pub fn run(args: RunArgs) -> Result<i32, String> {
         let recv_len = min(BUF_MAX_LEN as u64, to_recv);
         recv_loop(socket_fd, &mut buf, recv_len)?;
         to_recv -= recv_len;
-        let to_recv_usize: usize = recv_len.try_into().map_err(|err| format!("{:?}", err))?;
+        let to_recv_usize: usize = recv_len.try_into().map_err(|err| format!("{err:?}"))?;
         json_output.push_str(
-            std::str::from_utf8(&buf[0..to_recv_usize]).map_err(|err| format!("{:?}", err))?,
+            std::str::from_utf8(&buf[0..to_recv_usize]).map_err(|err| format!("{err:?}"))?,
         );
     }
 
     let output: CommandOutput = serde_json::from_str(json_output.as_str())
-        .map_err(|err| format!("Could not deserialize the output: {:?}", err))?;
+        .map_err(|err| format!("Could not deserialize the output: {err:?}"))?;
     print!("{}", output.stdout);
     eprint!("{}", output.stderr);
 
@@ -287,8 +287,8 @@ pub fn run(args: RunArgs) -> Result<i32, String> {
 }
 
 pub fn recv_file(args: FileArgs) -> Result<(), String> {
-    let mut file = File::create(&args.localfile)
-        .map_err(|err| format!("Could not open localfile {:?}", err))?;
+    let mut file =
+        File::create(&args.localfile).map_err(|err| format!("Could not open localfile {err:?}"))?;
     let vsocket = vsock_connect(args.cid, args.port)?;
     let socket_fd = vsocket.as_raw_fd();
 
@@ -297,7 +297,7 @@ pub fn recv_file(args: FileArgs) -> Result<(), String> {
 
     // send remotefile path
     let buf = args.remotefile.as_bytes();
-    let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
+    let len: u64 = buf.len().try_into().map_err(|err| format!("{err:?}"))?;
     send_u64(socket_fd, len)?;
     send_loop(socket_fd, buf, len)?;
 
@@ -315,12 +315,12 @@ pub fn recv_file(args: FileArgs) -> Result<(), String> {
     let mut buf = [0u8; BUF_MAX_LEN];
 
     while progress < filesize {
-        tmpsize = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
+        tmpsize = buf.len().try_into().map_err(|err| format!("{err:?}"))?;
         tmpsize = min(tmpsize, filesize - progress);
 
         recv_loop(socket_fd, &mut buf, tmpsize)?;
-        file.write_all(&buf[..tmpsize.try_into().map_err(|err| format!("{:?}", err))?])
-            .map_err(|err| format!("Could not write {:?}", err))?;
+        file.write_all(&buf[..tmpsize.try_into().map_err(|err| format!("{err:?}"))?])
+            .map_err(|err| format!("Could not write {err:?}"))?;
         progress += tmpsize
     }
     Ok(())
@@ -328,7 +328,7 @@ pub fn recv_file(args: FileArgs) -> Result<(), String> {
 
 pub fn send_file(args: FileArgs) -> Result<(), String> {
     let mut file =
-        File::open(&args.localfile).map_err(|err| format!("Could not open localfile {:?}", err))?;
+        File::open(&args.localfile).map_err(|err| format!("Could not open localfile {err:?}"))?;
     let vsocket = vsock_connect(args.cid, args.port)?;
     let socket_fd = vsocket.as_raw_fd();
 
@@ -337,13 +337,13 @@ pub fn send_file(args: FileArgs) -> Result<(), String> {
 
     // send remotefile path
     let buf = args.remotefile.as_bytes();
-    let len: u64 = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
+    let len: u64 = buf.len().try_into().map_err(|err| format!("{err:?}"))?;
     send_u64(socket_fd, len)?;
     send_loop(socket_fd, buf, len)?;
 
     let filesize = file
         .metadata()
-        .map_err(|err| format!("Could not get file metadate {:?}", err))?
+        .map_err(|err| format!("Could not get file metadate {err:?}"))?
         .len();
 
     send_u64(socket_fd, filesize)?;
@@ -359,11 +359,11 @@ pub fn send_file(args: FileArgs) -> Result<(), String> {
     let mut tmpsize: u64;
 
     while progress < filesize {
-        tmpsize = buf.len().try_into().map_err(|err| format!("{:?}", err))?;
+        tmpsize = buf.len().try_into().map_err(|err| format!("{err:?}"))?;
         tmpsize = min(tmpsize, filesize - progress);
 
-        file.read_exact(&mut buf[..tmpsize.try_into().map_err(|err| format!("{:?}", err))?])
-            .map_err(|err| format!("Could not read {:?}", err))?;
+        file.read_exact(&mut buf[..tmpsize.try_into().map_err(|err| format!("{err:?}"))?])
+            .map_err(|err| format!("Could not read {err:?}"))?;
         send_loop(socket_fd, &buf, tmpsize)?;
         progress += tmpsize
     }

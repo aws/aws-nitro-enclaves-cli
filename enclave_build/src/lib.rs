@@ -101,7 +101,7 @@ impl<'a> Docker2Eif<'a> {
         let sign_info = match (private_key, certificate_path) {
             (Some(key), Some(cert)) => SignKeyData::new(key, Path::new(&cert)).map_or_else(
                 |e| {
-                    eprintln!("Could not read signing info: {:?}", e);
+                    eprintln!("Could not read signing info: {e:?}");
                     None
                 },
                 Some,

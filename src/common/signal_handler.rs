@@ -40,7 +40,7 @@ impl SignalHandler {
         if let Some(set) = self.sig_set {
             set.thread_block().map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Masking signals covered by handler failed: {:?}", e),
+                    &format!("Masking signals covered by handler failed: {e:?}"),
                     NitroCliErrorEnum::SignalMaskingError
                 )
             })?;
@@ -54,7 +54,7 @@ impl SignalHandler {
         if let Some(set) = self.sig_set {
             set.thread_unblock().map_err(|e| {
                 new_nitro_cli_failure!(
-                    &format!("Unmasking signals covered by handler failed: {:?}", e),
+                    &format!("Unmasking signals covered by handler failed: {e:?}"),
                     NitroCliErrorEnum::SignalUnmaskingError
                 )
             })?;

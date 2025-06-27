@@ -45,7 +45,7 @@ impl RunEnclavesArgs {
         if let Some(config_file) = args.get_one::<String>("config") {
             let file = File::open(config_file).map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Failed to open config file: {:?}", err),
+                    &format!("Failed to open config file: {err:?}"),
                     NitroCliErrorEnum::FileOperationFailure
                 )
                 .add_info(vec![config_file, "Open"])
@@ -53,7 +53,7 @@ impl RunEnclavesArgs {
 
             let mut json: RunEnclavesArgs = serde_json::from_reader(file).map_err(|err| {
                 new_nitro_cli_failure!(
-                    &format!("Invalid JSON format for config file: {:?}", err),
+                    &format!("Invalid JSON format for config file: {err:?}"),
                     NitroCliErrorEnum::SerdeError
                 )
             })?;
@@ -400,20 +400,14 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
 
         if enclave_cid > 0 && enclave_cid <= VMADDR_CID_HOST as u64 {
             return Err(new_nitro_cli_failure!(
-                &format!(
-                    "CID {} is a well-known CID, not to be used for enclaves",
-                    enclave_cid
-                ),
+                &format!("CID {enclave_cid} is a well-known CID, not to be used for enclaves"),
                 NitroCliErrorEnum::InvalidArgument
             ));
         }
 
         if enclave_cid == u32::MAX as u64 {
             return Err(new_nitro_cli_failure!(
-                &format!(
-                    "CID {} is a well-known CID, not to be used for enclaves",
-                    enclave_cid
-                ),
+                &format!("CID {enclave_cid} is a well-known CID, not to be used for enclaves"),
                 NitroCliErrorEnum::InvalidArgument
             ));
         }
@@ -422,8 +416,7 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
         if enclave_cid == VMADDR_CID_PARENT as u64 {
             return Err(new_nitro_cli_failure!(
                 &format!(
-                    "CID {} is the CID of the parent VM, not to be used for enclaves",
-                    enclave_cid
+                    "CID {enclave_cid} is the CID of the parent VM, not to be used for enclaves"
                 ),
                 NitroCliErrorEnum::InvalidArgument
             ));
@@ -433,8 +426,7 @@ fn parse_enclave_cid(args: &ArgMatches) -> NitroCliResult<Option<u64>> {
         if enclave_cid > u32::MAX as u64 {
             return Err(new_nitro_cli_failure!(
                 &format!(
-                    "CID {} is higher than the maximum supported (u32 max) for a vsock device",
-                    enclave_cid
+                    "CID {enclave_cid} is higher than the maximum supported (u32 max) for a vsock device"
                 ),
                 NitroCliErrorEnum::InvalidArgument
             ));

@@ -72,8 +72,8 @@ impl CommandOutput {
 
     pub fn new_from(output: Output) -> Result<Self, String> {
         Ok(CommandOutput {
-            stdout: String::from_utf8(output.stdout).map_err(|err| format!("{:?}", err))?,
-            stderr: String::from_utf8(output.stderr).map_err(|err| format!("{:?}", err))?,
+            stdout: String::from_utf8(output.stdout).map_err(|err| format!("{err:?}"))?,
+            stderr: String::from_utf8(output.stderr).map_err(|err| format!("{err:?}"))?,
             rc: output.status.code(),
         })
     }

@@ -103,7 +103,7 @@ pub fn resolve_single(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<
     rresults
         .first()
         .cloned()
-        .ok_or_else(|| format!("Unable to resolve the DNS name: {}", addr))
+        .ok_or_else(|| format!("Unable to resolve the DNS name: {addr}"))
 }
 
 #[cfg(test)]
@@ -116,10 +116,10 @@ mod tests {
 
     static TEST_INIT: Once = Once::new();
 
-    static mut INVALID_TEST_DOMAIN: &'static str = "invalid-domain";
-    static mut IPV4_ONLY_TEST_DOMAIN: &'static str = "v4.ipv6test.app";
-    static mut IPV6_ONLY_TEST_DOMAIN: &'static str = "v6.ipv6test.app";
-    static mut DUAL_IP_TEST_DOMAIN: &'static str = "ipv6test.app";
+    static mut INVALID_TEST_DOMAIN: &str = "invalid-domain";
+    static mut IPV4_ONLY_TEST_DOMAIN: &str = "v4.ipv6test.app";
+    static mut IPV6_ONLY_TEST_DOMAIN: &str = "v6.ipv6test.app";
+    static mut DUAL_IP_TEST_DOMAIN: &str = "ipv6test.app";
 
     #[test]
     #[ctor]

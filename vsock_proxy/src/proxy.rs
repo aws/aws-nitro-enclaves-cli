@@ -124,7 +124,7 @@ impl Proxy {
     pub fn sock_listen(&self) -> VsockProxyResult<VsockListener> {
         let sockaddr = VsockAddr::new(VSOCK_PROXY_CID, self.local_port);
         let listener = VsockListener::bind(&sockaddr)
-            .map_err(|_| format!("Could not bind to {:?}", sockaddr))?;
+            .map_err(|_| format!("Could not bind to {sockaddr:?}"))?;
         info!("Bound to {:?}", sockaddr);
 
         Ok(listener)
@@ -168,7 +168,7 @@ impl Proxy {
         self.pool.execute(move || {
             let mut server = match sock_type {
                 SockType::Stream => TcpStream::connect(sockaddr)
-                    .map_err(|_| format!("Could not connect to {:?}", sockaddr)),
+                    .map_err(|_| format!("Could not connect to {sockaddr:?}")),
                 _ => Err("Socket type not implemented".to_string()),
             }
             .expect("Could not create connection");

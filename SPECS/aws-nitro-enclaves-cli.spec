@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.4.2
+Version:    1.4.3
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,22 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Tue Aug 19 2025 Connor Williamson <connordw@amazon.com> - 1.4.3-0"
+- build(deps): bump ctor from 0.2.9 to 0.4.2
+- build(deps): bump libc from 0.2.169 to 0.2.174
+- terminate-enclaves: print output as array
+- nitro_enclaves: Fix race when accessing has_event flag
+- Fix Clippy warnings from Rust 1.87
+- Use musl-gcc to build nitro-cli
+- Add ssl to docker api client
+- build(deps): bump flate2 from 1.0.35 to 1.1.1
+- Add tests with KMS keys
+- Get KMS-relates envs from SSM
+- build(deps): bump tokio from 1.43.0 to 1.43.1
+- build(deps): bump tempfile from 3.16.0 to 3.19.1
+- build(deps): bump openssl from 0.10.70 to 0.10.72
+- Reduce warning for vsock-proxy matching logic
+
 * Wed Mar 19 2025 Costin Lupu <lvpv@amazon.com> - 1.4.2-0
 - bump ring from 0.17.13 to 0.17.14
 

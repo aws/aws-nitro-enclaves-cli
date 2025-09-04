@@ -1,4 +1,4 @@
-FROM public.ecr.aws/ubuntu/ubuntu:20.04
+FROM public.ecr.aws/ubuntu/ubuntu:24.04
 
 SHELL ["/bin/bash", "-c"]
 
@@ -17,7 +17,7 @@ RUN apt-get update && \
 
 # Install bindgen dependencies
 RUN apt-get update && \
-	apt-get install -y llvm-dev libclang-dev clang
+	apt-get install -y llvm-dev libclang-dev clang perl
 
 # Build static version of Openssl.
 ENV OPENSSL_VERSION=OpenSSL_1_1_1q
@@ -31,16 +31,19 @@ RUN cd /tmp/openssl_src/openssl-${OPENSSL_VERSION} &&  \
 
 # Setup the right rust ver
 ENV RUST_VERSION=1.71.1
+ENV RUST_CARGO_AUDIT_VERSION=0.20.0
+ENV RUST_CARGO_ABOUT_VERSION=0.6.6
+
 RUN  source $HOME/.cargo/env && \
     ARCH=$(uname -m) && \
-    # Install and set 1.71.1 as default
+    # Install and set ${RUST_VERSION} as default
     rustup toolchain install ${RUST_VERSION}-${ARCH}-unknown-linux-gnu && \
     rustup default ${RUST_VERSION}-${ARCH}-unknown-linux-gnu && \
     rustup target add --toolchain ${RUST_VERSION} ${ARCH}-unknown-linux-musl && \
     # Install stable toolchain (needed to run fresh cargo-about)
     rustup toolchain install stable-${ARCH}-unknown-linux-gnu && \
-	cargo +stable install cargo-about --version 0.6.6 --locked && \
-    cargo install cargo-audit --version 0.17.6 --locked
+    cargo +stable install cargo-about --version ${RUST_CARGO_ABOUT_VERSION} --locked && \
+    cargo install cargo-audit --version ${RUST_CARGO_AUDIT_VERSION} --locked
 
 # Install docker for nitro-cli build-enclave runs
 RUN apt-get update && \

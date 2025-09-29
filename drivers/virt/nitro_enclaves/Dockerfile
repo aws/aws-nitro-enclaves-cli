@@ -1,7 +1,7 @@
 FROM public.ecr.aws/lts/ubuntu:20.04
 
 RUN apt-get update
-RUN apt-get install -y build-essential gcc make wget
+RUN apt-get install -y build-essential gcc make wget file
 
 ENV KERNEL_REPO="https://kernel.ubuntu.com/~kernel-ppa/mainline"
 ENV KERNEL_VER="v5.4.100"

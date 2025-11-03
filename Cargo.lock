@@ -850,7 +850,7 @@ dependencies = [
  "byteorder",
  "clap 4.4.18",
  "log",
- "nix 0.26.4",
+ "nix",
  "num",
  "num-derive",
  "num-traits",
@@ -1062,7 +1062,7 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "libc",
- "nix 0.26.4",
+ "nix",
  "sha2 0.9.9",
  "tempfile",
  "vsock",
@@ -2112,15 +2112,6 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "memoffset"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
-name = "memoffset"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
@@ -2172,7 +2163,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "nix 0.26.4",
+ "nix",
  "num-derive",
  "num-traits",
  "openssl",
@@ -2188,19 +2179,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "598beaf3cc6fdd9a5dfb1630c2800c7acd31df7aaf0f565796fba2b53ca1af1b"
-dependencies = [
- "bitflags 1.3.2",
- "cfg-if",
- "libc",
- "memoffset 0.7.1",
- "pin-utils",
-]
-
-[[package]]
-name = "nix"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
@@ -2209,7 +2187,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
- "memoffset 0.9.1",
+ "memoffset",
 ]
 
 [[package]]
@@ -3418,7 +3396,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e8b4d00e672f147fc86a09738fadb1445bd1c0a40542378dfb82909deeee688"
 dependencies = [
  "libc",
- "nix 0.29.0",
+ "nix",
 ]
 
 [[package]]
@@ -3432,7 +3410,7 @@ dependencies = [
  "hickory-resolver",
  "idna",
  "log",
- "nix 0.26.4",
+ "nix",
  "rand",
  "tempfile",
  "threadpool",

@@ -10,7 +10,7 @@ use flexi_logger::{DeferredNow, Record};
 use nix::unistd::Uid;
 use std::env;
 use std::fs::{File, OpenOptions, Permissions};
-use std::io::{Error, ErrorKind, Result, Write};
+use std::io::{Error, Result, Write};
 use std::ops::{Deref, DerefMut};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -112,10 +112,7 @@ impl EnclaveProcLogWriter {
 impl LogWriter for EnclaveProcLogWriter {
     fn write(&self, now: &mut DeferredNow, record: &Record) -> Result<()> {
         if self.safe_open_log_file().is_err() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Failed to safely open log file for writing",
-            ));
+            return Err(Error::other("Failed to safely open log file for writing"));
         }
 
         if let Ok(record_str) = self.create_msg(now.now(), record) {
@@ -125,13 +122,10 @@ impl LogWriter for EnclaveProcLogWriter {
                 return Ok(());
             }
 
-            return Err(Error::new(ErrorKind::Other, "Failed to lock log file"));
+            return Err(Error::other("Failed to lock log file"));
         }
 
-        Err(Error::new(
-            ErrorKind::Other,
-            "Failed to create logger message",
-        ))
+        Err(Error::other("Failed to create logger message"))
     }
 
     fn flush(&self) -> Result<()> {

@@ -30,8 +30,8 @@ RUN cd /tmp/openssl_src/openssl-${OPENSSL_VERSION} &&  \
 	make install_sw
 
 # Setup the right rust ver
-ENV RUST_VERSION=1.71.1
-ENV RUST_CARGO_AUDIT_VERSION=0.20.0
+ENV RUST_VERSION=1.81
+ENV RUST_CARGO_AUDIT_VERSION=0.21.2
 ENV RUST_CARGO_ABOUT_VERSION=0.6.6
 
 RUN  source $HOME/.cargo/env && \

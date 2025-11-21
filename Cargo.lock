@@ -787,18 +787,18 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.52"
+version = "4.5.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa8120877db0e5c011242f96806ce3c94e0737ab8108532a76a3300a01db2ab8"
+checksum = "4c26d721170e0295f191a69bd9a1f93efcdb0aff38684b61ab5750468972e5f5"
 dependencies = [
  "clap_builder",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.5.52"
+version = "4.5.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02576b399397b659c26064fbc92a75fede9d18ffd5f80ca1cd74ddab167016e1"
+checksum = "75835f0c7bf681bfd05abe44e965760fea999a5286c6eb2d59883634fd02011a"
 dependencies = [
  "anstream",
  "anstyle",
@@ -841,7 +841,7 @@ name = "command-executer"
 version = "0.1.0"
 dependencies = [
  "byteorder",
- "clap 4.5.52",
+ "clap 4.5.51",
  "log",
  "nix 0.26.4",
  "num",
@@ -1074,7 +1074,7 @@ dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64 0.22.1",
  "bollard",
- "clap 4.5.52",
+ "clap 4.5.51",
  "flate2",
  "futures",
  "log",
@@ -2155,7 +2155,7 @@ dependencies = [
  "bindgen",
  "chrono",
  "ciborium",
- "clap 4.5.52",
+ "clap 4.5.51",
  "driver-bindings",
  "eif_loader",
  "enclave_build",
@@ -3419,7 +3419,7 @@ name = "vsock-proxy"
 version = "1.0.1"
 dependencies = [
  "chrono",
- "clap 4.5.52",
+ "clap 4.5.51",
  "ctor",
  "env_logger",
  "hickory-resolver",

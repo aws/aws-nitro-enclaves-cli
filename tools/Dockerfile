@@ -25,7 +25,8 @@ RUN mkdir /tmp/openssl_src
 RUN curl -L https://github.com/openssl/openssl/archive/${OPENSSL_VERSION}.zip -o /tmp/openssl_src/openssl.zip
 RUN unzip -q /tmp/openssl_src/openssl.zip -d /tmp/openssl_src
 RUN cd /tmp/openssl_src/openssl-${OPENSSL_VERSION} &&  \
-	CC=musl-gcc CFLAGS=-fPIC CFLAGS=-mno-outline-atomics ./Configure --prefix=/musl_openssl --openssldir=/musl_openssl no-shared no-engine no-afalgeng linux-$(uname -m) -DOPENSSL_NO_SECURE_MEMORY no-tests && \
+	if [ $(uname -m ) = "aarch64" ] ; then CFLAGS_ARCH="-mno-outline-atomics" ; fi && \
+	CC=musl-gcc CFLAGS="-fPIC $CFLAGS_ARCH" ./Configure --prefix=/musl_openssl --openssldir=/musl_openssl no-shared no-engine no-afalgeng linux-$(uname -m) -DOPENSSL_NO_SECURE_MEMORY no-tests && \
 	make -j$(nproc) && \
 	make install_sw
 

@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.4.3
+Version:    1.4.4
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,25 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Mon Jan 12 2026 Leonard Foerster <foersleo@amazon.com> - 1.4.4-0"
+- vsock-proxy: configs: Add missing regions
+- vsock-proxy: configs: Reorder regions aligned with kms docs
+- tools/Dockerfile: Disable out-of-line helpers only on ARM
+- Cargo.lock: Downgrade clap to 4.5.51 temporarily
+- tools/Dockerfile: Disable out-of-line helpers for atomics when building OpenSSL
+- build(deps): bump clap from 4.4.18 to 4.5.52
+- build(deps): bump vmm-sys-util from 0.12.1 to 0.15.0
+- build(deps): bump chrono from 0.4.39 to 0.4.42
+- Fix Clippy warnings
+- Bump Rust version to 1.81
+- scripts: Add bump-rust-version.sh for bumping MSRV
+- Revert "Cargo.lock: Downgrade libc to 0.2.172 temporarily"
+- tools/Dockerfile: Unzip quietly
+- drivers/virt/nitro_enclaves/Dockerfile: Install file utility
+- drivers/virt/nitro_enclaves/Dockerfile: Use Ubuntu 20.04
+- Cargo.lock: Downgrade libc to 0.2.172 temporarily
+- tools/Dockerfile: Use Ubuntu 24.04 for building
+
 * Tue Aug 19 2025 Connor Williamson <connordw@amazon.com> - 1.4.3-0"
 - build(deps): bump ctor from 0.2.9 to 0.4.2
 - build(deps): bump libc from 0.2.169 to 0.2.174

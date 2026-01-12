@@ -2149,7 +2149,7 @@ dependencies = [
 
 [[package]]
 name = "nitro-cli"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "bindgen",

@@ -575,10 +575,12 @@ mod tests {
     fn parse_config_file(args: &ArgMatches) -> NitroCliResult<String> {
         let config_file = args
             .get_one::<String>("config")
-            .ok_or(new_nitro_cli_failure!(
-                "`config` argument not found",
-                NitroCliErrorEnum::MissingArgument
-            ))?;
+            .ok_or_else(|| {
+                new_nitro_cli_failure!(
+                    "`config` argument not found",
+                    NitroCliErrorEnum::MissingArgument
+                )
+            })?;
         Ok(config_file.into())
     }
 

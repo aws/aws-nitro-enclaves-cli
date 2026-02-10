@@ -141,7 +141,7 @@ impl Proxy {
 
         let dns_needs_resolution = self
             .dns_resolution_info
-            .map_or(true, |info| info.is_expired());
+            .is_none_or(|info| info.is_expired());
 
         let remote_addr = if dns_needs_resolution {
             info!("Resolving hostname: {}.", self.remote_host);

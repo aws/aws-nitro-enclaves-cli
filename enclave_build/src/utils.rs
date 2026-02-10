@@ -36,6 +36,7 @@ where
         match item {
             Ok(output) => {
                 if let Some(err_msg) = output.error() {
+                    eprintln!("Output error: {:?}", err_msg);
                     error!("{:?}", err_msg);
                     return Err(error_type);
                 } else {
@@ -43,6 +44,7 @@ where
                 }
             }
             Err(e) => {
+                eprintln!("Stream error: {:?}", e);
                 error!("{:?}", e);
                 return Err(error_type);
             }

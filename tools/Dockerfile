@@ -27,7 +27,7 @@ RUN unzip -q /tmp/openssl_src/openssl.zip -d /tmp/openssl_src
 RUN cd /tmp/openssl_src/openssl-${OPENSSL_VERSION} &&  \
 	if [ $(uname -m ) = "aarch64" ] ; then CFLAGS_ARCH="-mno-outline-atomics" ; fi && \
 	CC=musl-gcc CFLAGS="-fPIC $CFLAGS_ARCH" ./Configure --prefix=/musl_openssl --openssldir=/musl_openssl no-shared no-engine no-afalgeng linux-$(uname -m) -DOPENSSL_NO_SECURE_MEMORY no-tests && \
-	make -j$(nproc) && \
+	make -j$(nproc) -s && \
 	make install_sw
 
 # Setup the right rust ver

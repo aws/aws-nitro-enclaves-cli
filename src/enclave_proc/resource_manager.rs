@@ -407,7 +407,7 @@ impl ResourceAllocator {
         // At this point, we may have allocated more than we need, so we release all
         // regions we no longer need, starting with the smallest ones.
         self.mem_regions
-            .sort_by(|reg1, reg2| reg2.mem_size.cmp(&reg1.mem_size));
+            .sort_by_key(|reg| std::cmp::Reverse(reg.mem_size));
 
         needed_mem = self.requested_mem as i64;
         for region in self.mem_regions.iter() {

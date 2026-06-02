@@ -22,5 +22,5 @@ sha2 = "0.9.5"
 futures = "0.3.28"
 
 aws-nitro-enclaves-image-format = "0.5"
-tar = "0.4.40"
+tar = "0.4.45"
 flate2 = "1.1.1"

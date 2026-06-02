@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.4.4
+Version:    1.4.5
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,16 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Tue Jun 02 2026 Jasper Wise <jaspwise@amazon.co.uk> - 1.4.5-0
+- Update tar from 0.4.43 to 0.4.46
+- Update openssl from 0.10.72 to 0.10.80
+- Fix clippy::unnecessary_sort_by lint from Rust 1.95
+- Fix Clippy warnings for Rust 1.92
+- Bump Rust version to 1.92
+- scripts/bump-rust-version.sh: Switch to two-part versioning
+- tools/Dockerfile: Build openssl silently
+- enclave_build: Always print errors when handling builder streams
+
 * Mon Jan 12 2026 Leonard Foerster <foersleo@amazon.com> - 1.4.4-0"
 - vsock-proxy: configs: Add missing regions
 - vsock-proxy: configs: Reorder regions aligned with kms docs

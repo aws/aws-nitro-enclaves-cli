@@ -28,6 +28,11 @@ vsock = "0.5"
 vmm-sys-util = "0.15.0"
 sha2 = "0.9.5"
 hex = "0.4"
+flate2 = "1.0"
+tempfile = "3.19"
+cpio = "0.4"
+zstd = "0.13"
+xz2 = "0.1"
 
 lazy_static = "1.4.0"
 
@@ -38,7 +43,6 @@ bindgen = { version=">=0.54" }
 log = "0.4"
 num-derive = "0.4"
 num-traits = "0.2"
-tempfile = "3.19"
 
 [workspace]
 members = [".", "samples/command_executer", "driver-bindings", "eif_loader", "enclave_build", "vsock_proxy"]

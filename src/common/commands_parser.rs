@@ -114,6 +114,12 @@ pub struct BuildEnclavesArgs {
     pub img_version: Option<String>,
     /// The path to custom metadata JSON file
     pub metadata: Option<String>,
+    /// [DEPRECATING v3.0.0] Build with the bundled static kernel blob.
+    pub legacy_kernel: bool,
+    /// Specific Amazon Linux kernel version to use (None for latest)
+    pub kernel_version: Option<String>,
+    /// Path to a local kernel RPM file (alternative to downloading from repo)
+    pub kernel_rpm_path: Option<String>,
 }
 
 impl BuildEnclavesArgs {
@@ -140,6 +146,9 @@ impl BuildEnclavesArgs {
             img_name: parse_image_name(args),
             img_version: parse_image_version(args),
             metadata: parse_metadata(args),
+            legacy_kernel: args.get_flag("legacy-kernel"),
+            kernel_version: args.get_one::<String>("kernel-version").map(String::from),
+            kernel_rpm_path: args.get_one::<String>("kernel-rpm-path").map(String::from),
         })
     }
 }
@@ -608,7 +617,6 @@ impl DownloadKernelArgs {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

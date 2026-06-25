@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2026 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -561,6 +561,54 @@ fn parse_error_code_str(args: &ArgMatches) -> NitroCliResult<String> {
     })?;
     Ok(error_code_str.to_string())
 }
+
+/// The arguments used by the `list-packages` command.
+#[derive(Debug, Clone)]
+pub struct ListPackagesArgs {
+    /// The architecture to query (aarch64 or x86_64).
+    pub arch: String,
+}
+
+impl ListPackagesArgs {
+    /// Construct a new `ListPackagesArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> Self {
+        ListPackagesArgs {
+            arch: args
+                .get_one::<String>("arch")
+                .map(String::from)
+                .unwrap_or_else(|| "x86_64".to_string()),
+        }
+    }
+}
+
+/// The arguments used by the `download-kernel` command.
+#[derive(Debug, Clone)]
+pub struct DownloadKernelArgs {
+    /// The architecture to query (aarch64 or x86_64).
+    pub arch: String,
+    /// The kernel version to download (None for latest).
+    pub version: Option<String>,
+    /// The output directory for the downloaded RPM.
+    pub output_dir: String,
+}
+
+impl DownloadKernelArgs {
+    /// Construct a new `DownloadKernelArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> Self {
+        DownloadKernelArgs {
+            arch: args
+                .get_one::<String>("arch")
+                .map(String::from)
+                .unwrap_or_else(|| "x86_64".to_string()),
+            version: args.get_one::<String>("version").map(String::from),
+            output_dir: args
+                .get_one::<String>("output-dir")
+                .map(String::from)
+                .unwrap_or_else(|| ".".to_string()),
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

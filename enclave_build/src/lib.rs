@@ -99,14 +99,11 @@ impl<'a> Docker2Eif<'a> {
         }
 
         let sign_info = match (private_key, certificate_path) {
-            (Some(key), Some(cert)) => SignKeyData::new(key, Path::new(&cert)).map_or_else(
-                |e| {
-                    eprintln!("Could not read signing info: {e:?}");
-                    None
-                },
-                Some,
+            (Some(key), Some(cert)) => Some(
+                SignKeyData::new(key, Path::new(&cert)).map_err(Docker2EifError::SignImageError)?,
             ),
-            _ => None,
+            (None, None) => None,
+            _ => return Err(Docker2EifError::SignArgsError),
         };
 
         Ok(Docker2Eif {

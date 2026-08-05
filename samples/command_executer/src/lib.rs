@@ -305,7 +305,7 @@ pub fn recv_file(args: FileArgs) -> Result<(), String> {
     let filesize = recv_u64(socket_fd)?;
     println!(
         "Receiving file {}(saving to {}) - size {}",
-        &args.remotefile,
+        args.remotefile,
         &args.localfile[..],
         filesize
     );
@@ -349,7 +349,7 @@ pub fn send_file(args: FileArgs) -> Result<(), String> {
     send_u64(socket_fd, filesize)?;
     println!(
         "Sending file {}(sending to {}) - size {}",
-        &args.localfile,
+        args.localfile,
         &args.remotefile[..],
         filesize
     );

@@ -104,7 +104,7 @@ impl EnclaveProcLogWriter {
             timestamp,
             record.file().unwrap_or("?"),
             record.line().unwrap_or(0),
-            &record.args()
+            record.args()
         ))
     }
 }

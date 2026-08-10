@@ -5,9 +5,9 @@ use crate::docker::DockerError::CredentialsError;
 use crate::utils::handle_stream_output;
 use base64::{engine::general_purpose, Engine as _};
 use bollard::auth::DockerCredentials;
-use bollard::image::{BuildImageOptions, CreateImageOptions};
+use bollard::query_parameters::{BuildImageOptionsBuilder, CreateImageOptionsBuilder};
 use bollard::secret::ImageInspect;
-use bollard::Docker;
+use bollard::{body_full, Docker};
 use flate2::{write::GzEncoder, Compression};
 use log::{debug, error};
 use serde_json::{json, Value};
@@ -180,10 +180,9 @@ impl DockerUtil {
         let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
 
         runtime.block_on(async {
-            let create_image_options = CreateImageOptions {
-                from_image: self.docker_image.clone(),
-                ..Default::default()
-            };
+            let create_image_options = CreateImageOptionsBuilder::default()
+                .from_image(&self.docker_image)
+                .build();
 
             let credentials = match self.get_credentials() {
                 Ok(auth) => Some(auth),
@@ -226,13 +225,12 @@ impl DockerUtil {
 
         runtime.block_on(async move {
             let stream = self.docker.build_image(
-                BuildImageOptions {
-                    dockerfile: "Dockerfile".to_string(),
-                    t: self.docker_image.clone(),
-                    ..Default::default()
-                },
+                BuildImageOptionsBuilder::default()
+                    .dockerfile("Dockerfile")
+                    .t(&self.docker_image)
+                    .build(),
                 None,
-                Some(Self::build_tarball(dockerfile_dir)?.into()),
+                Some(body_full(Self::build_tarball(dockerfile_dir)?.into())),
             );
 
             handle_stream_output(stream, DockerError::BuildError).await

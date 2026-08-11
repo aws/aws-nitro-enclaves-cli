@@ -47,6 +47,11 @@ impl DnsResolutionInfo {
 
 /// Resolve a DNS name (IDNA format) into multiple IP addresses (v4 or v6)
 pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<DnsResolutionInfo>> {
+    // If addr is already a valid IP address, skip DNS resolution entirely.
+    if let Ok(ip) = addr.parse::<IpAddr>() {
+        return Ok(vec![DnsResolutionInfo::new(ip, Duration::seconds(0))]);
+    }
+
     // IDNA parsing
     let addr = domain_to_ascii(addr).map_err(|_| "Could not parse domain name")?;
 
@@ -186,5 +191,29 @@ mod tests {
         let rresult = resolve_single(domain, IpAddrType::IPAddrMixed).unwrap();
         assert!(rresult.ip_addr().is_ipv4());
         assert!(rresult.ttl != Duration::seconds(0));
+    }
+
+    #[test]
+    fn test_resolve_ipv4_address_skips_dns() {
+        let rresults = resolve("127.0.0.1", IpAddrType::IPAddrMixed).unwrap();
+        assert_eq!(rresults.len(), 1);
+        assert_eq!(
+            rresults[0].ip_addr(),
+            "127.0.0.1".parse::<IpAddr>().unwrap()
+        );
+        assert_eq!(rresults[0].ttl(), Duration::seconds(0));
+    }
+
+    #[test]
+    fn test_resolve_ipv6_address_skips_dns() {
+        let rresults = resolve("::1", IpAddrType::IPAddrMixed).unwrap();
+        assert_eq!(rresults.len(), 1);
+        assert_eq!(rresults[0].ip_addr(), "::1".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn test_resolve_single_with_ip_address() {
+        let rresult = resolve_single("10.0.0.1", IpAddrType::IPAddrV4Only).unwrap();
+        assert_eq!(rresult.ip_addr(), "10.0.0.1".parse::<IpAddr>().unwrap());
     }
 }

@@ -110,6 +110,18 @@ fn main() -> VsockProxyResult<()> {
     info!("Checking allowlist configuration");
     let config_file = matches.get_one::<String>("config_file").map(String::as_str);
     let remote_host = remote_addr.to_string();
+
+    // Reject bare numeric strings early with a helpful message.
+    // A bare number like "19" is likely a vsock CID passed by mistake.
+    if remote_addr.parse::<u32>().is_ok() {
+        return Err(format!(
+            "'{}' is not a valid hostname or IP address. \
+             Note: remote_addr is the TCP destination to forward traffic to, \
+             not the enclave CID.",
+            remote_addr
+        ));
+    }
+
     check_allowlist(&remote_host, remote_port, config_file, ip_addr_type)
         .map_err(|err| format!("Error at checking the allowlist: {err}"))?;
 

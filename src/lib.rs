@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2026 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -12,6 +12,10 @@ pub mod common;
 pub mod enclave_proc;
 /// The module covering the communication between a CLI instance and enclave processes.
 pub mod enclave_proc_comm;
+/// The module for extracting kernel binaries from RPM packages.
+pub mod kernel_extract;
+/// The module for querying RPM repositories.
+pub mod rpm_repo;
 /// The CLI-specific utilities module.
 pub mod utils;
 
@@ -63,12 +67,16 @@ pub fn build_enclaves(args: BuildEnclavesArgs) -> NitroCliResult<()> {
         &args.img_name,
         &args.img_version,
         &args.metadata,
+        args.legacy_kernel,
+        &args.kernel_version,
+        &args.kernel_rpm_path,
     )
     .map_err(|e| e.add_subaction("Failed to build EIF from docker".to_string()))?;
     Ok(())
 }
 
 /// Build an enclave image file from a Docker image.
+#[allow(clippy::too_many_arguments)]
 pub fn build_from_docker(
     docker_uri: &str,
     docker_dir: &Option<String>,
@@ -78,9 +86,130 @@ pub fn build_from_docker(
     img_name: &Option<String>,
     img_version: &Option<String>,
     metadata_path: &Option<String>,
+    legacy_kernel: bool,
+    kernel_version: &Option<String>,
+    kernel_rpm_path: &Option<String>,
 ) -> NitroCliResult<(File, BTreeMap<String, String>)> {
     let blobs_path =
         blobs_path().map_err(|e| e.add_subaction("Failed to retrieve blobs path".to_string()))?;
+
+    // Determine architecture
+    let arch = match std::env::consts::ARCH {
+        "aarch64" => "aarch64",
+        "x86_64" => "x86_64",
+        _ => {
+            return Err(new_nitro_cli_failure!(
+                "Unsupported architecture",
+                NitroCliErrorEnum::EifBuildingError
+            ))
+        }
+    };
+
+    // Variables for kernel and modules
+    let kernel_path: String;
+    let config_path: String;
+    let modules: Vec<enclave_build::ModuleEntry>;
+    let _temp_dir: Option<tempfile::TempDir>; // Keep temp dir alive
+
+    if legacy_kernel {
+        // Use the bundled legacy kernel blob.
+        // This path is deprecated and will be removed in the next major version (3.0.0);
+        eprintln!(
+            "DEPRECATION NOTICE: --legacy-kernel uses the legacy bundled kernel blob, which will \
+             be removed in the next major release (3.0.0). Omit the flag to build with the latest \
+             Amazon Linux kernel instead."
+        );
+
+        let kernel_image_name = match arch {
+            "aarch64" => "Image",
+            "x86_64" => "bzImage",
+            _ => "undefined",
+        };
+
+        kernel_path = format!("{blobs_path}/{kernel_image_name}");
+        config_path = format!("{kernel_path}.config");
+
+        // Use only nsm.ko from blobs
+        modules = vec![enclave_build::ModuleEntry {
+            name: String::from("nsm"),
+            path: std::path::PathBuf::from(format!("{blobs_path}/nsm.ko")),
+            dependencies: vec![],
+        }];
+
+        _temp_dir = None;
+    } else {
+        // Create a temporary directory for kernel extraction
+        let temp_dir = tempfile::TempDir::new().map_err(|e| {
+            new_nitro_cli_failure!(
+                &format!("Failed to create temporary directory: {e:?}"),
+                NitroCliErrorEnum::FileOperationFailure
+            )
+        })?;
+        let temp_path = temp_dir.path();
+
+        // Get the kernel RPM path - either from local file or download from repo
+        let rpm_path = if let Some(local_rpm) = kernel_rpm_path {
+            eprintln!("Using local kernel RPM: {local_rpm}");
+            let local_path = std::path::PathBuf::from(local_rpm);
+            if !local_path.exists() {
+                return Err(new_nitro_cli_failure!(
+                    &format!("Local kernel RPM not found: {local_rpm}"),
+                    NitroCliErrorEnum::FileOperationFailure
+                ));
+            }
+            local_path
+        } else {
+            eprintln!("Using kernel from Amazon Linux 2023 repository...");
+            eprintln!("Downloading kernel RPM...");
+            let downloaded = rpm_repo::download_kernel(
+                arch,
+                kernel_version.as_deref(),
+                temp_path.to_str().unwrap(),
+            )
+            .map_err(|e| {
+                e.add_subaction("Failed to download kernel from AL repository".to_string())
+            })?;
+            eprintln!("Downloaded: {}", downloaded.display());
+            downloaded
+        };
+
+        // Extract kernel binaries and modules
+        eprintln!("Extracting kernel binaries and modules...");
+        let extract_dir = temp_path.join("extracted");
+        let extract_info =
+            kernel_extract::extract_kernel_binaries(&rpm_path, &extract_dir, arch)
+                .map_err(|e| e.add_subaction("Failed to extract kernel binaries".to_string()))?;
+
+        // Set kernel and config paths
+        kernel_path = extract_info.kernel_image.to_str().unwrap().to_string();
+        config_path = extract_info.kernel_config.to_str().unwrap().to_string();
+
+        // Convert extracted modules to ModuleEntry
+        modules = extract_info
+            .modules
+            .into_iter()
+            .map(|m| enclave_build::ModuleEntry {
+                name: m.name,
+                path: m.path,
+                dependencies: m.dependencies,
+            })
+            .collect();
+
+        eprintln!(
+            "Using kernel: {}",
+            extract_info
+                .kernel_image
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+        );
+        eprintln!("Modules to include: {}", modules.len());
+
+        _temp_dir = Some(temp_dir);
+    }
+
+    // Read kernel command line
     let cmdline_file_path = format!("{blobs_path}/cmdline");
     let mut cmdline_file = File::open(cmdline_file_path.clone()).map_err(|e| {
         new_nitro_cli_failure!(
@@ -113,14 +242,7 @@ pub fn build_from_docker(
             .add_info(vec![output_path, "Open"])
         })?;
 
-    let kernel_image_name = match std::env::consts::ARCH {
-        "aarch64" => "Image",
-        "x86_64" => "bzImage",
-        _ => "undefined",
-    };
-
-    let kernel_path = format!("{blobs_path}/{kernel_image_name}");
-    let build_info = generate_build_info!(&format!("{kernel_path}.config")).map_err(|e| {
+    let build_info = generate_build_info!(&config_path).map_err(|e| {
         new_nitro_cli_failure!(
             &format!("Could not generate build info: {e:?}"),
             NitroCliErrorEnum::EifBuildingError
@@ -130,7 +252,7 @@ pub fn build_from_docker(
     let mut docker2eif = enclave_build::Docker2Eif::new(
         docker_uri.to_string(),
         format!("{blobs_path}/init"),
-        format!("{blobs_path}/nsm.ko"),
+        modules,
         kernel_path,
         cmdline.trim().to_string(),
         format!("{blobs_path}/linuxkit"),
@@ -788,6 +910,25 @@ macro_rules! create_app {
                         Arg::new("metadata")
                             .long("metadata")
                             .help("Path to JSON containing the custom metadata provided by the user."),
+                    )
+                    .arg(
+                        Arg::new("legacy-kernel")
+                            .long("legacy-kernel")
+                            .help("[DEPRECATED] Build with the bundled static kernel blob instead of the Amazon Linux kernel. This flag will be removed in the next major version (3.0.0).")
+                            .action(clap::ArgAction::SetTrue)
+                            .conflicts_with("kernel-version")
+                            .conflicts_with("kernel-rpm-path"),
+                    )
+                    .arg(
+                        Arg::new("kernel-version")
+                            .long("kernel-version")
+                            .help("Specific Amazon Linux kernel version to use (defaults to latest)"),
+                    )
+                    .arg(
+                        Arg::new("kernel-rpm-path")
+                            .long("kernel-rpm-path")
+                            .help("Path to a local kernel RPM file to use")
+                            .conflicts_with("kernel-version"),
                     ),
             )
             .subcommand(
@@ -881,6 +1022,39 @@ macro_rules! create_app {
                             .help("KMS key ARN or local path to developer's Eliptic Curve private key.")
                             .requires("signing-certificate"),
                     )
+            )
+            .subcommand(
+                Command::new("list-packages")
+                    .about("List available kernel packages from Amazon Linux 2023 RPM repository")
+                    .arg(
+                        Arg::new("arch")
+                            .long("arch")
+                            .help("Architecture to query (aarch64 or x86_64)")
+                            .value_parser(["aarch64", "x86_64"])
+                            .default_value("x86_64"),
+                    ),
+            )
+            .subcommand(
+                Command::new("download-kernel")
+                    .about("Download a kernel RPM from Amazon Linux 2023 RPM repository")
+                    .arg(
+                        Arg::new("arch")
+                            .long("arch")
+                            .help("Architecture to query (aarch64 or x86_64)")
+                            .value_parser(["aarch64", "x86_64"])
+                            .default_value("x86_64"),
+                    )
+                    .arg(
+                        Arg::new("version")
+                            .long("version")
+                            .help("Kernel version to download (e.g., 6.12.20). If not specified, downloads the latest version"),
+                    )
+                    .arg(
+                        Arg::new("output-dir")
+                            .long("output-dir")
+                            .help("Directory to save the downloaded RPM")
+                            .default_value("."),
+                    ),
             )
     };
 }

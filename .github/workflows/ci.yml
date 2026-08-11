@@ -20,6 +20,18 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - run: cargo build --all --locked
 
+  test:
+    name: Run tests on AL2023
+    runs-on: ubuntu-latest
+    container: amazonlinux:2023
+    steps:
+    - run: dnf install -y gcc openssl-devel rpm-build cpio tar gzip findutils
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+
+    - run: cargo test --lib --test test_kernel_extract --test test_nitro_cli_args --locked -- --test-threads=1
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -48,7 +60,8 @@ jobs:
     - uses: dtolnay/rust-toolchain@stable
     - uses: Swatinem/rust-cache@v2
     - run: cargo install --locked cargo-audit
-    - run: cargo audit --ignore RUSTSEC-2020-0159 --ignore RUSTSEC-2020-0071
+    # Ignored advisories are configured in audit.toml
+    - run: cargo audit
 
   license:
     name: Check dependencies for licenses

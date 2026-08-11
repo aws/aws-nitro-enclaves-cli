@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.4.5
+Version:    2.0.0
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,14 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Fri Jun 26 2026 Jasper Wise <jaspwise@amazon.co.uk> - 2.0.0-0
+- Prepare release 2.0.0
+- tests: Add coverage for Amazon Linux kernel build and extraction
+- cli: Build from Amazon Linux kernel by default, add --legacy-kernel
+- cli: Add AL2023 kernel download support
+- cli: Add kernel extraction from Amazon Linux RPM packages
+- enclave_build: Support building initramfs with multiple modules
+
 * Tue Jun 02 2026 Jasper Wise <jaspwise@amazon.co.uk> - 1.4.5-0
 - Update tar from 0.4.43 to 0.4.46
 - Update openssl from 0.10.72 to 0.10.80

@@ -19,13 +19,16 @@ use sha2::Digest;
 use std::collections::BTreeMap;
 use yaml_generator::YamlGenerator;
 
+// Re-export ModuleEntry for external use
+pub use yaml_generator::ModuleEntry;
+
 pub const DEFAULT_TAG: &str = "1.0";
 
 pub struct Docker2Eif<'a> {
     docker_image: String,
     docker: DockerUtil,
     init_path: String,
-    nsm_path: String,
+    modules: Vec<ModuleEntry>,
     kernel_img_path: String,
     cmdline: String,
     linuxkit_path: String,
@@ -44,7 +47,7 @@ pub enum Docker2EifError {
     DockerfilePathError,
     ImagePullError,
     InitPathError,
-    NsmPathError,
+    ModulePathError(String),
     KernelPathError,
     LinuxkitExecError,
     LinuxkitPathError,
@@ -62,7 +65,7 @@ impl<'a> Docker2Eif<'a> {
     pub fn new(
         docker_image: String,
         init_path: String,
-        nsm_path: String,
+        modules: Vec<ModuleEntry>,
         kernel_img_path: String,
         cmdline: String,
         linuxkit_path: String,
@@ -82,9 +85,20 @@ impl<'a> Docker2Eif<'a> {
 
         if !Path::new(&init_path).is_file() {
             return Err(Docker2EifError::InitPathError);
-        } else if !Path::new(&nsm_path).is_file() {
-            return Err(Docker2EifError::NsmPathError);
-        } else if !Path::new(&kernel_img_path).is_file() {
+        }
+
+        // Validate all module paths
+        for module in &modules {
+            if !module.path.is_file() {
+                return Err(Docker2EifError::ModulePathError(format!(
+                    "Module {} not found at {}",
+                    module.name,
+                    module.path.display()
+                )));
+            }
+        }
+
+        if !Path::new(&kernel_img_path).is_file() {
             return Err(Docker2EifError::KernelPathError);
         } else if !Path::new(&linuxkit_path).is_file() {
             return Err(Docker2EifError::LinuxkitPathError);
@@ -110,7 +124,7 @@ impl<'a> Docker2Eif<'a> {
             docker_image,
             docker,
             init_path,
-            nsm_path,
+            modules,
             kernel_img_path,
             cmdline,
             linuxkit_path,
@@ -204,7 +218,7 @@ impl<'a> Docker2Eif<'a> {
         let yaml_generator = YamlGenerator::new(
             self.docker_image.clone(),
             self.init_path.clone(),
-            self.nsm_path.clone(),
+            self.modules.clone(),
             cmd_file.path().to_str().unwrap().to_string(),
             env_file.path().to_str().unwrap().to_string(),
         );

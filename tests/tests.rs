@@ -84,6 +84,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         assert!(build_enclaves(args).is_err());
@@ -103,6 +106,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         let measurements = build_from_docker(
@@ -114,6 +120,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed")
         .1;
@@ -145,6 +154,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -156,6 +168,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
     }
@@ -174,6 +189,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -185,6 +203,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
     }
@@ -251,6 +272,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         let measurements = build_from_docker(
@@ -262,6 +286,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed")
         .1;
@@ -294,6 +321,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -305,6 +335,9 @@ mod tests {
             &build_args.img_name,
             &build_args.img_version,
             &build_args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -340,6 +373,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -351,6 +387,9 @@ mod tests {
             &build_args.img_name,
             &build_args.img_version,
             &build_args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -386,6 +425,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -397,6 +439,9 @@ mod tests {
             &build_args.img_name,
             &build_args.img_version,
             &build_args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -434,6 +479,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -445,6 +493,9 @@ mod tests {
             &build_args.img_name,
             &build_args.img_version,
             &build_args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -541,6 +592,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -552,6 +606,9 @@ mod tests {
             &build_args.img_name,
             &build_args.img_version,
             &build_args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -583,6 +640,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -594,6 +654,9 @@ mod tests {
             &build_args.img_name,
             &build_args.img_version,
             &build_args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -645,6 +708,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -656,6 +722,9 @@ mod tests {
             &build_args.img_name,
             &build_args.img_version,
             &build_args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -735,6 +804,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -746,6 +818,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -826,6 +901,9 @@ mod tests {
             img_name: Some("TestName".to_string()),
             img_version: Some("1.0".to_string()),
             metadata: Some(meta_path.to_str().unwrap().to_string()),
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -837,6 +915,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -920,6 +1001,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -931,6 +1015,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -1019,6 +1106,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -1030,6 +1120,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -1061,6 +1154,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -1072,6 +1168,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -1103,6 +1202,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -1114,6 +1216,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -1162,6 +1267,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -1173,6 +1281,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -1218,6 +1329,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -1229,6 +1343,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -1262,6 +1379,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -1273,6 +1393,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -1316,6 +1439,9 @@ mod tests {
             img_name: None,
             img_version: None,
             metadata: None,
+            legacy_kernel: true,
+            kernel_version: None,
+            kernel_rpm_path: None,
         };
 
         build_from_docker(
@@ -1327,6 +1453,9 @@ mod tests {
             &args.img_name,
             &args.img_version,
             &args.metadata,
+            true,
+            &None,
+            &None,
         )
         .expect("Docker build failed");
 
@@ -1371,6 +1500,9 @@ mod tests {
                 img_name: None,
                 img_version: None,
                 metadata: None,
+                legacy_kernel: true,
+                kernel_version: None,
+                kernel_rpm_path: None,
             };
 
             build_from_docker(
@@ -1382,6 +1514,9 @@ mod tests {
                 &args.img_name,
                 &args.img_version,
                 &args.metadata,
+                true,
+                &None,
+                &None,
             )
             .expect("Docker build failed");
 
@@ -1413,6 +1548,9 @@ mod tests {
                 img_name: None,
                 img_version: None,
                 metadata: None,
+                legacy_kernel: true,
+                kernel_version: None,
+                kernel_rpm_path: None,
             };
 
             build_from_docker(
@@ -1424,6 +1562,9 @@ mod tests {
                 &args.img_name,
                 &args.img_version,
                 &args.metadata,
+                true,
+                &None,
+                &None,
             )
             .expect("Docker build failed");
 
@@ -1472,6 +1613,9 @@ mod tests {
                 img_name: None,
                 img_version: None,
                 metadata: None,
+                legacy_kernel: true,
+                kernel_version: None,
+                kernel_rpm_path: None,
             };
 
             build_from_docker(
@@ -1483,6 +1627,9 @@ mod tests {
                 &args.img_name,
                 &args.img_version,
                 &args.metadata,
+                true,
+                &None,
+                &None,
             )
             .expect("Docker build failed");
 
@@ -1531,6 +1678,9 @@ mod tests {
                 img_name: None,
                 img_version: None,
                 metadata: None,
+                legacy_kernel: true,
+                kernel_version: None,
+                kernel_rpm_path: None,
             };
 
             build_from_docker(
@@ -1542,6 +1692,9 @@ mod tests {
                 &args.img_name,
                 &args.img_version,
                 &args.metadata,
+                true,
+                &None,
+                &None,
             )
             .expect("Docker build failed");
 
@@ -1587,6 +1740,9 @@ mod tests {
                 img_name: None,
                 img_version: None,
                 metadata: None,
+                legacy_kernel: true,
+                kernel_version: None,
+                kernel_rpm_path: None,
             };
 
             build_from_docker(
@@ -1598,6 +1754,9 @@ mod tests {
                 &args.img_name,
                 &args.img_version,
                 &args.metadata,
+                true,
+                &None,
+                &None,
             )
             .expect("Docker build failed");
 
@@ -1631,6 +1790,9 @@ mod tests {
                 img_name: None,
                 img_version: None,
                 metadata: None,
+                legacy_kernel: true,
+                kernel_version: None,
+                kernel_rpm_path: None,
             };
 
             build_from_docker(
@@ -1642,6 +1804,9 @@ mod tests {
                 &args.img_name,
                 &args.img_version,
                 &args.metadata,
+                true,
+                &None,
+                &None,
             )
             .expect("Docker build failed");
 
@@ -1685,6 +1850,9 @@ mod tests {
                 img_name: None,
                 img_version: None,
                 metadata: None,
+                legacy_kernel: true,
+                kernel_version: None,
+                kernel_rpm_path: None,
             };
 
             build_from_docker(
@@ -1696,6 +1864,9 @@ mod tests {
                 &args.img_name,
                 &args.img_version,
                 &args.metadata,
+                true,
+                &None,
+                &None,
             )
             .expect("Docker build failed");
 
@@ -1739,6 +1910,9 @@ mod tests {
                 img_name: None,
                 img_version: None,
                 metadata: None,
+                legacy_kernel: true,
+                kernel_version: None,
+                kernel_rpm_path: None,
             };
 
             build_from_docker(
@@ -1750,6 +1924,9 @@ mod tests {
                 &args.img_name,
                 &args.img_version,
                 &args.metadata,
+                true,
+                &None,
+                &None,
             )
             .expect("Docker build failed");
 

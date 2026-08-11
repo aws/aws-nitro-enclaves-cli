@@ -133,10 +133,16 @@ fn main() {
         .open(output)
         .expect("Failed to create output file");
 
+    let modules = vec![enclave_build::ModuleEntry {
+        name: String::from("nsm"),
+        path: std::path::PathBuf::from(nsm_path),
+        dependencies: vec![],
+    }];
+
     let mut img = Docker2Eif::new(
         docker_image.to_string(),
         init_path.to_string(),
-        nsm_path.to_string(),
+        modules,
         kernel_img_path.to_string(),
         cmdline.to_string(),
         linuxkit_path.to_string(),

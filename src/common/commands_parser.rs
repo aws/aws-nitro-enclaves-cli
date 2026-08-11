@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2026 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #![deny(missing_docs)]
 #![deny(warnings)]
@@ -114,6 +114,12 @@ pub struct BuildEnclavesArgs {
     pub img_version: Option<String>,
     /// The path to custom metadata JSON file
     pub metadata: Option<String>,
+    /// [DEPRECATING v3.0.0] Build with the bundled static kernel blob.
+    pub legacy_kernel: bool,
+    /// Specific Amazon Linux kernel version to use (None for latest)
+    pub kernel_version: Option<String>,
+    /// Path to a local kernel RPM file (alternative to downloading from repo)
+    pub kernel_rpm_path: Option<String>,
 }
 
 impl BuildEnclavesArgs {
@@ -140,6 +146,9 @@ impl BuildEnclavesArgs {
             img_name: parse_image_name(args),
             img_version: parse_image_version(args),
             metadata: parse_metadata(args),
+            legacy_kernel: args.get_flag("legacy-kernel"),
+            kernel_version: args.get_one::<String>("kernel-version").map(String::from),
+            kernel_rpm_path: args.get_one::<String>("kernel-rpm-path").map(String::from),
         })
     }
 }
@@ -560,6 +569,53 @@ fn parse_error_code_str(args: &ArgMatches) -> NitroCliResult<String> {
         )
     })?;
     Ok(error_code_str.to_string())
+}
+
+/// The arguments used by the `list-packages` command.
+#[derive(Debug, Clone)]
+pub struct ListPackagesArgs {
+    /// The architecture to query (aarch64 or x86_64).
+    pub arch: String,
+}
+
+impl ListPackagesArgs {
+    /// Construct a new `ListPackagesArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> Self {
+        ListPackagesArgs {
+            arch: args
+                .get_one::<String>("arch")
+                .map(String::from)
+                .unwrap_or_else(|| "x86_64".to_string()),
+        }
+    }
+}
+
+/// The arguments used by the `download-kernel` command.
+#[derive(Debug, Clone)]
+pub struct DownloadKernelArgs {
+    /// The architecture to query (aarch64 or x86_64).
+    pub arch: String,
+    /// The kernel version to download (None for latest).
+    pub version: Option<String>,
+    /// The output directory for the downloaded RPM.
+    pub output_dir: String,
+}
+
+impl DownloadKernelArgs {
+    /// Construct a new `DownloadKernelArgs` instance from the given command-line arguments.
+    pub fn new_with(args: &ArgMatches) -> Self {
+        DownloadKernelArgs {
+            arch: args
+                .get_one::<String>("arch")
+                .map(String::from)
+                .unwrap_or_else(|| "x86_64".to_string()),
+            version: args.get_one::<String>("version").map(String::from),
+            output_dir: args
+                .get_one::<String>("output-dir")
+                .map(String::from)
+                .unwrap_or_else(|| ".".to_string()),
+        }
+    }
 }
 
 #[cfg(test)]

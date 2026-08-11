@@ -13,8 +13,8 @@ use log::info;
 use std::os::unix::net::UnixStream;
 
 use nitro_cli::common::commands_parser::{
-    BuildEnclavesArgs, ConsoleArgs, DescribeEnclavesArgs, EmptyArgs, ExplainArgs, PcrArgs,
-    RunEnclavesArgs, SignEifArgs, TerminateEnclavesArgs,
+    BuildEnclavesArgs, ConsoleArgs, DescribeEnclavesArgs, DownloadKernelArgs, EmptyArgs,
+    ExplainArgs, ListPackagesArgs, PcrArgs, RunEnclavesArgs, SignEifArgs, TerminateEnclavesArgs,
 };
 use nitro_cli::common::document_errors::explain_error;
 use nitro_cli::common::json_output::{EnclaveDescribeInfo, EnclaveRunInfo, EnclaveTerminateInfo};
@@ -29,7 +29,8 @@ use nitro_cli::enclave_proc_comm::{
 };
 use nitro_cli::{
     build_enclaves, console_enclaves, create_app, describe_eif, get_all_enclave_names,
-    get_file_pcr, new_enclave_name, new_nitro_cli_failure, sign_eif, terminate_all_enclaves,
+    get_file_pcr, new_enclave_name, new_nitro_cli_failure, rpm_repo, sign_eif,
+    terminate_all_enclaves,
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
@@ -43,7 +44,8 @@ const EXPLAIN_ERR_STR: &str = "Explain Error";
 const NEW_NAME_STR: &str = "New Enclave Name";
 const FILE_PCR_STR: &str = "File PCR";
 const SIGN_EIF_STR: &str = "Sign EIF";
-
+const LIST_PACKAGES_STR: &str = "List Packages";
+const DOWNLOAD_KERNEL_STR: &str = "Download Kernel";
 /// *Nitro CLI* application entry point.
 fn main() {
     let version_str = env!("CARGO_PKG_VERSION");
@@ -315,6 +317,42 @@ fn main() {
                         .set_action(SIGN_EIF_STR.to_string())
                 })
                 .ok_or_exit_with_errno(None);
+        }
+        Some(("list-packages", args)) => {
+            let list_args = ListPackagesArgs::new_with(args);
+            let packages = rpm_repo::list_kernel_packages(&list_args.arch)
+                .map_err(|e| {
+                    e.add_subaction("Failed to list packages".to_string())
+                        .set_action(LIST_PACKAGES_STR.to_string())
+                })
+                .ok_or_exit_with_errno(None);
+
+            if packages.is_empty() {
+                println!("No kernel packages found with version >= 6.12");
+            } else {
+                println!("Kernel packages (version >= 6.12) for {}:", list_args.arch);
+                println!();
+                for pkg in &packages {
+                    println!("{}", pkg);
+                }
+                println!();
+                println!("Total: {} packages", packages.len());
+            }
+        }
+        Some(("download-kernel", args)) => {
+            let download_args = DownloadKernelArgs::new_with(args);
+            let output_path = rpm_repo::download_kernel(
+                &download_args.arch,
+                download_args.version.as_deref(),
+                &download_args.output_dir,
+            )
+            .map_err(|e| {
+                e.add_subaction("Failed to download kernel".to_string())
+                    .set_action(DOWNLOAD_KERNEL_STR.to_string())
+            })
+            .ok_or_exit_with_errno(None);
+
+            println!("Downloaded: {}", output_path.display());
         }
         Some((&_, _)) | None => (),
     }

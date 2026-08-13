@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.4.5
+Version:    1.5.0
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,18 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Thu Aug 13 2026 Michael Wink <winkmw@amazon.com> - 1.5.0-0
+- Bump versions of all dependency packages
+- Bump aws-nitro-enclaves-image-format to 0.7
+- Bump MSRV to 1.94.1
+- Bump bytes to 1.11.1
+- Bump aws-lc packages
+- Bump bollard to 0.19.4
+- Bump time to 0.3.47
+- Bump openssl to 0.10.80
+- Fail hard on sign_info setup issues
+- Fix clippy warnings and errors
+
 * Tue Jun 02 2026 Jasper Wise <jaspwise@amazon.co.uk> - 1.4.5-0
 - Update tar from 0.4.43 to 0.4.46
 - Update openssl from 0.10.72 to 0.10.80

@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "driver-bindings"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "dtor"
@@ -1016,7 +1016,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "eif_loader"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "libc",
@@ -1034,7 +1034,7 @@ checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
 name = "enclave_build"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64",
@@ -3339,7 +3339,7 @@ dependencies = [
 
 [[package]]
 name = "vsock-proxy"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "chrono",
  "clap",

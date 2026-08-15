@@ -58,6 +58,7 @@ ERR_CLEAR_PAGE=203
 ERR_SET_PAGE=204
 ERR_ROLLBACK_PAGE=205
 ERR_INSUFFICIENT_MEMORY=206
+ERR_ROLLBACK_CPU_POOL=207
 
 # Trap any exit condition, including all fatal errors.
 trap 'error_handler $? $LINENO' EXIT
@@ -109,6 +110,9 @@ function fail {
                 ;;
             "$ERR_INSUFFICIENT_MEMORY")
                 echo "Failed to configure entire amount of requested memory. This indicates insufficient system resources."
+                ;;
+            "$ERR_ROLLBACK_CPU_POOL")
+                echo "Failed to roll back CPU pool configuration. The CPU pool may be in an inconsistent state."
                 ;;
             \?)
                 echo "An unknown error has occurred: $1"
@@ -536,9 +540,15 @@ function run_in_driver_dir {
 function configure_cpu_pool {
     [ -f "$CPU_POOL_FILE" ] || fail "The CPU pool file is missing. Please make sure the Nitro Enclaves driver is inserted."
 
+    local prev_val
+    prev_val=$(cat "$CPU_POOL_FILE" 2>/dev/null || echo "")
+
     print "Configuring the enclave CPU pool..."
     sudo_run "echo $1 > $CPU_POOL_FILE" || fail "Failed to configure the CPU pool."
     print "Done."
+
+    # Return the previous value so caller can roll back later if needed.
+    echo "$prev_val"
 }
 
 # Configure the CPU pool using the provided CPU count.
@@ -769,10 +779,22 @@ done
 # If CPU IDs are requested, memory can only be reserved on the same NUMA node as the CPUs. If a CPU count
 # is requested, we need to iterate over all available NUMA nodes to find one which supports both the CPU
 # and the memory requirements.
-[ -z "$cpu_id_request" ] || configure_cpu_pool "$cpu_id_request"
+prev_cpu_pool=""
+if [ -n "$cpu_id_request" ]; then
+    prev_cpu_pool=$(configure_cpu_pool "$cpu_id_request")
+fi
 
 if [ -z "$cpu_count_request" ]; then
-    [ -z "$memory_request" ] || configure_huge_pages "$memory_request" || fail $?
+    if [ -n "$memory_request" ]; then
+        if ! configure_huge_pages "$memory_request"; then
+            # Rollback CPU pool if memory configuration failed
+            if [ -n "$cpu_id_request" ]; then
+                print "Memory configuration failed, rolling back CPU pool..."
+                configure_cpu_pool "$prev_cpu_pool" > /dev/null || fail $ERR_ROLLBACK_CPU_POOL
+            fi
+            fail $?
+        fi
+    fi
 else
     configure_cpu_pool_by_cpu_count "$cpu_count_request" "$memory_request"
 fi

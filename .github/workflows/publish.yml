@@ -1,0 +1,63 @@
+name: Publish to crates.io
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  # Dependency order. Cargo publishes them in this order and waits for
+  # each one to appear in the index before it starts the next.
+  CRATES: >-
+    aws-nitro-enclaves-driver-bindings
+    aws-nitro-enclaves-eif-loader
+    aws-nitro-enclaves-enclave-build
+    aws-nitro-enclaves-cli
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for the OIDC token exchange with crates.io.
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+
+    # The helper crates change rarely. Skip the ones whose version is
+    # already on crates.io so a release of the CLI alone succeeds.
+    - name: Select crates to publish
+      id: select
+      run: |
+        set -euo pipefail
+        args=""
+        for crate in $CRATES; do
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r --arg c "$crate" '.packages[] | select(.name == $c) | .version')
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -A "aws-nitro-enclaves-cli publish workflow" \
+            "https://crates.io/api/v1/crates/$crate/$version")
+          case "$code" in
+            200) echo "$crate $version is already published, skipping" ;;
+            404) args="$args -p $crate" ;;
+            *)   echo "crates.io returned $code for $crate $version" >&2; exit 1 ;;
+          esac
+        done
+        echo "args=$args" >> "$GITHUB_OUTPUT"
+
+    # Build everything before asking for a token. The token lives for
+    # 30 minutes and the verify builds take most of that on a small runner.
+    - name: Dry run
+      if: steps.select.outputs.args != ''
+      run: cargo publish --dry-run --locked ${{ steps.select.outputs.args }}
+
+    - uses: rust-lang/crates-io-auth-action@v1
+      if: steps.select.outputs.args != ''
+      id: auth
+
+    - name: Publish
+      if: steps.select.outputs.args != ''
+      run: cargo publish --locked ${{ steps.select.outputs.args }}
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

@@ -54,6 +54,13 @@ This repository contains a collection of tools and commands used for managing th
 
   Out-of-tree driver build can be done using the Makefile in the 'drivers/virt/nitro_enclaves' directory.
 
+### How to install (crates.io):
+  `cargo install aws-nitro-enclaves-cli` installs the `nitro-cli` binary.
+  The binary alone cannot build or run enclaves. It also needs:
+  - the enclave kernel, init and NSM blobs (`aws-nitro-enclaves-cli-devel` RPM, or `make install`),
+  - the `nitro_enclaves` kernel driver (part of the distro kernels listed above),
+  - the `nitro-enclaves-allocator` service (`aws-nitro-enclaves-cli` RPM, or `make install`).
+
 ### How to install (GitHub sources):
   1. Clone the repository.
   2. Set NITRO_CLI_INSTALL_DIR to the desired location, by default everything will be installed in build/install

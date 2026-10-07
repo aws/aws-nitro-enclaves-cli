@@ -1,10 +1,29 @@
 [package]
-name = "nitro-cli"
-version = "1.5.0"
+name = "aws-nitro-enclaves-cli"
+version = "1.5.1"
 authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
 edition = "2018"
 license = "Apache-2.0"
 rust-version = "1.94.1"
+description = "Command line tool to build and manage AWS Nitro Enclaves."
+repository = "https://github.com/aws/aws-nitro-enclaves-cli"
+readme = "README.md"
+include = [
+    "/src/**",
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/LICENSE",
+    "/NOTICE",
+]
+
+[lib]
+name = "nitro_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nitro-cli"
+path = "src/main.rs"
 
 [dependencies]
 serde = { version = ">=1.0", features = ["derive"] }
@@ -19,10 +38,10 @@ flexi_logger = "0.25"
 page_size = "0.6"
 signal-hook = "0.3"
 ciborium = "0.2"
-driver-bindings = { path = "./driver-bindings" }
+driver-bindings = { package = "aws-nitro-enclaves-driver-bindings", path = "./driver-bindings", version = "1.0.0" }
 aws-nitro-enclaves-image-format = "0.7"
-eif_loader = { path = "./eif_loader" }
-enclave_build = { path = "./enclave_build" }
+eif_loader = { package = "aws-nitro-enclaves-eif-loader", path = "./eif_loader", version = "1.0.0" }
+enclave_build = { package = "aws-nitro-enclaves-enclave-build", path = "./enclave_build", version = "1.0.0" }
 openssl = "0.10.80"
 vsock = "0.5"
 vmm-sys-util = "0.15.0"
@@ -31,13 +50,7 @@ hex = "0.4"
 
 lazy_static = "1.4.0"
 
-[build-dependencies]
-bindgen = { version=">=0.54" }
-
 [dev-dependencies]
-log = "0.4"
-num-derive = "0.4"
-num-traits = "0.2"
 tempfile = "3.19"
 
 [workspace]

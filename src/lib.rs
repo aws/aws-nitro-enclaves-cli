@@ -309,7 +309,7 @@ pub fn sign_eif(args: SignEifArgs) -> NitroCliResult<()> {
 
     let signer = EifSigner::new(sign_info).ok_or_else(|| {
         new_nitro_cli_failure!(
-            format!("Failed to create EifSigner"),
+            "Failed to create EifSigner".to_string(),
             NitroCliErrorEnum::EIFSigningError
         )
     })?;

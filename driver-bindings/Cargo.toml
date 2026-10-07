@@ -1,7 +1,13 @@
 [package]
-name = "driver-bindings"
-version = "0.1.1"
+name = "aws-nitro-enclaves-driver-bindings"
+version = "1.0.0"
 authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
 edition = "2018"
 description = "Rust FFI bindings to Linux Nitro Enclaves driver generated using bindgen."
 rust-version = "1.94.1"
+license = "Apache-2.0"
+repository = "https://github.com/aws/aws-nitro-enclaves-cli"
+
+[lib]
+name = "driver_bindings"
+path = "src/lib.rs"

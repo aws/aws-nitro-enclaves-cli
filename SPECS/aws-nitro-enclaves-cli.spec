@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.5.0
+Version:    1.5.1
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,11 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Wed Oct 07 2026 Mushahid Hussain <hmushi@amazon.co.uk> - 1.5.1-0
+- Publish to crates.io as aws-nitro-enclaves-cli
+- Publish the helper crates under the aws-nitro-enclaves- prefix
+- Drop the unused bindgen build dependency
+
 * Thu Aug 13 2026 Michael Wink <winkmw@amazon.com> - 1.5.0-0
 - Bump versions of all dependency packages
 - Bump aws-nitro-enclaves-image-format to 0.7

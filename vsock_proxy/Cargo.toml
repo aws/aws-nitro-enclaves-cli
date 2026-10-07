@@ -12,7 +12,8 @@ publish = false
 chrono = "0.4"
 clap = "~4.5"
 env_logger = "0.10"
-hickory-resolver = "0.24"
+hickory-resolver = "0.26"
+tokio = { version = "1", features = ["rt"] }
 idna = "1.0.3"
 log = "0.4"
 nix = "0.26"

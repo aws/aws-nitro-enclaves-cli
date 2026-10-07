@@ -6,7 +6,8 @@
 use std::net::IpAddr;
 
 use chrono::{DateTime, Duration, Utc};
-use hickory_resolver::Resolver;
+use hickory_resolver::config::LookupIpStrategy;
+use hickory_resolver::TokioResolver;
 use idna::domain_to_ascii;
 
 use crate::{IpAddrType, VsockProxyResult};
@@ -45,31 +46,43 @@ impl DnsResolutionInfo {
     }
 }
 
-/// Resolve a DNS name (IDNA format) into multiple IP addresses (v4 or v6)
+/// Resolve a DNS name (IDNA format) into multiple IP addresses (v4 or v6).
+/// Blocks on a local runtime; must not be called from an async context.
 pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<DnsResolutionInfo>> {
     // IDNA parsing
     let addr = domain_to_ascii(addr).map_err(|_| "Could not parse domain name")?;
 
-    // Initialize a DNS resolver using the system's configured nameservers.
-    let resolver = Resolver::from_system_conf()
+    // The resolver is async; run it to completion on a local runtime.
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
         .map_err(|_| "Error while initializing DNS resolver!".to_string())?;
 
-    // DNS lookup
+    // DNS lookup using the system's configured nameservers.
     // It results in a vector of IPs (V4 and V6)
-    let rresults: Vec<DnsResolutionInfo> = resolver
-        .lookup_ip(addr)
-        .map_err(|_| "DNS lookup failed!")?
+    let lookup = runtime.block_on(async {
+        let resolver = TokioResolver::builder_tokio()
+            .map(|mut builder| {
+                // 0.26 defaults to Ipv6AndIpv4; keep the IPv4-first order.
+                builder.options_mut().ip_strategy = LookupIpStrategy::Ipv4thenIpv6;
+                builder
+            })
+            .and_then(|builder| builder.build())
+            .map_err(|_| "Error while initializing DNS resolver!".to_string())?;
+        resolver
+            .lookup_ip(addr)
+            .await
+            .map_err(|_| "DNS lookup failed!".to_string())
+    })?;
+
+    let rresults: Vec<DnsResolutionInfo> = lookup
         .as_lookup()
-        .records()
+        .answers()
         .iter()
         .filter_map(|record| {
-            if let Some(rdata) = record.data() {
-                if let Some(ip_addr) = rdata.ip_addr() {
-                    let ttl = Duration::seconds(record.ttl() as i64);
-                    return Some(DnsResolutionInfo::new(ip_addr, ttl));
-                }
-            }
-            None
+            let ip_addr = record.data.ip_addr()?;
+            let ttl = Duration::seconds(record.ttl as i64);
+            Some(DnsResolutionInfo::new(ip_addr, ttl))
         })
         .collect();
 

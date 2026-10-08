@@ -6,9 +6,12 @@
 use std::net::IpAddr;
 
 use chrono::{DateTime, Duration, Utc};
-use hickory_resolver::config::LookupIpStrategy;
-use hickory_resolver::TokioResolver;
+use hickory_resolver::config::{LookupIpStrategy, ResolverConfig};
+use hickory_resolver::net::runtime::TokioRuntimeProvider;
+use hickory_resolver::net::NetError;
+use hickory_resolver::{TokioResolver, MAX_TTL};
 use idna::domain_to_ascii;
+use log::warn;
 
 use crate::{IpAddrType, VsockProxyResult};
 
@@ -44,11 +47,48 @@ impl DnsResolutionInfo {
     pub fn ttl(&self) -> Duration {
         self.ttl
     }
+
+    /// Same address, fresh timestamp, new TTL. Used to back off after a failed refresh.
+    pub fn renew(&self, ttl: Duration) -> Self {
+        DnsResolutionInfo {
+            ttl,
+            last_dns_resolution_time: Utc::now(),
+            ..*self
+        }
+    }
 }
+
+/// Builder for a resolver that uses the system DNS configuration.
+type ResolverBuilder = hickory_resolver::ResolverBuilder<TokioRuntimeProvider>;
 
 /// Resolve a DNS name (IDNA format) into multiple IP addresses (v4 or v6).
 /// Blocks on a local runtime; must not be called from an async context.
 pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<DnsResolutionInfo>> {
+    resolve_with(addr, ip_addr_type, TokioResolver::builder_tokio)
+}
+
+/// `resolve` with the system resolver builder supplied by the caller.
+fn resolve_with(
+    addr: &str,
+    ip_addr_type: IpAddrType,
+    system_builder: impl FnOnce() -> Result<ResolverBuilder, NetError>,
+) -> VsockProxyResult<Vec<DnsResolutionInfo>> {
+    // An IP literal needs no resolver and must work on a host without DNS.
+    if let Ok(ip_addr) = addr.parse::<IpAddr>() {
+        let accepted = match ip_addr_type {
+            IpAddrType::IPAddrMixed => true,
+            IpAddrType::IPAddrV4Only => ip_addr.is_ipv4(),
+            IpAddrType::IPAddrV6Only => ip_addr.is_ipv6(),
+        };
+        if !accepted {
+            return Err("No accepted IP was found.".to_string());
+        }
+        return Ok(vec![DnsResolutionInfo::new(
+            ip_addr,
+            Duration::seconds(i64::from(MAX_TTL)),
+        )]);
+    }
+
     // IDNA parsing
     let addr = domain_to_ascii(addr).map_err(|_| "Could not parse domain name")?;
 
@@ -61,13 +101,19 @@ pub fn resolve(addr: &str, ip_addr_type: IpAddrType) -> VsockProxyResult<Vec<Dns
     // DNS lookup using the system's configured nameservers.
     // It results in a vector of IPs (V4 and V6)
     let lookup = runtime.block_on(async {
-        let resolver = TokioResolver::builder_tokio()
-            .map(|mut builder| {
-                // 0.26 defaults to Ipv6AndIpv4; keep the IPv4-first order.
-                builder.options_mut().ip_strategy = LookupIpStrategy::Ipv4thenIpv6;
-                builder
-            })
-            .and_then(|builder| builder.build())
+        // Without a nameserver line in resolv.conf, 0.26 refuses to build a
+        // resolver. Fall back to an empty config so /etc/hosts still works.
+        let mut builder = system_builder().unwrap_or_else(|e| {
+            warn!("Could not use the system DNS config ({e}); using /etc/hosts only.");
+            TokioResolver::builder_with_config(
+                ResolverConfig::from_parts(None, vec![], vec![]),
+                TokioRuntimeProvider::default(),
+            )
+        });
+        // 0.26 defaults to Ipv6AndIpv4; keep the IPv4-first order.
+        builder.options_mut().ip_strategy = LookupIpStrategy::Ipv4thenIpv6;
+        let resolver = builder
+            .build()
             .map_err(|_| "Error while initializing DNS resolver!".to_string())?;
         resolver
             .lookup_ip(addr)
@@ -199,5 +245,60 @@ mod tests {
         let rresult = resolve_single(domain, IpAddrType::IPAddrMixed).unwrap();
         assert!(rresult.ip_addr().is_ipv4());
         assert!(rresult.ttl != Duration::seconds(0));
+    }
+
+    /// Stands in for a resolv.conf that hickory rejects.
+    fn no_system_config() -> Result<ResolverBuilder, NetError> {
+        Err(NetError::from(std::io::Error::other(
+            "no nameservers found in config",
+        )))
+    }
+
+    /// An IP literal must be answered without building a resolver.
+    fn no_resolver_for_literal() -> Result<ResolverBuilder, NetError> {
+        panic!("resolver built for an IP literal");
+    }
+
+    #[test]
+    fn test_resolve_ip_literal_builds_no_resolver() {
+        let v4 =
+            resolve_with("10.0.0.5", IpAddrType::IPAddrMixed, no_resolver_for_literal).unwrap();
+        assert_eq!(v4[0].ip_addr(), "10.0.0.5".parse::<IpAddr>().unwrap());
+        assert_eq!(v4[0].ttl(), Duration::seconds(i64::from(MAX_TTL)));
+        assert!(resolve_with("::1", IpAddrType::IPAddrV6Only, no_resolver_for_literal).is_ok());
+        let rejected = resolve_with(
+            "10.0.0.5",
+            IpAddrType::IPAddrV6Only,
+            no_resolver_for_literal,
+        );
+        assert!(rejected.is_err() && rejected.err().unwrap().eq("No accepted IP was found."));
+    }
+
+    #[test]
+    fn test_resolve_hosts_file_without_system_config() {
+        let rresults =
+            resolve_with("localhost", IpAddrType::IPAddrMixed, no_system_config).unwrap();
+        assert!(rresults.iter().all(|r| r.ip_addr().is_loopback()));
+        let missing = resolve_with(
+            "no-such-host.invalid",
+            IpAddrType::IPAddrMixed,
+            no_system_config,
+        );
+        assert!(missing.is_err() && missing.err().unwrap().eq("DNS lookup failed!"));
+    }
+
+    #[test]
+    fn test_renew_keeps_address_and_resets_ttl() {
+        let ip_addr = "10.0.0.5".parse::<IpAddr>().unwrap();
+        let expired = DnsResolutionInfo {
+            ip_addr,
+            ttl: Duration::seconds(0),
+            last_dns_resolution_time: Utc::now() - Duration::seconds(60),
+        };
+        assert!(expired.is_expired());
+        let renewed = expired.renew(Duration::seconds(30));
+        assert_eq!(renewed.ip_addr(), ip_addr);
+        assert_eq!(renewed.ttl(), Duration::seconds(30));
+        assert!(!renewed.is_expired());
     }
 }

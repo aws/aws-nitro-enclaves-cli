@@ -4,12 +4,13 @@
 
 /// Contains code for Proxy, a library used for translating vsock traffic to
 /// TCP traffic
+use chrono::Duration;
 use log::{info, warn};
 use nix::sys::select::{select, FdSet};
 use nix::sys::socket::SockType;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::net::{IpAddr, SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpStream};
 use std::os::unix::io::AsRawFd;
 use threadpool::ThreadPool;
 use vsock::{VsockAddr, VsockListener};
@@ -18,17 +19,41 @@ use yaml_rust2::YamlLoader;
 use crate::dns::DnsResolutionInfo;
 use crate::{dns, IpAddrType, VsockProxyResult};
 
+/// Seconds to keep a stale address after a failed DNS refresh.
+const DNS_RETRY_SECS: i64 = 30;
+/// Lookup attempts at start before giving up.
+const DNS_START_ATTEMPTS: u32 = 3;
+
 const BUFF_SIZE: usize = 8192;
 pub const VSOCK_PROXY_CID: u32 = 3;
 pub const VSOCK_PROXY_PORT: u32 = 8000;
 
-/// Checks if the forwarded server is allowed, providing its IP on success.
+/// Resolve the remote host at start, retrying so one bad answer does not stop the proxy.
+fn resolve_at_start(
+    remote_host: &str,
+    ip_addr_type: IpAddrType,
+) -> VsockProxyResult<DnsResolutionInfo> {
+    let mut attempt = 1;
+    loop {
+        match dns::resolve_single(remote_host, ip_addr_type) {
+            Ok(dns_result) => return Ok(dns_result),
+            Err(e) if attempt < DNS_START_ATTEMPTS => {
+                warn!("Could not resolve \"{}\" ({}); retrying.", remote_host, e);
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// Checks if the forwarded server is allowed, providing its resolved address on success.
 pub fn check_allowlist(
     remote_host: &str,
     remote_port: u16,
     config_file: Option<&str>,
     ip_addr_type: IpAddrType,
-) -> VsockProxyResult<IpAddr> {
+) -> VsockProxyResult<DnsResolutionInfo> {
     if let Some(config_file) = config_file {
         let mut f = File::open(config_file).map_err(|_| "Could not open the file")?;
 
@@ -42,7 +67,7 @@ pub fn check_allowlist(
             .ok_or("No allowlist field")?;
 
         // Obtain the remote server's IP address.
-        let dns_result = dns::resolve_single(remote_host, ip_addr_type)?;
+        let dns_result = resolve_at_start(remote_host, ip_addr_type)?;
         let remote_addr = dns_result.ip_addr();
 
         for raw_service in services {
@@ -60,7 +85,7 @@ pub fn check_allowlist(
             // Attempt to match directly against the allowlisted hostname first.
             if addr == remote_host {
                 info!("Matched with host name \"{}\" and port \"{}\"", addr, port);
-                return Ok(remote_addr);
+                return Ok(dns_result);
             }
 
             // If hostname matching failed, attempt to match against IPs.
@@ -76,7 +101,7 @@ pub fn check_allowlist(
                     "Matched with host IP \"{}\" and port \"{}\"",
                     matched_addr, port
                 );
-                return Ok(matched_addr);
+                return Ok(dns_result);
             }
         }
 
@@ -103,10 +128,10 @@ impl Proxy {
         remote_port: u16,
         num_workers: usize,
         ip_addr_type: IpAddrType,
+        dns_resolution_info: Option<DnsResolutionInfo>,
     ) -> VsockProxyResult<Self> {
         let pool = ThreadPool::new(num_workers);
         let sock_type = SockType::Stream;
-        let dns_resolution_info: Option<DnsResolutionInfo> = None;
 
         Ok(Proxy {
             local_port,
@@ -146,17 +171,35 @@ impl Proxy {
         let remote_addr = if dns_needs_resolution {
             info!("Resolving hostname: {}.", self.remote_host);
 
-            let dns_resolution = dns::resolve_single(&self.remote_host, self.ip_addr_type)?;
-
-            info!(
-                "Using IP \"{:?}\" for the given server \"{}\". (TTL: {} secs)",
-                dns_resolution.ip_addr(),
-                self.remote_host,
-                dns_resolution.ttl().num_seconds()
-            );
-
-            self.dns_resolution_info = Some(dns_resolution);
-            dns_resolution.ip_addr()
+            match dns::resolve_single(&self.remote_host, self.ip_addr_type) {
+                Ok(dns_resolution) => {
+                    info!(
+                        "Using IP \"{:?}\" for the given server \"{}\". (TTL: {} secs)",
+                        dns_resolution.ip_addr(),
+                        self.remote_host,
+                        dns_resolution.ttl().num_seconds()
+                    );
+                    self.dns_resolution_info = Some(dns_resolution);
+                    dns_resolution.ip_addr()
+                }
+                // Keep the last known address rather than stop the proxy,
+                // and wait before the next attempt.
+                Err(e) => match self.dns_resolution_info {
+                    Some(previous) => {
+                        warn!(
+                            "Could not refresh \"{}\" ({}); keeping {:?} for {} secs.",
+                            self.remote_host,
+                            e,
+                            previous.ip_addr(),
+                            DNS_RETRY_SECS
+                        );
+                        self.dns_resolution_info =
+                            Some(previous.renew(Duration::seconds(DNS_RETRY_SECS)));
+                        previous.ip_addr()
+                    }
+                    None => return Err(e),
+                },
+            }
         } else {
             self.dns_resolution_info
                 .ok_or("DNS resolution failed!")?

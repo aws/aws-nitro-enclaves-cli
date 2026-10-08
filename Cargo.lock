@@ -243,9 +243,8 @@ version = "1.0.0"
 
 [[package]]
 name = "aws-nitro-enclaves-eif-loader"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
- "aws-nitro-enclaves-image-format",
  "libc",
  "nix 0.26.4",
  "sha2 0.10.9",
@@ -255,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "aws-nitro-enclaves-enclave-build"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64 0.22.1",

@@ -110,7 +110,7 @@ fn main() -> VsockProxyResult<()> {
     info!("Checking allowlist configuration");
     let config_file = matches.get_one::<String>("config_file").map(String::as_str);
     let remote_host = remote_addr.to_string();
-    check_allowlist(&remote_host, remote_port, config_file, ip_addr_type)
+    let dns_resolution_info = check_allowlist(&remote_host, remote_port, config_file, ip_addr_type)
         .map_err(|err| format!("Error at checking the allowlist: {err}"))?;
 
     let mut proxy = Proxy::new(
@@ -119,6 +119,7 @@ fn main() -> VsockProxyResult<()> {
         remote_port,
         num_workers,
         ip_addr_type,
+        Some(dns_resolution_info),
     )
     .map_err(|err| format!("Could not create proxy: {err}"))?;
 

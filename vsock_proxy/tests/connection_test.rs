@@ -35,6 +35,7 @@ fn test_tcp_connection() {
         9000,
         2,
         IpAddrType::IPAddrMixed,
+        None,
     )
     .unwrap();
 

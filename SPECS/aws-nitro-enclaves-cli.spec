@@ -199,6 +199,7 @@ fi
 - Bump aws-nitro-enclaves-image-format to 0.8
 - Update Cargo.lock to fix cargo audit findings
 - vsock-proxy: Move to hickory-resolver 0.26
+- vsock-proxy: Resolve IP literals without a nameserver, keep the last address if a refresh fails
 - KMS signing honours HTTP_PROXY, HTTPS_PROXY and NO_PROXY
 
 * Wed Oct 07 2026 Mushahid Hussain <hmushi@amazon.co.uk> - 1.5.1-0

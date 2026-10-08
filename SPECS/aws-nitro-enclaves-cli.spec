@@ -199,6 +199,7 @@ fi
 - Bump aws-nitro-enclaves-image-format to 0.8
 - Update Cargo.lock to fix cargo audit findings
 - vsock-proxy: Move to hickory-resolver 0.26
+- KMS signing honours HTTP_PROXY, HTTPS_PROXY and NO_PROXY
 
 * Wed Oct 07 2026 Mushahid Hussain <hmushi@amazon.co.uk> - 1.5.1-0
 - Publish to crates.io as aws-nitro-enclaves-cli

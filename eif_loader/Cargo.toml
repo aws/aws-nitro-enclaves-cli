@@ -1,6 +1,6 @@
 [package]
 name = "aws-nitro-enclaves-eif-loader"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["The AWS Nitro Enclaves Team <aws-nitro-enclaves-devel@amazon.com>"]
 edition = "2018"
 rust-version = "1.94.1"
@@ -14,7 +14,6 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-aws-nitro-enclaves-image-format = "0.8"
 nix = "0.26"
 libc = "0.2"
 vsock = "0.5"

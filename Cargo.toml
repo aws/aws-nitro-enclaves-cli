@@ -40,8 +40,8 @@ signal-hook = "0.3"
 ciborium = "0.2"
 driver-bindings = { package = "aws-nitro-enclaves-driver-bindings", path = "./driver-bindings", version = "1.0.0" }
 aws-nitro-enclaves-image-format = "0.8"
-eif_loader = { package = "aws-nitro-enclaves-eif-loader", path = "./eif_loader", version = "1.0.0" }
-enclave_build = { package = "aws-nitro-enclaves-enclave-build", path = "./enclave_build", version = "1.0.0" }
+eif_loader = { package = "aws-nitro-enclaves-eif-loader", path = "./eif_loader", version = "1.0.1" }
+enclave_build = { package = "aws-nitro-enclaves-enclave-build", path = "./enclave_build", version = "2.0.0" }
 openssl = "0.10.80"
 vsock = "0.5"
 vmm-sys-util = "0.15.0"

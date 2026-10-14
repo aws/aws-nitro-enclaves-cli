@@ -16,7 +16,7 @@ hickory-resolver = "0.26"
 tokio = { version = "1", features = ["rt"] }
 idna = "1.0.3"
 log = "0.4"
-nix = "0.26"
+nix = "0.31"
 yaml-rust2 = "0.9"
 threadpool = "1.7.1"
 vsock = "0.5"

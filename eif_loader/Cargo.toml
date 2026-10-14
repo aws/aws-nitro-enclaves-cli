@@ -14,7 +14,7 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-nix = "0.26"
+nix = "0.31"
 libc = "0.2"
 vsock = "0.5"
 

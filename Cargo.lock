@@ -289,7 +289,7 @@ dependencies = [
  "crc",
  "hex",
  "litemap 0.7.4",
- "num-derive",
+ "num-derive 0.4.2",
  "num-traits",
  "openssl",
  "regex",
@@ -933,7 +933,7 @@ dependencies = [
  "log",
  "nix 0.26.4",
  "num",
- "num-derive",
+ "num-derive 0.5.1",
  "num-traits",
  "serde",
  "serde_json",
@@ -2367,6 +2367,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4e98dc3b890f6c23a0f9d3d491a2823d0dea0fa656302a13dd225fa924112a8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
 ]
 
 [[package]]

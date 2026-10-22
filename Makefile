@@ -12,6 +12,7 @@ ARCH_x86_64      = x86_64
 ARCH_aarch64     = aarch64
 TOOLCHAIN_PREFIX = unknown-linux-musl
 HOST_MACHINE     = $(shell uname -m)
+SYSTEMD_VERSION  = $(shell systemctl --version 2> /dev/null |head -1|cut -f 2 -d ' ')
 
 CARGO   = cargo
 CC      = musl-gcc
@@ -307,8 +308,15 @@ install-tools:
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples
 	$(CP) -r examples/${HOST_MACHINE}/* ${NITRO_CLI_INSTALL_DIR}${DATA_DIR}/nitro_enclaves/examples/
 
+.PHONE: install-tools-modprobe
+install-tools-modprobe:
+	# Systemd < 245 doesn't include the modprobe@.service unit
+	if [ -n "$(SYSTEMD_VERSION)" ] && [ "$(SYSTEMD_VERSION)" -ge 245 ]; then \
+	    $(INSTALL) -D -m 0644 bootstrap/10-autoload-module.conf ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service.d/10-autoload-module.conf; \
+	fi
+
 .PHONY: install
-install: install-tools nitro_enclaves
+install: install-tools install-tools-modprobe nitro_enclaves
 	$(MKDIR) -p ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(shell uname -r)/extra/nitro_enclaves
 	$(INSTALL) -D -m 0755 drivers/virt/nitro_enclaves/nitro_enclaves.ko \
                ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(shell uname -r)/extra/nitro_enclaves/nitro_enclaves.ko
@@ -328,6 +336,7 @@ uninstall:
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-vsock-proxy.service
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/vsock-proxy.yaml
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service
+	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${UNIT_DIR}/nitro-enclaves-allocator.service.d/10-autoload-module.conf
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${CONF_DIR}/nitro_enclaves/allocator.yaml
 	$(RM) -rf ${NITRO_CLI_INSTALL_DIR}/lib/modules/$(shell uname -r)/extra/nitro_enclaves
 	$(RM) -f ${NITRO_CLI_INSTALL_DIR}${ENV_SETUP_DIR}/nitro-cli-env.sh

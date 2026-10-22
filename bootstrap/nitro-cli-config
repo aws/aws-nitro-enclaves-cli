@@ -532,12 +532,79 @@ function run_in_driver_dir {
     popd &> /dev/null
 }
 
+# Convert a CPU list (e.g. "3,1,2,5-7,4") into its most compact range form
+# (e.g. "1-7"), merging duplicate, overlapping and adjacent entries.
+#
+# The ne_cpus module parameter is stored in a fixed-size kernel buffer
+# (NE_CPUS_SIZE, 512 bytes including the NUL terminator). Listing every CPU
+# individually overflows it on instances with many CPUs (for example ~150+
+# CPUs with 3-digit IDs), and the kernel then rejects the pool with ENOSPC
+# ("ne_cpus: string doesn't fit in 511 chars"). The kernel parses the value
+# with cpulist_parse(), which accepts ranges, so the compact form describes
+# exactly the same set of CPUs.
+#
+# Keep this identical in nitro-cli-config and nitro-enclaves-allocator;
+# tests/allocator/test_cpu_pool.sh checks this.
+#
+# Whitespace is ignored. If the list is not well-formed, it is printed with
+# whitespace removed but otherwise unchanged, so that the kernel reports the
+# error as before.
+function compact_cpu_list {
+    local cpu_list="${1//[[:space:]]/}"
+    local start=""
+    local end=""
+    local range_start=""
+    local range_end=-2
+    local ranges=()
+
+    # A single trailing comma is accepted, as the kernel accepts it too.
+    if [[ ! "$cpu_list" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*,?$ ]]; then
+        echo "$cpu_list"
+        return 0
+    fi
+
+    # Merge the entries in ascending order, extending the last range while
+    # the next entry overlaps or is adjacent to it.
+    while IFS=- read -r start end
+    do
+        start=$((10#$start))
+        end=$((10#${end:-$start}))
+        if [ "$start" -gt "$end" ]; then
+            echo "$cpu_list"
+            return 0
+        fi
+        if [ "$start" -gt $((range_end + 1)) ]; then
+            range_start="$start"
+            ranges+=("")
+        fi
+        [ "$end" -le "$range_end" ] || range_end="$end"
+        if [ "$range_start" -eq "$range_end" ]; then
+            ranges[${#ranges[@]} - 1]="$range_start"
+        else
+            ranges[${#ranges[@]} - 1]="$range_start-$range_end"
+        fi
+    done < <(tr ',' '\n' <<< "${cpu_list%,}" | sort -t- -n -k1,1 -k2,2)
+
+    local IFS=,
+    echo "${ranges[*]}"
+}
+
 # Configure the CPU pool.
 function configure_cpu_pool {
+    local cpu_pool=""
+
     [ -f "$CPU_POOL_FILE" ] || fail "The CPU pool file is missing. Please make sure the Nitro Enclaves driver is inserted."
 
-    print "Configuring the enclave CPU pool..."
-    sudo_run "echo $1 > $CPU_POOL_FILE" || fail "Failed to configure the CPU pool."
+    cpu_pool="$(compact_cpu_list "$1")"
+
+    # The driver stores ne_cpus in NE_CPUS_SIZE (512) bytes, including the
+    # NUL terminator. Fail with a clear message instead of the driver's
+    # ENOSPC, before the driver tears down the current pool.
+    [ "${#cpu_pool}" -le 511 ] || \
+        fail "The CPU pool is ${#cpu_pool} characters long even as ranges, but the driver accepts at most 511 (\"$cpu_pool\")."
+
+    print "Configuring the enclave CPU pool ($cpu_pool)..."
+    sudo_run "echo $cpu_pool > $CPU_POOL_FILE" || fail "Failed to configure the CPU pool."
     print "Done."
 }
 
@@ -698,6 +765,14 @@ function configure_cpu_pool_by_cpu_count {
     print "Auto-generated the enclave CPU pool: $cpu_pool."
     configure_cpu_pool "$cpu_pool"
 }
+
+# Stop here when sourced, so that the functions above can be used by tests.
+# The top-level code above still runs when sourced: it sets "set -eu",
+# installs an EXIT trap and runs whoami. Source this script only in a
+# subshell.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+    return 0
+fi
 
 # Script entry point.
 [ "$#" -gt 0 ] || fail "No arguments given."

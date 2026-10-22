@@ -30,6 +30,13 @@ jobs:
     - run: rustup component add clippy
     - run: cargo clippy --all
 
+  allocator:
+    name: Allocator script tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: tests/allocator/test_cpu_pool.sh
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest

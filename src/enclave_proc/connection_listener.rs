@@ -5,16 +5,15 @@
 
 use log::{debug, info, warn};
 use nix::sys::epoll::{self, EpollEvent, EpollFlags, EpollOp};
-use std::fs::set_permissions;
-use std::fs::Permissions;
+use nix::sys::stat::{umask, Mode};
 use std::io;
 
 #[cfg(test)]
 use std::os::raw::c_char;
 
-use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::Path;
 use std::thread::{self, JoinHandle};
 
 use super::connection::Connection;
@@ -76,7 +75,7 @@ impl ConnectionListener {
             .map_err(|e| e.add_subaction("Failed to create enclave process socket".to_string()))?;
 
         // Bind the listener to the socket and spawn the listener thread.
-        let listener = UnixListener::bind(self.socket.get_path()).map_err(|e| {
+        let listener = bind_listener(self.socket.get_path()).map_err(|e| {
             new_nitro_cli_failure!(
                 &format!("Failed to bind connection listener: {e:?}"),
                 NitroCliErrorEnum::SocketError
@@ -286,23 +285,17 @@ impl ConnectionListener {
                 io::Error::last_os_error()
             );
         }
-
-        // Since access policy is handled within the enclave process explicitly, we
-        // allow full access to the socket itself (otherwise other users will not
-        // be allowed to connect to the socket in the first place).
-        if let Ok(sock_addr) = listener.local_addr() {
-            if let Some(sock_path) = sock_addr.as_pathname() {
-                let perms = Permissions::from_mode(0o766);
-                if let Err(e) = set_permissions(sock_path, perms) {
-                    warn!("Failed to update socket permissions: {}", e);
-                }
-            } else {
-                warn!("Failed to get the listener's socket path.");
-            }
-        } else {
-            warn!("Failed to get the socket listener's local address.")
-        }
     }
+}
+
+/// Bind a listener to the socket at `path`. Since access policy is handled
+/// within the enclave process explicitly, the socket allows connections from
+/// all users. Its mode (0766) is set at creation through the umask.
+fn bind_listener(path: &Path) -> io::Result<UnixListener> {
+    let old_umask = umask(Mode::from_bits_truncate(0o011));
+    let listener = UnixListener::bind(path);
+    umask(old_umask);
+    listener
 }
 
 #[cfg(test)]
@@ -395,6 +388,28 @@ mod tests {
 
             assert!(result.is_err());
         }
+    }
+
+    /// Test that `bind_listener()` creates the socket with mode 0766 and
+    /// does not follow a symbolic link at the socket path.
+    #[test]
+    fn test_bind_listener() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let sock_path = dir.path().join("test.sock");
+        let _listener = bind_listener(&sock_path).unwrap();
+        let mode = fs::metadata(&sock_path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o766);
+
+        let target = dir.path().join("target");
+        fs::write(&target, "").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        let link = dir.path().join("link.sock");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        assert!(bind_listener(&link).is_err());
+        let mode = fs::metadata(&target).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 
     /// Test that connection_listener_run closes a previously-spawned thread when

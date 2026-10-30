@@ -77,6 +77,17 @@ impl DockerUtil {
             }
         }
     }
+    /// Canonicalizes Docker Hub's interchangeable registry hosts to a single
+    /// value. `docker login` stores the Hub credential under
+    /// `index.docker.io`, while image references name it as `docker.io`.
+    fn canonical_host(host: &str) -> String {
+        let host = host.to_ascii_lowercase();
+        match host.as_str() {
+            "index.docker.io" | "registry-1.docker.io" => "docker.io".to_string(),
+            _ => host,
+        }
+    }
+
     /// Returns the credentials by reading ${HOME}/.docker/config.json or ${DOCKER_CONFIG}
     ///
     /// config.json doesn't seem to have a schema that we could use to validate
@@ -100,7 +111,10 @@ impl DockerUtil {
 
         if let Value::Object(auths) = auths {
             for (registry_name, registry_auths) in auths.iter() {
-                if !registry_name.to_string().contains(&host) {
+                let key_host = Self::parse_docker_host(registry_name);
+                if !key_host.is_some_and(|key_host| {
+                    Self::canonical_host(&key_host) == Self::canonical_host(&host)
+                }) {
                     continue;
                 }
 
@@ -362,6 +376,12 @@ mod tests {
               }},
               "https://registry.example.com": {{
                 "auth": "b3RoZXJfdXNlcjpvdGhlcl9wYXNzd29yZA=="
+              }},
+              "registry.example.org": {{
+                "auth": "b3JnX3VzZXI6b3JnX3Bhc3N3b3Jk"
+              }},
+              "https://index.docker.io/v1/": {{
+                "auth": "aHViX3VzZXI6aHViX3Bhc3N3b3Jk"
               }}
             }}
           }}"#
@@ -382,6 +402,22 @@ mod tests {
         let creds = docker.get_credentials().unwrap();
         assert_eq!(creds.username, Some(test_user.to_string()));
         assert_eq!(creds.password, Some(test_password.to_string()));
+
+        // Credentials are selected by exact registry host.
+        for (image, user) in [
+            ("registry.example.com/app:1", Some("other_user")),
+            ("REGISTRY.example.com/app:1", Some("other_user")),
+            ("registry.example.org/app:1", Some("org_user")),
+            ("registry.example.co/app:1", None),
+            ("example.com/app:1", None),
+            ("registry.example.com.example.net/app:1", None),
+            ("docker.io/library/app:1", Some("hub_user")),
+            ("index.docker.io/team/app:1", Some("hub_user")),
+        ] {
+            let docker = DockerUtil::new(String::from(image)).unwrap();
+            let creds = docker.get_credentials().ok();
+            assert_eq!(creds.and_then(|c| c.username).as_deref(), user, "{}", image);
+        }
 
         temp_file.close().unwrap();
     }

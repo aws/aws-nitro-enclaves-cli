@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bollard::errors::Error;
-use bollard::secret::{BuildInfo, CreateImageInfo};
+use bollard::models::{BuildInfo, CreateImageInfo, ErrorDetail};
 use futures::stream::StreamExt;
 use futures::Stream;
 use log::{error, info};
@@ -11,17 +11,23 @@ pub trait StreamItem {
     fn error(&self) -> Option<String>;
 }
 
+fn error_message(detail: &Option<ErrorDetail>) -> Option<String> {
+    detail
+        .as_ref()
+        .map(|d| d.message.clone().unwrap_or_else(|| format!("{d:?}")))
+}
+
 // Implement StreamItem for CreateImageInfo
 impl StreamItem for CreateImageInfo {
     fn error(&self) -> Option<String> {
-        self.error.clone()
+        error_message(&self.error_detail)
     }
 }
 
 // Implement StreamItem for BuildInfo
 impl StreamItem for BuildInfo {
     fn error(&self) -> Option<String> {
-        self.error.clone()
+        error_message(&self.error_detail)
     }
 }
 

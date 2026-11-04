@@ -91,7 +91,7 @@ impl YamlGenerator {
             ),
         };
 
-        let yaml = serde_yaml::to_string(&ramfs);
+        let yaml = serde_norway::to_string(&ramfs);
 
         let mut file = NamedTempFile::new().map_err(|_| YamlGeneratorError::TempfileError)?;
 
@@ -150,7 +150,7 @@ impl YamlGenerator {
             ),
         };
 
-        let yaml = serde_yaml::to_string(&ramfs);
+        let yaml = serde_norway::to_string(&ramfs);
 
         let mut file = NamedTempFile::new().map_err(|_| YamlGeneratorError::TempfileError)?;
 
@@ -184,19 +184,18 @@ mod tests {
         bootstrap_ramfs.read_to_string(&mut bootstrap_data).unwrap();
         assert_eq!(
             bootstrap_data,
-            "---\
-             \nfiles:\
-             \n  - path: dev\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: init\
-             \n    source: path_to_init\
-             \n    mode: \"0755\"\
-             \n  - path: nsm.ko\
-             \n    source: path_to_nsm\
-             \n    mode: \"0755\"\
-             \n\
-             "
+            concat!(
+                "files:\n",
+                "- path: dev\n",
+                "  directory: true\n",
+                "  mode: '0755'\n",
+                "- path: init\n",
+                "  source: path_to_init\n",
+                "  mode: '0755'\n",
+                "- path: nsm.ko\n",
+                "  source: path_to_nsm\n",
+                "  mode: '0755'\n",
+            )
         );
 
         let mut customer_data = String::new();
@@ -205,37 +204,36 @@ mod tests {
         customer_ramfs.read_to_string(&mut customer_data).unwrap();
         assert_eq!(
             customer_data,
-            "---\
-             \nprefix: rootfs/\
-             \ninit:\
-             \n  - docker_image\
-             \nfiles:\
-             \n  - path: rootfs/dev\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/run\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/sys\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/var\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/proc\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/tmp\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: cmd\
-             \n    source: path_to_cmd\
-             \n    mode: \"0644\"\
-             \n  - path: env\
-             \n    source: path_to_env\
-             \n    mode: \"0644\"\
-             \n\
-             "
+            concat!(
+                "prefix: rootfs/\n",
+                "init:\n",
+                "- docker_image\n",
+                "files:\n",
+                "- path: rootfs/dev\n",
+                "  directory: true\n",
+                "  mode: '0755'\n",
+                "- path: rootfs/run\n",
+                "  directory: true\n",
+                "  mode: '0755'\n",
+                "- path: rootfs/sys\n",
+                "  directory: true\n",
+                "  mode: '0755'\n",
+                "- path: rootfs/var\n",
+                "  directory: true\n",
+                "  mode: '0755'\n",
+                "- path: rootfs/proc\n",
+                "  directory: true\n",
+                "  mode: '0755'\n",
+                "- path: rootfs/tmp\n",
+                "  directory: true\n",
+                "  mode: '0755'\n",
+                "- path: cmd\n",
+                "  source: path_to_cmd\n",
+                "  mode: '0644'\n",
+                "- path: env\n",
+                "  source: path_to_env\n",
+                "  mode: '0644'\n",
+            )
         );
     }
 }

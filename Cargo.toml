@@ -25,6 +25,10 @@ path = "src/lib.rs"
 name = "nitro-cli"
 path = "src/main.rs"
 
+[[bin]]
+name = "nitro-enclaves-allocator"
+path = "src/bin/nitro-enclaves-allocator.rs"
+
 [dependencies]
 serde = { version = ">=1.0", features = ["derive"] }
 chrono = "0.4"

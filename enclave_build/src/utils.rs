@@ -12,9 +12,11 @@ pub trait StreamItem {
 }
 
 fn error_message(detail: &Option<ErrorDetail>) -> Option<String> {
-    detail
-        .as_ref()
-        .map(|d| d.message.clone().unwrap_or_else(|| format!("{d:?}")))
+    detail.as_ref().map(|d| {
+        d.message
+            .clone()
+            .unwrap_or_else(|| "unknown Docker error".to_string())
+    })
 }
 
 // Implement StreamItem for CreateImageInfo

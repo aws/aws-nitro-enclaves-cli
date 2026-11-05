@@ -57,6 +57,13 @@ impl DockerUtil {
             DockerError::ConnectionError
         })?;
 
+        // Talk to the daemon at the highest API version both sides support.
+        let runtime = Runtime::new().map_err(|_| DockerError::RuntimeError)?;
+        let docker = runtime.block_on(docker.negotiate_version()).map_err(|e| {
+            error!("{:?}", e);
+            DockerError::ConnectionError
+        })?;
+
         Ok(DockerUtil {
             docker,
             docker_image,

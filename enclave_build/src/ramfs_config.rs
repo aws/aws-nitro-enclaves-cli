@@ -41,11 +41,11 @@ struct DirTemplate {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum YamlGeneratorError {
+pub enum RamfsConfigError {
     TempfileError,
 }
 
-pub struct YamlGenerator {
+pub struct RamfsConfigGenerator {
     docker_image: String,
     init_path: String,
     nsm_path: String,
@@ -53,7 +53,7 @@ pub struct YamlGenerator {
     env_path: String,
 }
 
-impl YamlGenerator {
+impl RamfsConfigGenerator {
     pub fn new(
         docker_image: String,
         init_path: String,
@@ -61,7 +61,7 @@ impl YamlGenerator {
         cmd_path: String,
         env_path: String,
     ) -> Self {
-        YamlGenerator {
+        RamfsConfigGenerator {
             docker_image,
             init_path,
             nsm_path,
@@ -70,7 +70,7 @@ impl YamlGenerator {
         }
     }
 
-    pub fn get_bootstrap_ramfs(&self) -> Result<NamedTempFile, YamlGeneratorError> {
+    pub fn get_bootstrap_ramfs(&self) -> Result<NamedTempFile, RamfsConfigError> {
         let ramfs = BootstrapRamfsTemplate {
             files: (
                 DirTemplate {
@@ -91,17 +91,17 @@ impl YamlGenerator {
             ),
         };
 
-        let yaml = serde_json::to_string(&ramfs);
+        let config = serde_json::to_string(&ramfs);
 
-        let mut file = NamedTempFile::new().map_err(|_| YamlGeneratorError::TempfileError)?;
+        let mut file = NamedTempFile::new().map_err(|_| RamfsConfigError::TempfileError)?;
 
-        file.write_all(yaml.unwrap().as_bytes())
-            .map_err(|_| YamlGeneratorError::TempfileError)?;
+        file.write_all(config.unwrap().as_bytes())
+            .map_err(|_| RamfsConfigError::TempfileError)?;
 
         Ok(file)
     }
 
-    pub fn get_customer_ramfs(&self) -> Result<NamedTempFile, YamlGeneratorError> {
+    pub fn get_customer_ramfs(&self) -> Result<NamedTempFile, RamfsConfigError> {
         let ramfs = CustomerRamfsTemplate {
             prefix: "rootfs/".to_string(),
             init: vec![self.docker_image.clone()],
@@ -150,12 +150,12 @@ impl YamlGenerator {
             ),
         };
 
-        let yaml = serde_json::to_string(&ramfs);
+        let config = serde_json::to_string(&ramfs);
 
-        let mut file = NamedTempFile::new().map_err(|_| YamlGeneratorError::TempfileError)?;
+        let mut file = NamedTempFile::new().map_err(|_| RamfsConfigError::TempfileError)?;
 
-        file.write_all(yaml.unwrap().as_bytes())
-            .map_err(|_| YamlGeneratorError::TempfileError)?;
+        file.write_all(config.unwrap().as_bytes())
+            .map_err(|_| RamfsConfigError::TempfileError)?;
 
         Ok(file)
     }
@@ -170,7 +170,7 @@ mod tests {
     /// Test the ramfs config files (JSON, which linuxkit reads as YAML)
     #[test]
     fn test_ramfs() {
-        let yaml_generator = YamlGenerator::new(
+        let config_generator = RamfsConfigGenerator::new(
             String::from("docker_image"),
             String::from("path_to_init"),
             String::from("path_to_nsm"),
@@ -179,7 +179,7 @@ mod tests {
         );
 
         let mut bootstrap_data = String::new();
-        let bootstrap_ramfs = yaml_generator.get_bootstrap_ramfs().unwrap();
+        let bootstrap_ramfs = config_generator.get_bootstrap_ramfs().unwrap();
         let mut bootstrap_ramfs = File::open(bootstrap_ramfs.path()).unwrap();
         bootstrap_ramfs.read_to_string(&mut bootstrap_data).unwrap();
         assert_eq!(
@@ -188,7 +188,7 @@ mod tests {
         );
 
         let mut customer_data = String::new();
-        let customer_ramfs = yaml_generator.get_customer_ramfs().unwrap();
+        let customer_ramfs = config_generator.get_customer_ramfs().unwrap();
         let mut customer_ramfs = File::open(customer_ramfs.path()).unwrap();
         customer_ramfs.read_to_string(&mut customer_data).unwrap();
         assert_eq!(

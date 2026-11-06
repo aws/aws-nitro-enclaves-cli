@@ -7,17 +7,17 @@ use std::path::Path;
 use std::process::Command;
 
 mod docker;
+mod ramfs_config;
 mod utils;
-mod yaml_generator;
 
 use aws_nitro_enclaves_image_format::defs::{EifBuildInfo, EifIdentityInfo, EIF_HDR_ARCH_ARM64};
 use aws_nitro_enclaves_image_format::utils::identity::parse_custom_metadata;
 use aws_nitro_enclaves_image_format::utils::{EifBuilder, SignKeyData};
 use docker::DockerUtil;
+use ramfs_config::RamfsConfigGenerator;
 use serde_json::json;
 use sha2::Digest;
 use std::collections::BTreeMap;
-use yaml_generator::YamlGenerator;
 
 pub const DEFAULT_TAG: &str = "1.0";
 
@@ -201,7 +201,7 @@ impl<'a> Docker2Eif<'a> {
             Docker2EifError::DockerError
         })?;
 
-        let yaml_generator = YamlGenerator::new(
+        let config_generator = RamfsConfigGenerator::new(
             self.docker_image.clone(),
             self.init_path.clone(),
             self.nsm_path.clone(),
@@ -209,11 +209,11 @@ impl<'a> Docker2Eif<'a> {
             env_file.path().to_str().unwrap().to_string(),
         );
 
-        let ramfs_config_file = yaml_generator.get_bootstrap_ramfs().map_err(|e| {
+        let ramfs_config_file = config_generator.get_bootstrap_ramfs().map_err(|e| {
             eprintln!("Ramfs error: {e:?}");
             Docker2EifError::RamfsError
         })?;
-        let ramfs_with_rootfs_config_file = yaml_generator.get_customer_ramfs().map_err(|e| {
+        let ramfs_with_rootfs_config_file = config_generator.get_customer_ramfs().map_err(|e| {
             eprintln!("Ramfs error: {e:?}");
             Docker2EifError::RamfsError
         })?;

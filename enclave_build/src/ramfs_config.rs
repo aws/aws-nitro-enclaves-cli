@@ -41,11 +41,11 @@ struct DirTemplate {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum YamlGeneratorError {
+pub enum RamfsConfigError {
     TempfileError,
 }
 
-pub struct YamlGenerator {
+pub struct RamfsConfigGenerator {
     docker_image: String,
     init_path: String,
     nsm_path: String,
@@ -53,7 +53,7 @@ pub struct YamlGenerator {
     env_path: String,
 }
 
-impl YamlGenerator {
+impl RamfsConfigGenerator {
     pub fn new(
         docker_image: String,
         init_path: String,
@@ -61,7 +61,7 @@ impl YamlGenerator {
         cmd_path: String,
         env_path: String,
     ) -> Self {
-        YamlGenerator {
+        RamfsConfigGenerator {
             docker_image,
             init_path,
             nsm_path,
@@ -70,7 +70,7 @@ impl YamlGenerator {
         }
     }
 
-    pub fn get_bootstrap_ramfs(&self) -> Result<NamedTempFile, YamlGeneratorError> {
+    pub fn get_bootstrap_ramfs(&self) -> Result<NamedTempFile, RamfsConfigError> {
         let ramfs = BootstrapRamfsTemplate {
             files: (
                 DirTemplate {
@@ -91,17 +91,17 @@ impl YamlGenerator {
             ),
         };
 
-        let yaml = serde_yaml::to_string(&ramfs);
+        let config = serde_json::to_string(&ramfs);
 
-        let mut file = NamedTempFile::new().map_err(|_| YamlGeneratorError::TempfileError)?;
+        let mut file = NamedTempFile::new().map_err(|_| RamfsConfigError::TempfileError)?;
 
-        file.write_all(yaml.unwrap().as_bytes())
-            .map_err(|_| YamlGeneratorError::TempfileError)?;
+        file.write_all(config.unwrap().as_bytes())
+            .map_err(|_| RamfsConfigError::TempfileError)?;
 
         Ok(file)
     }
 
-    pub fn get_customer_ramfs(&self) -> Result<NamedTempFile, YamlGeneratorError> {
+    pub fn get_customer_ramfs(&self) -> Result<NamedTempFile, RamfsConfigError> {
         let ramfs = CustomerRamfsTemplate {
             prefix: "rootfs/".to_string(),
             init: vec![self.docker_image.clone()],
@@ -150,12 +150,12 @@ impl YamlGenerator {
             ),
         };
 
-        let yaml = serde_yaml::to_string(&ramfs);
+        let config = serde_json::to_string(&ramfs);
 
-        let mut file = NamedTempFile::new().map_err(|_| YamlGeneratorError::TempfileError)?;
+        let mut file = NamedTempFile::new().map_err(|_| RamfsConfigError::TempfileError)?;
 
-        file.write_all(yaml.unwrap().as_bytes())
-            .map_err(|_| YamlGeneratorError::TempfileError)?;
+        file.write_all(config.unwrap().as_bytes())
+            .map_err(|_| RamfsConfigError::TempfileError)?;
 
         Ok(file)
     }
@@ -167,10 +167,10 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
 
-    /// Test YAML config files are the same as the ones written by hand
+    /// Test the ramfs config files (JSON, which linuxkit reads as YAML)
     #[test]
     fn test_ramfs() {
-        let yaml_generator = YamlGenerator::new(
+        let config_generator = RamfsConfigGenerator::new(
             String::from("docker_image"),
             String::from("path_to_init"),
             String::from("path_to_nsm"),
@@ -179,63 +179,21 @@ mod tests {
         );
 
         let mut bootstrap_data = String::new();
-        let bootstrap_ramfs = yaml_generator.get_bootstrap_ramfs().unwrap();
+        let bootstrap_ramfs = config_generator.get_bootstrap_ramfs().unwrap();
         let mut bootstrap_ramfs = File::open(bootstrap_ramfs.path()).unwrap();
         bootstrap_ramfs.read_to_string(&mut bootstrap_data).unwrap();
         assert_eq!(
             bootstrap_data,
-            "---\
-             \nfiles:\
-             \n  - path: dev\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: init\
-             \n    source: path_to_init\
-             \n    mode: \"0755\"\
-             \n  - path: nsm.ko\
-             \n    source: path_to_nsm\
-             \n    mode: \"0755\"\
-             \n\
-             "
+            r#"{"files":[{"path":"dev","directory":true,"mode":"0755"},{"path":"init","source":"path_to_init","mode":"0755"},{"path":"nsm.ko","source":"path_to_nsm","mode":"0755"}]}"#
         );
 
         let mut customer_data = String::new();
-        let customer_ramfs = yaml_generator.get_customer_ramfs().unwrap();
+        let customer_ramfs = config_generator.get_customer_ramfs().unwrap();
         let mut customer_ramfs = File::open(customer_ramfs.path()).unwrap();
         customer_ramfs.read_to_string(&mut customer_data).unwrap();
         assert_eq!(
             customer_data,
-            "---\
-             \nprefix: rootfs/\
-             \ninit:\
-             \n  - docker_image\
-             \nfiles:\
-             \n  - path: rootfs/dev\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/run\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/sys\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/var\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/proc\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: rootfs/tmp\
-             \n    directory: true\
-             \n    mode: \"0755\"\
-             \n  - path: cmd\
-             \n    source: path_to_cmd\
-             \n    mode: \"0644\"\
-             \n  - path: env\
-             \n    source: path_to_env\
-             \n    mode: \"0644\"\
-             \n\
-             "
+            r#"{"prefix":"rootfs/","init":["docker_image"],"files":[{"path":"rootfs/dev","directory":true,"mode":"0755"},{"path":"rootfs/run","directory":true,"mode":"0755"},{"path":"rootfs/sys","directory":true,"mode":"0755"},{"path":"rootfs/var","directory":true,"mode":"0755"},{"path":"rootfs/proc","directory":true,"mode":"0755"},{"path":"rootfs/tmp","directory":true,"mode":"0755"},{"path":"cmd","source":"path_to_cmd","mode":"0644"},{"path":"env","source":"path_to_env","mode":"0644"}]}"#
         );
     }
 }

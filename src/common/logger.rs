@@ -7,12 +7,11 @@ use chrono::offset::{Local, Utc};
 use chrono::DateTime;
 use flexi_logger::writers::LogWriter;
 use flexi_logger::{DeferredNow, Record};
-use nix::unistd::Uid;
 use std::env;
-use std::fs::{File, OpenOptions, Permissions};
+use std::fs::{File, OpenOptions};
 use std::io::{Error, Result, Write};
 use std::ops::{Deref, DerefMut};
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -166,6 +165,7 @@ fn open_log_file(file_path: &Path) -> NitroCliResult<File> {
         .create(true)
         .append(true)
         .read(false)
+        .custom_flags(libc::O_NOFOLLOW)
         .open(file_path)
         .map_err(|e| {
             new_nitro_cli_failure!(
@@ -179,36 +179,6 @@ fn open_log_file(file_path: &Path) -> NitroCliResult<File> {
                 "Open",
             ])
         })?;
-
-    let log_file_uid = Uid::from_raw(
-        file.metadata()
-            .map_err(|e| {
-                new_nitro_cli_failure!(
-                    &format!("Failed to get log file metadata: {e:?}"),
-                    NitroCliErrorEnum::FileOperationFailure
-                )
-                .add_info(vec![
-                    file_path
-                        .to_str()
-                        .unwrap_or("Invalid unicode log file name"),
-                    "Get metadata",
-                ])
-            })?
-            .uid(),
-    );
-
-    // The log file should be write-accessible to any user, since
-    // any user may launch a CLI instance. Only the file's owner
-    // may change its permissions.
-    if log_file_uid == Uid::current() {
-        let perms = Permissions::from_mode(0o766);
-        file.set_permissions(perms).map_err(|e| {
-            new_nitro_cli_failure!(
-                &format!("Failed to change log file permissions: {e:?}"),
-                NitroCliErrorEnum::FilePermissionsError
-            )
-        })?;
-    }
 
     Ok(file)
 }
@@ -248,14 +218,15 @@ mod tests {
 
     use tempfile::NamedTempFile;
 
-    /// Tests that `open_log_file()` creates a file
-    /// with the expected permissions.
+    /// Tests that `open_log_file()` does not change
+    /// the permissions of the log file.
     #[test]
     fn test_open_log_file() {
         let file0 = NamedTempFile::new();
 
         if let Ok(file0) = file0 {
             let test_file_path = file0.path();
+            fs::set_permissions(test_file_path, fs::Permissions::from_mode(0o640)).unwrap();
 
             let f = open_log_file(test_file_path).unwrap();
             let metadata = f.metadata();
@@ -266,9 +237,20 @@ mod tests {
                 let permissions = metadata.permissions();
                 let mode = permissions.mode();
 
-                assert_eq!(mode & 0o777, 0o766);
+                assert_eq!(mode & 0o777, 0o640);
             }
         }
+    }
+
+    /// Tests that `open_log_file()` does not follow a symbolic link.
+    #[test]
+    fn test_open_log_file_symlink() {
+        let target = NamedTempFile::new().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let link = dir.path().join(LOG_FILE_NAME);
+        std::os::unix::fs::symlink(target.path(), &link).unwrap();
+
+        assert!(open_log_file(&link).is_err());
     }
 
     /// Tests that the logger id is initially empty ("").

@@ -23,5 +23,5 @@ vsock = "0.5"
 
 [dev-dependencies]
 ctor = "0.4.2"
-rand = "0.8.5"
+rand = "0.10.3"
 tempfile = "3.19.1"

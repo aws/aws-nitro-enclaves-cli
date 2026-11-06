@@ -135,7 +135,6 @@ This repository contains a collection of tools and commands used for managing th
       - 'allocator.yaml': Configuration file for enclave memory and CPUs reservation
       - 'env.sh': A script which inserts the pre-built Nitro Enclaves kernel module, adds the CLI binary directory to $PATH and sets the blobs directory
       - 'nitro-cli-config': A script which can build, configure and install the Nitro Enclaves kernel module, as well as configure the memory and CPUs available for enclave launches (depending on the operation, root privileges may be required)
-      - 'nitro-enclaves-allocator': Configuration script for enclave memory and CPUs reservation
       - 'nitro-enclaves-allocator.service': Configuration service for enclave memory and CPUs reservation
 
   - 'docs': Useful documentation
@@ -153,10 +152,11 @@ This repository contains a collection of tools and commands used for managing th
 
   - 'samples': A collection of CLI-related sample applications. One sample is the command executer - an application that enables a parent instance to issue commands to an enclave (such as transferring a file, executing an application on the enclave etc.)
 
-  - 'src': The Nitro CLI implementation, divided into 3 components:
+  - 'src': The Nitro CLI implementation, divided into 4 components:
       - The implementation of the background enclave process: 'src/enclave_proc'
       - The implementation of the CLI, which takes user commands and communicates with enclave processes: 'src/*.rs'
       - A common module used by both the CLI and the enclave process: 'src/common'
+      - The enclave memory and CPUs reservation tool run by 'nitro-enclaves-allocator.service': 'src/bin/nitro-enclaves-allocator.rs'
 
   - 'tests': Various unit and integration tests for the CLI
 

@@ -20,7 +20,7 @@
 
 Summary:    AWS Nitro Enclaves tools for managing enclaves
 Name:       aws-nitro-enclaves-cli
-Version:    1.5.2
+Version:    1.5.3
 Release:    0%{?dist}
 
 License:    Apache 2.0
@@ -195,6 +195,15 @@ fi
 %{ne_include_dir}/*
 
 %changelog
+* Mon Nov 09 2026 Eugene Koira <eugkoira@amazon.com> - 1.5.3-0
+- Select registry credentials by exact registry host
+- Open the log file without following symlinks and keep its mode
+- Set the enclave process socket mode at bind time
+- enclave_build: Move to bollard 0.21 and replace serde_yaml with serde_norway
+- enclave_build: Write the ramfs config as JSON
+- Update Cargo.lock to fix cargo audit findings
+- nitro-cli-config: Write the NE CPU pool as compact ranges
+
 * Wed Oct 07 2026 Mushahid Hussain <hmushi@amazon.co.uk> - 1.5.2-0
 - Bump aws-nitro-enclaves-image-format to 0.8
 - Update Cargo.lock to fix cargo audit findings

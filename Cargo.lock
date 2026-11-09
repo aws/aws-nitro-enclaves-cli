@@ -194,7 +194,7 @@ dependencies = [
 
 [[package]]
 name = "aws-nitro-enclaves-cli"
-version = "1.5.2"
+version = "1.5.3"
 dependencies = [
  "aws-nitro-enclaves-driver-bindings",
  "aws-nitro-enclaves-eif-loader",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "aws-nitro-enclaves-enclave-build"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64 0.22.1",

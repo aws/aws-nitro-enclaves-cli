@@ -132,7 +132,17 @@ function parse_config {
 
 # Set all CPUs online before trying to reconfigure the CPU pool (in case the service is restarted).
 function enable_offline_cpus {
-    echo "" > /sys/module/nitro_enclaves/parameters/ne_cpus 2> .tmp_file
+    # The driver cannot parse an empty CPU list, so writing one to an already
+    # empty pool only makes it log EINVAL to dmesg. Nothing needs re-onlining
+    # in that case (e.g. the first start after boot), so leave the pool alone.
+    # If the pool cannot be read, fall through and write as before.
+    local current_pool
+    if current_pool="$(cat "$CPU_POOL_FILE" 2> /dev/null)" && \
+       [[ -z "${current_pool//[[:space:]]/}" ]]; then
+        return 0
+    fi
+
+    echo "" > "$CPU_POOL_FILE" 2> .tmp_file
     err_info=$(cat .tmp_file)
     rm .tmp_file
 

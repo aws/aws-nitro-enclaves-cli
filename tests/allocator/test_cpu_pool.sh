@@ -220,5 +220,32 @@ cli_config_configure_cpu_pool "$over_max_pool"
 check "nitro-cli-config rejects a 512 character pool" "$?" "1"
 check "nitro-cli-config does not write a 512 character pool" "$(cat "$cli_config_pool")" "unchanged"
 
+# enable_offline_cpus must not write an empty list to an already empty pool,
+# because the driver logs EINVAL for it (aws-nitro-enclaves-cli#397). A pool
+# file that is written to gets a newer modification time than the reference.
+offline_pool="$(mktemp)"
+offline_ref="$(mktemp)"
+touch -t 200001010000 "$offline_pool"
+touch -t 200101010000 "$offline_ref"
+(
+    CPU_POOL_FILE="$offline_pool"
+    enable_offline_cpus
+) > /dev/null 2>&1
+check "enable_offline_cpus returns 0 on an empty pool" "$?" "0"
+if [ "$offline_pool" -nt "$offline_ref" ]; then
+    check "enable_offline_cpus leaves an empty pool alone" "written" "untouched"
+else
+    check "enable_offline_cpus leaves an empty pool alone" "untouched" "untouched"
+fi
+
+# A pool that still lists CPUs is cleared, so they are put back online.
+echo "2-3" > "$offline_pool"
+(
+    CPU_POOL_FILE="$offline_pool"
+    enable_offline_cpus
+) > /dev/null 2>&1
+check "enable_offline_cpus clears a non-empty pool" "$(cat "$offline_pool")" ""
+rm -f "$offline_pool" "$offline_ref"
+
 echo "Passed: $passed, Failed: $failed"
 [ "$failed" -eq 0 ]
